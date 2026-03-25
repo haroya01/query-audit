@@ -1,10 +1,10 @@
 # Troubleshooting
 
-Common issues and solutions when using Query Guard.
+Common issues and solutions when using QueryAudit.
 
 ---
 
-## Query Guard Not Detecting Any Queries
+## QueryAudit Not Detecting Any Queries
 
 **Symptom:** Report shows `0 queries analyzed` even though your test executes SQL.
 
@@ -25,7 +25,7 @@ Common issues and solutions when using Query Guard.
 
 === "Non-Spring: DataSource not found"
 
-    Query Guard needs a `static DataSource` field in the test class.
+    QueryAudit needs a `static DataSource` field in the test class.
 
     ```java
     @QueryAudit
@@ -37,10 +37,10 @@ Common issues and solutions when using Query Guard.
 
 === "Queries executed outside test method"
 
-    Query Guard only captures queries between `@BeforeEach` and `@AfterEach`.
+    QueryAudit only captures queries between `@BeforeEach` and `@AfterEach`.
     Queries in `@BeforeAll` or static initializers are not captured.
 
-=== "Query Guard disabled"
+=== "QueryAudit disabled"
 
     Check that you have not set `query-audit.enabled: false` in your test configuration:
 
@@ -52,9 +52,9 @@ Common issues and solutions when using Query Guard.
 
 ---
 
-## Why Didn't Query Guard Detect My Issue?
+## Why Didn't QueryAudit Detect My Issue?
 
-**Symptom:** You know a query has a problem, but Query Guard does not flag it.
+**Symptom:** You know a query has a problem, but QueryAudit does not flag it.
 
 **Possible causes:**
 
@@ -118,7 +118,7 @@ be flagged:
 
 ### The query type is not analyzed
 
-Query Guard analyzes SELECT, INSERT, UPDATE, and DELETE statements. DDL statements
+QueryAudit analyzes SELECT, INSERT, UPDATE, and DELETE statements. DDL statements
 (`CREATE TABLE`, `ALTER TABLE`) and session-level commands (`SET`, `SHOW`) are not
 analyzed.
 
@@ -134,7 +134,7 @@ query-audit:
 
 ### SQL is too complex for the parser
 
-Query Guard uses JSQLParser for structural SQL analysis (extracting WHERE columns,
+QueryAudit uses JSQLParser for structural SQL analysis (extracting WHERE columns,
 JOIN columns, table names, etc.) with a regex-based fallback for simpler pattern
 checks. Extremely complex or non-standard SQL (CTEs with multiple levels of nesting,
 database-specific syntax extensions) may not be fully parsed. If you suspect a
@@ -149,7 +149,7 @@ looks correct.
 
 **Cause:** You may be using an older version. DML capture was added in 0.2.0.
 
-**Fix:** Update to the latest version of Query Guard.
+**Fix:** Update to the latest version of QueryAudit.
 
 ---
 
@@ -181,7 +181,7 @@ were counted. Look for unexpected queries from:
 
 **Symptom:** You see duplicate query logs or performance degradation in tests.
 
-**Cause:** Both Query Guard and spring-boot-data-source-decorator are wrapping
+**Cause:** Both QueryAudit and spring-boot-data-source-decorator are wrapping
 the DataSource.
 
 **Fix:** See [Spring Boot Integration - Using with existing datasource-proxy](../getting-started/spring-boot.md#using-with-an-existing-datasource-proxy-gavlyukovskiy).
@@ -212,14 +212,14 @@ Ensure the correct module is in your test dependencies:
 
 ### Using H2 or embedded database
 
-Query Guard's MySQL module uses `SHOW INDEX` and the PostgreSQL module uses
+QueryAudit's MySQL module uses `SHOW INDEX` and the PostgreSQL module uses
 `pg_catalog` system tables. H2 and other embedded databases are not supported.
 To get full index-based detection, use Testcontainers with a real database in
 your test environment.
 
 !!! tip "Migrating from H2 to Testcontainers"
     If you currently use H2 for tests, consider switching to Testcontainers
-    for more realistic testing. This enables Query Guard's full detection
+    for more realistic testing. This enables QueryAudit's full detection
     capabilities and catches issues that H2's compatibility mode may hide.
 
     ```groovy
@@ -230,8 +230,8 @@ your test environment.
 
 ### Tables created after metadata collection
 
-If tables are created after Query Guard collects metadata, the indexes won't be
-visible. This usually works fine because Query Guard collects metadata in
+If tables are created after QueryAudit collects metadata, the indexes won't be
+visible. This usually works fine because QueryAudit collects metadata in
 `@BeforeAll`, after Spring context initialization.
 
 **Fix:** Ensure your schema is created before tests start. If using `ddl-auto=create-drop`,
@@ -250,7 +250,7 @@ The database user must have read access to the system catalogs:
 
 ### N+1 Not Detected on Lazy Collections
 
-**Symptom:** Lazy-loaded collections cause N+1 queries, but Query Guard does not flag them.
+**Symptom:** Lazy-loaded collections cause N+1 queries, but QueryAudit does not flag them.
 
 **Possible causes:**
 
@@ -271,7 +271,7 @@ The database user must have read access to the system catalogs:
    changes and may not trigger N+1 detection.
 
 4. **Using `@EntityGraph` or `JOIN FETCH`:** If the relationship is already
-   eagerly fetched in the query, there is no N+1 -- Query Guard is correctly
+   eagerly fetched in the query, there is no N+1 -- QueryAudit is correctly
    not flagging it.
 
 ### FetchType.EAGER Causes Extra Queries
@@ -328,7 +328,7 @@ spring:
 
 ### Spring Data JPA Derived Queries
 
-**Symptom:** Query Guard flags issues on queries you did not write explicitly.
+**Symptom:** QueryAudit flags issues on queries you did not write explicitly.
 
 **Cause:** Spring Data JPA generates SQL from method names (e.g.,
 `findByStatusAndCreatedAtAfter`). The generated SQL may trigger detections
@@ -341,12 +341,12 @@ should be optimized. Add the missing index or use `@Query` with optimized SQL.
 
 ## Tests Fail in CI but Pass Locally
 
-**Symptom:** Query Guard detects issues in CI that don't appear locally.
+**Symptom:** QueryAudit detects issues in CI that don't appear locally.
 
 **Possible causes:**
 
 1. **Different database:** CI uses a real MySQL/PostgreSQL instance while local
-   uses H2. Query Guard detects more issues with real databases because index
+   uses H2. QueryAudit detects more issues with real databases because index
    metadata is available.
 
 2. **Test ordering:** Tests run in a different order in CI, causing different
@@ -359,13 +359,13 @@ should be optimized. Add the missing index or use `@Query` with optimized SQL.
    definitions than your local environment.
 
 5. **Different Spring profiles:** CI may activate a different Spring profile
-   with different Query Guard settings.
+   with different QueryAudit settings.
 
 ---
 
 ## Report Not Printing
 
-**Symptom:** No Query Guard report appears in test output.
+**Symptom:** No QueryAudit report appears in test output.
 
 **Check:**
 
@@ -399,9 +399,9 @@ generated when at least one test method completes.
 
 ## OutOfMemoryError During Tests
 
-**Symptom:** Tests crash with `java.lang.OutOfMemoryError` when Query Guard is enabled.
+**Symptom:** Tests crash with `java.lang.OutOfMemoryError` when QueryAudit is enabled.
 
-**Cause:** Query Guard records every SQL statement for analysis. Tests that generate
+**Cause:** QueryAudit records every SQL statement for analysis. Tests that generate
 a very large number of queries (e.g., batch processing tests) can exhaust heap memory.
 
 **Fix options:**
@@ -430,11 +430,11 @@ a very large number of queries (e.g., batch processing tests) can exhaust heap m
 
 ---
 
-## Performance Impact of Query Guard
+## Performance Impact of QueryAudit
 
-**Symptom:** Tests run noticeably slower with Query Guard enabled.
+**Symptom:** Tests run noticeably slower with QueryAudit enabled.
 
-**Expected impact:** Query Guard adds a small overhead per query (microseconds) for
+**Expected impact:** QueryAudit adds a small overhead per query (microseconds) for
 interception and recording. The analysis phase runs after each test method and is
 proportional to the number of unique query patterns.
 
@@ -443,7 +443,7 @@ proportional to the number of unique query patterns.
 1. Reduce `max-queries` to limit recording overhead
 2. Disable rules you don't need with `disabled-rules`
 3. Use `@EnableQueryInspector` selectively rather than on every test class
-4. Check if the slow-down is from Query Guard or from running against a real
+4. Check if the slow-down is from QueryAudit or from running against a real
    database (vs H2). Testcontainers startup adds time to the first test.
 
 ---
@@ -452,7 +452,7 @@ proportional to the number of unique query patterns.
 
 When reporting an issue or debugging unexpected behavior, check these items:
 
-- [ ] Query Guard annotation is present on the test class or method
+- [ ] QueryAudit annotation is present on the test class or method
 - [ ] Correct database module is on the test classpath (`query-audit-mysql` or `query-audit-postgresql`)
 - [ ] `query-audit.enabled` is not set to `false`
 - [ ] No overly broad `suppress-patterns` or `suppress-queries`

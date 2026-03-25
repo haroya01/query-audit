@@ -1,9 +1,9 @@
 # Reports
 
-After each test method, Query Guard generates a report summarizing all detected issues.
+After each test method, QueryAudit generates a report summarizing all detected issues.
 The report helps you quickly identify which queries need attention and why.
 
-Query Guard includes three reporter implementations, all fully implemented:
+QueryAudit includes three reporter implementations, all fully implemented:
 
 | Reporter | Class | Output | Use Case |
 |---|---|---|---|
@@ -24,7 +24,7 @@ after each test method.
 
 ```
 ------------------------------------------------------------------------
-  QUERY GUARD REPORT
+  QUERY AUDIT REPORT
   Test: findRecentOrders_shouldUseIndex
 ------------------------------------------------------------------------
 
@@ -220,7 +220,7 @@ The generated HTML report contains these sections:
 
 ```
 +------------------------------------------------------------+
-|  Query Guard Report                                        |
+|  QueryAudit Report                                        |
 |  Generated: 2026-03-25 14:30:00                            |
 +------------------------------------------------------------+
 |  Summary: 12 tests | 5 errors | 3 warnings | 2 info       |
@@ -254,7 +254,7 @@ The generated HTML report contains these sections:
 
 ```
 ------------------------------------------------------------------------
-  QUERY GUARD REPORT
+  QUERY AUDIT REPORT
   Test: findRecentOrders_shouldUseIndex
 ------------------------------------------------------------------------
 ```
@@ -337,7 +337,7 @@ The summary footer provides:
    on small test datasets. If your test uses realistic data volumes, these may be
    worth investigating.
 
-5. **Look at the Fix suggestion.** Query Guard provides actionable suggestions like
+5. **Look at the Fix suggestion.** QueryAudit provides actionable suggestions like
    `CREATE INDEX` DDL or recommendations to use JOIN FETCH.
 
 ---

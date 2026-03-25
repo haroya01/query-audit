@@ -40,7 +40,7 @@ scales linearly and is one of the most common causes of slow application perform
 
 ---
 
-## How Query Guard Detects It
+## How QueryAudit Detects It
 
 The detection algorithm is purely **pattern-based** and does not rely on `EXPLAIN`, making it
 100% reliable regardless of test data size.
@@ -77,7 +77,7 @@ for (var entry : grouped.entrySet()) {
 
 ## How to Diagnose
 
-When Query Guard reports an N+1 issue, follow these steps to find and fix the root cause:
+When QueryAudit reports an N+1 issue, follow these steps to find and fix the root cause:
 
 ### Step 1: Identify the Repeated Query
 
@@ -99,7 +99,7 @@ Look for code that:
 - Calls a repository method inside a loop
 
 !!! tip "Stack trace"
-    Query Guard captures the stack trace at query execution time. Check the report output
+    QueryAudit captures the stack trace at query execution time. Check the report output
     for the originating line of code -- it typically points to the getter that triggers the
     lazy load.
 
@@ -324,7 +324,7 @@ Jackson calls `getMember()` on each `Order` during serialization, triggering laz
 
 !!! danger "This is hard to spot"
     The N+1 does not appear in your controller code. It happens inside the JSON serializer.
-    Query Guard catches it because it monitors all queries regardless of where they originate.
+    QueryAudit catches it because it monitors all queries regardless of where they originate.
 
 **Fix:** Use a DTO projection or `@EntityGraph` in the repository method:
 
@@ -540,11 +540,11 @@ Need a safety net for all lazy loads?
 
 ---
 
-## Query Guard Report Output
+## QueryAudit Report Output
 
 ```
 ============================================================
- QUERY GUARD REPORT
+ QUERY AUDIT REPORT
 ============================================================
 
  [ERROR] N+1 Query detected

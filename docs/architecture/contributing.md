@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for your interest in contributing to Query Guard. This page covers
+Thank you for your interest in contributing to QueryAudit. This page covers
 everything you need to build, test, and submit changes.
 
 ---
@@ -18,7 +18,7 @@ everything you need to build, test, and submit changes.
 ### 1. Clone and Build
 
 ```bash
-git clone https://github.com/query-audit/query-audit.git
+git clone https://github.com/haroya01/query-audit.git
 cd query-audit
 ./gradlew build
 ```
@@ -375,7 +375,7 @@ class UnionWithoutAllDetectorTest {
 
 ## How to Add a Custom Detection Rule (External)
 
-Users can add custom detection rules **without modifying Query Guard source code**
+Users can add custom detection rules **without modifying QueryAudit source code**
 using either ServiceLoader auto-discovery or programmatic registration.
 
 ### Option 1: ServiceLoader auto-discovery
@@ -502,7 +502,7 @@ In summary:
             }
 
             String message = String.format(
-                "Query Guard: %d issue(s) in %s.%s",
+                "QueryAudit: %d issue(s) in %s.%s",
                 report.confirmedIssues().size(),
                 report.testClass(),
                 report.testName()

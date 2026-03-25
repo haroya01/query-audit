@@ -2,7 +2,7 @@
 
 Not every detected issue is a problem. Sometimes a full table scan is intentional,
 a `SELECT *` is used in a test helper, or a health-check query should be ignored.
-Query Guard provides multiple ways to suppress issues at different levels.
+QueryAudit provides multiple ways to suppress issues at different levels.
 
 ---
 

@@ -1,5 +1,5 @@
 ---
-title: Query Guard -- Automatic Query Performance Analysis for JUnit Tests
+title: QueryAudit -- Automatic Query Performance Analysis for JUnit Tests
 description: Catch N+1 queries, missing indexes, and SQL anti-patterns before they hit production.
 ---
 
@@ -58,14 +58,14 @@ description: Catch N+1 queries, missing indexes, and SQL anti-patterns before th
 
 <div class="qg-hero" markdown>
 
-# Query Guard
+# QueryAudit
 
 <p class="qg-tagline">
 Stop shipping slow queries. Catch N+1, missing indexes, and 57 other SQL anti-patterns automatically during your JUnit tests.
 </p>
 
 [Get Started](getting-started/installation.md){ .md-button .md-button--primary }
-[View on GitHub](https://github.com/query-audit/query-audit){ .md-button }
+[View on GitHub](https://github.com/haroya01/query-audit){ .md-button }
 
 </div>
 
@@ -85,7 +85,7 @@ Catches N+1 queries, missing indexes, `SELECT *`, DML anti-patterns, batch inser
 
 ### :material-check-decagram: 100% Reliable
 
-Confirmed detections are **structural** -- they inspect SQL text and index metadata, not runtime data. No flaky heuristics. No false positives. If Query Guard flags it, it is a real problem.
+Confirmed detections are **structural** -- they inspect SQL text and index metadata, not runtime data. No flaky heuristics. No false positives. If QueryAudit flags it, it is a real problem.
 
 </div>
 
@@ -93,7 +93,7 @@ Confirmed detections are **structural** -- they inspect SQL text and index metad
 
 ### :material-cog-off: Zero Config
 
-Add one annotation to your test class. That's it. Query Guard auto-discovers your `DataSource`, intercepts queries, analyzes them, and reports issues. Works with JUnit 5 and Spring Boot. Supports **MySQL** and **PostgreSQL**.
+Add one annotation to your test class. That's it. QueryAudit auto-discovers your `DataSource`, intercepts queries, analyzes them, and reports issues. Works with JUnit 5 and Spring Boot. Supports **MySQL** and **PostgreSQL**.
 
 </div>
 
@@ -123,7 +123,7 @@ Every issue includes the exact SQL statement, affected table, column, the detect
   <div class="qg-flow-step">:material-alert-circle: Report & fail</div>
 </div>
 
-Query Guard hooks into your test's `DataSource` via a lightweight proxy. During test execution, it captures every SQL statement. After the test completes, it:
+QueryAudit hooks into your test's `DataSource` via a lightweight proxy. During test execution, it captures every SQL statement. After the test completes, it:
 
 1. **Parses** each query to identify tables, columns, joins, and clauses
 2. **Fetches index metadata** from your database (MySQL `SHOW INDEX` or PostgreSQL `pg_catalog`)
@@ -157,11 +157,11 @@ class OrderServiceTest {
 
 1.  That's it. No configuration, no extra beans, no proxy wiring.
 
-Run your tests, and Query Guard produces a report like this:
+Run your tests, and QueryAudit produces a report like this:
 
 ```
 ================================================================================
-                          QUERY GUARD REPORT
+                          QUERY AUDIT REPORT
                     OrderServiceTest (8 queries analyzed)
 ================================================================================
 
@@ -209,7 +209,7 @@ INFO (for review)
 
 ---
 
-## Why Query Guard?
+## Why QueryAudit?
 
 Most teams discover query performance problems in one of two painful ways: a production incident, or a slow code review where someone manually checks SQL logs.
 
@@ -221,9 +221,9 @@ Existing tools help with **observability** -- they let you *see* your queries:
 | **p6spy** | Logs queries with bind parameters | Same -- logging only |
 | **Spring Hibernate statistics** | Counts queries per session | Counts, but doesn't analyze |
 
-**Query Guard closes the gap.** It doesn't just log queries -- it applies 57 detection rules to every captured query, cross-references index metadata from your database (MySQL `SHOW INDEX` or PostgreSQL `pg_catalog`), and produces a structured report with concrete fix suggestions.
+**QueryAudit closes the gap.** It doesn't just log queries -- it applies 57 detection rules to every captured query, cross-references index metadata from your database (MySQL `SHOW INDEX` or PostgreSQL `pg_catalog`), and produces a structured report with concrete fix suggestions.
 
-| Capability | datasource-proxy | p6spy | Query Guard |
+| Capability | datasource-proxy | p6spy | QueryAudit |
 |---|:---:|:---:|:---:|
 | Query logging | :material-check: | :material-check: | :material-check: |
 | Bind parameter capture | :material-close: | :material-check: | :material-check: |
@@ -239,6 +239,6 @@ Existing tools help with **observability** -- they let you *see* your queries:
 
 ## Getting Started
 
-Ready to add Query Guard to your project? It takes about two minutes.
+Ready to add QueryAudit to your project? It takes about two minutes.
 
 [Installation Guide :material-arrow-right:](getting-started/installation.md){ .md-button .md-button--primary }

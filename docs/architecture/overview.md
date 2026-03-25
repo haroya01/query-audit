@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This page describes Query Guard's internal architecture, module structure, key interfaces,
+This page describes QueryAudit's internal architecture, module structure, key interfaces,
 and the full lifecycle of a query from execution to report.
 
 ---
@@ -255,7 +255,7 @@ record Issue(
 
 ## Extension Points
 
-Query Guard is designed for extensibility via Java ServiceLoader. No changes to core
+QueryAudit is designed for extensibility via Java ServiceLoader. No changes to core
 modules are required when adding support for new databases or custom rules.
 
 ### Adding a Custom Detection Rule
@@ -433,7 +433,7 @@ public class SlackReporter implements Reporter {
 
 ## Index Metadata Collection
 
-Query Guard collects index information from **two sources** and merges them:
+QueryAudit collects index information from **two sources** and merges them:
 
 ```
                     +-------------------------+
@@ -473,7 +473,7 @@ Implementations are discovered via **Java ServiceLoader**. The provider's
 
 ## Query Count Regression Detection
 
-Query Guard tracks query counts per test method across runs using a baseline file
+QueryAudit tracks query counts per test method across runs using a baseline file
 (`.query-audit-counts`).
 
 ```
@@ -507,7 +507,7 @@ Query Guard tracks query counts per test method across runs using a baseline fil
 
 ## Report Generation
 
-Query Guard includes three reporter implementations, all in `query-audit-core`:
+QueryAudit includes three reporter implementations, all in `query-audit-core`:
 
 ### Console Report (`ConsoleReporter`)
 
@@ -532,17 +532,17 @@ CSS and JavaScript.
 ### Zero False Positives on CONFIRMED Issues
 
 CONFIRMED issues are **structurally certain** based on SQL parsing and index metadata.
-Query Guard never guesses. Issues that depend on data volume or query planner behavior
+QueryAudit never guesses. Issues that depend on data volume or query planner behavior
 are classified as INFO, not CONFIRMED.
 
 ### Test-Time Only
 
-Query Guard is a **test dependency**. It never runs in production. The datasource
+QueryAudit is a **test dependency**. It never runs in production. The datasource
 proxy wrapping only happens in the test classpath.
 
 ### Transparent to Application Code
 
-Application code does not need to know about Query Guard. The DataSource proxy is
+Application code does not need to know about QueryAudit. The DataSource proxy is
 injected transparently via `BeanPostProcessor` (Spring Boot) or reflection-based
 DataSource resolution (plain JUnit 5).
 

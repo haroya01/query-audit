@@ -11,7 +11,7 @@ targeting a specific SQL clause where a missing index causes performance degrada
 
 !!! note "One rule, four issue types"
     Although `MissingIndexDetector` is registered as a single detection rule in
-    `QueryAuditAnalyzer`, it produces 4 separate issue types. This is why Query Guard has
+    `QueryAuditAnalyzer`, it produces 4 separate issue types. This is why QueryAudit has
     57 active rules but 60 active issue types. See the
     [Detection Rules Overview](overview.md#accounting) for the full accounting.
 
@@ -111,7 +111,7 @@ SELECT * FROM orders WHERE status = 'pending';
 
 === "With composite index suggestion"
 
-    When other WHERE columns already have indexes, Query Guard suggests a composite index:
+    When other WHERE columns already have indexes, QueryAudit suggests a composite index:
 
     ```sql
     -- If 'customer_id' already has an index, and you also filter on 'status':
@@ -601,7 +601,7 @@ The complete detection flow for every query:
 
 ### Composite Index (WHERE + WHERE)
 
-When Query Guard detects multiple unindexed WHERE columns on the same table:
+When QueryAudit detects multiple unindexed WHERE columns on the same table:
 
 === "MySQL"
 

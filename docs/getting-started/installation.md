@@ -1,12 +1,12 @@
 ---
 title: Installation
-description: Add Query Guard to your Java project with Gradle or Maven.
+description: Add QueryAudit to your Java project with Gradle or Maven.
 ---
 
 # Installation
 
 !!! abstract "What you'll learn"
-    How to add Query Guard to your project, choose the right database module, and verify the installation works.
+    How to add QueryAudit to your project, choose the right database module, and verify the installation works.
 
 ---
 
@@ -27,7 +27,7 @@ description: Add Query Guard to your Java project with Gradle or Maven.
 
 ## Dependencies
 
-Query Guard uses a **database-module-centric** dependency model.
+QueryAudit uses a **database-module-centric** dependency model.
 Each database module (e.g. `query-audit-mysql`, `query-audit-postgresql`) transitively pulls in `query-audit-core` and `query-audit-junit5`,
 so you only need **one or two** dependencies depending on your setup.
 
@@ -182,7 +182,7 @@ Run a quick smoke test to confirm everything is wired correctly.
 
         @Test
         void queryGuardIsActive() {
-            // If you see a Query Guard report in the test output,
+            // If you see a QueryAudit report in the test output,
             // the installation is working correctly.
         }
     }
@@ -198,16 +198,16 @@ Run a quick smoke test to confirm everything is wired correctly.
 
         @Test
         void queryGuardIsActive() {
-            // Query Guard auto-discovers the static DataSource field
+            // QueryAudit auto-discovers the static DataSource field
         }
     }
     ```
 
-Run the test. If Query Guard is configured correctly, you will see the report header:
+Run the test. If QueryAudit is configured correctly, you will see the report header:
 
 ```
 ================================================================================
-                          QUERY GUARD REPORT
+                          QUERY AUDIT REPORT
               InstallationVerificationTest (0 queries analyzed)
 ================================================================================
   0 confirmed issues | 0 info | 0 queries
@@ -215,7 +215,7 @@ Run the test. If Query Guard is configured correctly, you will see the report he
 ```
 
 !!! success "You're all set!"
-    If you see this output, Query Guard is installed and working. Move on to the Quick Start to see real detections in action.
+    If you see this output, QueryAudit is installed and working. Move on to the Quick Start to see real detections in action.
 
 ---
 

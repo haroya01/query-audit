@@ -1,22 +1,22 @@
-# Query Guard
+# QueryAudit
 
 **Catch SQL performance problems in your tests -- before they hit production.**
 
-[![Build](https://github.com/query-audit/query-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/query-audit/query-audit/actions/workflows/ci.yml)
+[![Build](https://github.com/haroya01/query-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/haroya01/query-audit/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.haroya01/query-audit-core)](https://search.maven.org/search?q=g:io.github.haroya01)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-query--guard.github.io-blue)](https://query-audit.github.io/query-audit)
+[![Documentation](https://img.shields.io/badge/docs-query--guard.github.io-blue)](https://haroya01.github.io/query-audit)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://openjdk.org/)
 
 ---
 
-## Why Query Guard?
+## Why QueryAudit?
 
 Most SQL performance problems -- N+1 queries, missing indexes, unsafe DML -- are invisible during development because test datasets are small. They only surface in production under real load, causing outages and firefighting.
 
-**Query Guard shifts that discovery left into your test suite.**
+**QueryAudit shifts that discovery left into your test suite.**
 
-| | Without Query Guard | With Query Guard |
+| | Without QueryAudit | With QueryAudit |
 |---|---|---|
 | **N+1 queries** | Discovered in production via slow dashboards | Test fails immediately with the exact query and fix suggestion |
 | **Missing indexes** | Noticed after a table grows to millions of rows | Detected by cross-referencing `SHOW INDEX` / `pg_catalog` during test |
@@ -28,7 +28,7 @@ Most SQL performance problems -- N+1 queries, missing indexes, unsafe DML -- are
 
 ## What It Does
 
-Query Guard intercepts every SQL query executed during your JUnit tests, analyzes each one against **57 detection rules**, cross-references index metadata from your database, and fails your build when it finds performance anti-patterns.
+QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes each one against **57 detection rules**, cross-references index metadata from your database, and fails your build when it finds performance anti-patterns.
 
 - **57 detection rules** covering N+1 queries, missing indexes, DML safety, locking risks, ORM anti-patterns, and more
 - **Zero configuration** -- add one annotation and go
@@ -127,7 +127,7 @@ class OrderServiceTest {
     @Test
     void findRecentOrders_shouldUseIndex() {
         orderService.findRecentOrders(userId);
-        // Query Guard automatically analyzes all SQL executed during this test.
+        // QueryAudit automatically analyzes all SQL executed during this test.
         // If an N+1 pattern or missing index is detected, the test fails.
     }
 }
@@ -137,7 +137,7 @@ class OrderServiceTest {
 
 ```
 ================================================================================
-                          QUERY GUARD REPORT
+                          QUERY AUDIT REPORT
                     OrderServiceTest (8 queries analyzed)
 ================================================================================
 
@@ -182,7 +182,7 @@ INFO (for review)
 
 ## 57 Detection Rules
 
-Query Guard ships with 57 detection rules organized into two confidence tiers:
+QueryAudit ships with 57 detection rules organized into two confidence tiers:
 
 **Confirmed (ERROR / WARNING)** -- structural and schema-based checks that are reliable regardless of test data size. These inspect SQL text, repetition patterns, and cross-reference actual index metadata from your database.
 
@@ -203,7 +203,7 @@ Query Guard ships with 57 detection rules organized into two confidence tiers:
 | **EXPLAIN-Based** | Full table scan, filesort, temporary table | 3 |
 | **Miscellaneous** | Slow query, unbounded result set, query count regression, non-deterministic pagination, and more | 6 |
 
-See the [Detection Rules Overview](https://query-audit.github.io/query-audit/detections/overview/) for the complete reference.
+See the [Detection Rules Overview](https://haroya01.github.io/query-audit/detections/overview/) for the complete reference.
 
 ---
 
@@ -252,13 +252,13 @@ query-audit:
     show-info: true
 ```
 
-See the [Configuration Reference](https://query-audit.github.io/query-audit/guide/configuration/) for the full list of options.
+See the [Configuration Reference](https://haroya01.github.io/query-audit/guide/configuration/) for the full list of options.
 
 ---
 
 ## Documentation
 
-Full documentation is available at **[query-audit.github.io/query-audit](https://query-audit.github.io/query-audit)**.
+Full documentation is available at **[query-audit.github.io/query-audit](https://haroya01.github.io/query-audit)**.
 
 ---
 
