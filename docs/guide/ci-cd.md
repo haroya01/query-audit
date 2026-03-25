@@ -1,11 +1,11 @@
 # CI/CD Integration
 
-Query Guard is designed to catch query performance issues before they reach production.
+QueryAudit is designed to catch query performance issues before they reach production.
 By running as part of your test suite, it integrates naturally into any CI/CD pipeline.
 
 ## How It Works
 
-When `fail-on-detection` is `true` (the default), Query Guard throws an `AssertionError`
+When `fail-on-detection` is `true` (the default), QueryAudit throws an `AssertionError`
 on confirmed issues (ERROR or WARNING severity). This causes the test to fail, which in
 turn causes the CI build to fail -- no extra configuration needed.
 
@@ -69,14 +69,14 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Run tests (including Query Guard analysis)
+      - name: Run tests (including QueryAudit analysis)
         run: ./gradlew test
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/testdb
           SPRING_DATASOURCE_USERNAME: root
           SPRING_DATASOURCE_PASSWORD: test
 
-      - name: Upload Query Guard reports
+      - name: Upload QueryAudit reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -87,7 +87,7 @@ jobs:
 
 !!! tip "The `if: always()` on the upload step"
     This ensures reports are uploaded even when tests fail, so you can review the
-    Query Guard output in the build artifacts.
+    QueryAudit output in the build artifacts.
 
 ### With PostgreSQL
 
@@ -130,7 +130,7 @@ jobs:
           SPRING_DATASOURCE_USERNAME: test
           SPRING_DATASOURCE_PASSWORD: test
 
-      - name: Upload Query Guard reports
+      - name: Upload QueryAudit reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -162,7 +162,7 @@ update it explicitly when query counts change intentionally.
 
 ### With PR Comment (JSON Report Parsing)
 
-Post a summary of Query Guard findings as a PR comment:
+Post a summary of QueryAudit findings as a PR comment:
 
 ```yaml
       - name: Run tests with JSON report
@@ -173,7 +173,7 @@ Post a summary of Query Guard findings as a PR comment:
           SPRING_DATASOURCE_PASSWORD: test
         continue-on-error: true
 
-      - name: Comment on PR with Query Guard summary
+      - name: Comment on PR with QueryAudit summary
         if: github.event_name == 'pull_request' && always()
         uses: actions/github-script@v7
         with:
@@ -192,7 +192,7 @@ Post a summary of Query Guard findings as a PR comment:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: `**Query Guard Report**: ${totalErrors} issue(s) detected. Check the [build artifacts](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`
+                body: `**QueryAudit Report**: ${totalErrors} issue(s) detected. Check the [build artifacts](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`
               });
             }
 ```
@@ -380,12 +380,12 @@ query-audit:
 
 ## Strategies for Gradual Adoption
 
-If you are introducing Query Guard to a large existing project, you may not want every
+If you are introducing QueryAudit to a large existing project, you may not want every
 pre-existing issue to break the build immediately. Here are some strategies:
 
 ### 1. Report-Only Mode First
 
-Start with `fail-on-detection: false` to see what Query Guard finds without failing
+Start with `fail-on-detection: false` to see what QueryAudit finds without failing
 any builds:
 
 ```yaml

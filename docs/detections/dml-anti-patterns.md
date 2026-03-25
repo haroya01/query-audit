@@ -1,6 +1,6 @@
 # DML Anti-Pattern Detection
 
-Query Guard detects performance and safety issues in **INSERT, UPDATE, DELETE** statements.
+QueryAudit detects performance and safety issues in **INSERT, UPDATE, DELETE** statements.
 These rules analyze SQL structure and repetition patterns, not `EXPLAIN` output, making them
 100% reliable.
 
@@ -31,11 +31,11 @@ blocking all concurrent writes until the statement completes.
 
 !!! danger "Data safety"
     MySQL provides `sql_safe_updates` as a built-in safety mechanism for exactly this reason.
-    Query Guard catches it at test time before it reaches production.
+    QueryAudit catches it at test time before it reaches production.
 
 #### Detection
 
-Query Guard checks whether an UPDATE or DELETE statement contains a WHERE clause.
+QueryAudit checks whether an UPDATE or DELETE statement contains a WHERE clause.
 This is a pure syntax check.
 
 #### Examples and Fixes
@@ -126,7 +126,7 @@ This means a single slow UPDATE can lock the entire table and cause cascading ti
 
 #### Detection
 
-Query Guard extracts WHERE columns from UPDATE/DELETE statements and cross-references
+QueryAudit extracts WHERE columns from UPDATE/DELETE statements and cross-references
 them against the actual index metadata (via `SHOW INDEX`). If none of the WHERE columns
 match the leading column of any index, the issue is flagged.
 
@@ -210,7 +210,7 @@ with autocommit triggers a **separate redo log flush**.
 
 #### Detection
 
-Query Guard normalizes INSERT statements and groups them by pattern. If the same INSERT
+QueryAudit normalizes INSERT statements and groups them by pattern. If the same INSERT
 pattern (same table, same columns) appears 3 or more times in a single test, it is flagged.
 Multi-row INSERT statements (`VALUES (...), (...)`) are excluded.
 
@@ -362,7 +362,7 @@ execution due to gap lock interactions on unique keys (MySQL-specific).
 
 #### Detection
 
-Query Guard detects both `INSERT ... ON DUPLICATE KEY UPDATE` and `REPLACE INTO` patterns.
+QueryAudit detects both `INSERT ... ON DUPLICATE KEY UPDATE` and `REPLACE INTO` patterns.
 
 #### Examples and Fixes
 
@@ -600,7 +600,7 @@ child rows and re-INSERT them whenever the collection is modified. This is extre
 
 #### Detection
 
-Query Guard detects a DELETE followed by re-INSERT sequence on the same table within a single
+QueryAudit detects a DELETE followed by re-INSERT sequence on the same table within a single
 test execution.
 
 #### Examples and Fixes
@@ -693,7 +693,7 @@ to deletes.
 
 #### Detection
 
-Query Guard detects a SELECT followed by individual DELETE statements on the same table.
+QueryAudit detects a SELECT followed by individual DELETE statements on the same table.
 
 #### Examples and Fixes
 

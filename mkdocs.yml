@@ -1,9 +1,9 @@
-site_name: Query Guard
-site_url: https://query-audit.github.io/query-audit
+site_name: QueryAudit
+site_url: https://haroya01.github.io/query-audit
 site_description: Automatic query performance analysis for JUnit tests
-site_author: Query Guard Contributors
-repo_url: https://github.com/query-audit/query-audit
-repo_name: query-audit/query-audit
+site_author: QueryAudit Contributors
+repo_url: https://github.com/haroya01/query-audit
+repo_name: haroya01/query-audit
 edit_uri: edit/main/docs/
 
 theme:
@@ -70,7 +70,7 @@ markdown_extensions:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/query-audit/query-audit
+      link: https://github.com/haroya01/query-audit
 
 nav:
   - Home: index.md

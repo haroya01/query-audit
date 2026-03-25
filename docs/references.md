@@ -1,6 +1,6 @@
 # References
 
-Query Guard's detection rules are grounded in official database documentation,
+QueryAudit's detection rules are grounded in official database documentation,
 peer-reviewed academic research, and established technical literature.
 
 ---
@@ -83,12 +83,12 @@ peer-reviewed academic research, and established technical literature.
 
 ## Related Tools
 
-| Tool | Language | Approach | Comparison with Query Guard |
+| Tool | Language | Approach | Comparison with QueryAudit |
 |------|----------|----------|---------------------------|
-| [SQLCheck](https://github.com/jarulraj/sqlcheck) | C++ | Static SQL file analysis | Query Guard analyzes queries at test runtime with index metadata |
-| [SAND](https://doi.org/10.1145/3460319.3464818) | Java | Static analysis of source code | Query Guard intercepts actual executed queries |
-| [datasource-proxy](https://github.com/ttddyy/datasource-proxy) | Java | Query interception library | Query Guard uses datasource-proxy as its interception layer |
-| [p6spy](https://github.com/p6spy/p6spy) | Java | Query logging | Logging only; Query Guard adds analysis and detection |
+| [SQLCheck](https://github.com/jarulraj/sqlcheck) | C++ | Static SQL file analysis | QueryAudit analyzes queries at test runtime with index metadata |
+| [SAND](https://doi.org/10.1145/3460319.3464818) | Java | Static analysis of source code | QueryAudit intercepts actual executed queries |
+| [datasource-proxy](https://github.com/ttddyy/datasource-proxy) | Java | Query interception library | QueryAudit uses datasource-proxy as its interception layer |
+| [p6spy](https://github.com/p6spy/p6spy) | Java | Query logging | Logging only; QueryAudit adds analysis and detection |
 
 ---
 

@@ -1,6 +1,6 @@
 # Annotations Guide
 
-Query Guard provides four annotations for different use cases. All annotations trigger the
+QueryAudit provides four annotations for different use cases. All annotations trigger the
 `QueryAuditExtension` JUnit 5 extension automatically.
 
 ---
@@ -169,7 +169,7 @@ class OrderServiceTest {
 ```
 
 !!! tip "Use this for gradual adoption"
-    Start with `@EnableQueryInspector` to see what Query Guard finds without breaking
+    Start with `@EnableQueryInspector` to see what QueryAudit finds without breaking
     your builds. Once you've reviewed the issues, switch to `@QueryAudit` to enforce them.
 
 ---
@@ -229,7 +229,7 @@ class OrderServiceTest {
 
 ### How N+1 Detection Works
 
-Query Guard detects N+1 at **two levels**:
+QueryAudit detects N+1 at **two levels**:
 
 1. **SQL-level** (all environments): Normalizes each query (`SELECT * FROM items WHERE id = ?`),
    groups by pattern, and counts executions. If the same pattern appears >= threshold times
@@ -333,14 +333,14 @@ class OrderServiceTest {
 
 ## Without Spring Boot
 
-All annotations work without Spring Boot. Query Guard resolves the `DataSource`
+All annotations work without Spring Boot. QueryAudit resolves the `DataSource`
 by looking for a `static DataSource` field in the test class:
 
 ```java
 @QueryAudit
 class OrderRepositoryTest {
 
-    // Query Guard auto-discovers this field
+    // QueryAudit auto-discovers this field
     static DataSource dataSource = new HikariDataSource(hikariConfig());
 
     @Test
@@ -350,7 +350,7 @@ class OrderRepositoryTest {
                 "SELECT * FROM orders WHERE status = ?");
             ps.setString(1, "PENDING");
             ResultSet rs = ps.executeQuery();
-            // Query Guard captures and analyzes this query
+            // QueryAudit captures and analyzes this query
         }
     }
 

@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: Get your first Query Guard report in under five minutes.
+description: Get your first QueryAudit report in under five minutes.
 ---
 
 # Quick Start
@@ -8,13 +8,13 @@ description: Get your first Query Guard report in under five minutes.
 !!! abstract "What you'll learn"
     How to add `@QueryAudit` to a test, trigger real detections (N+1, missing index, batch insert), read the report, and fix the issues.
 
-This guide walks you through adding Query Guard to a Spring Boot test, triggering real detections, and reading the report.
+This guide walks you through adding QueryAudit to a Spring Boot test, triggering real detections, and reading the report.
 
 ---
 
 ## The Simplest Example
 
-If you just want to see Query Guard in action, this is all you need:
+If you just want to see QueryAudit in action, this is all you need:
 
 ```java
 @SpringBootTest
@@ -27,7 +27,7 @@ class MyServiceTest {
     @Test
     void myMethod_shouldNotHaveQueryIssues() {
         myService.doSomething();
-        // That's it. Query Guard analyzes every SQL query executed above
+        // That's it. QueryAudit analyzes every SQL query executed above
         // and fails the test if it finds performance anti-patterns.
     }
 }
@@ -107,7 +107,7 @@ class OrderServiceTest {
 ./gradlew test --tests OrderServiceTest
 ```
 
-Query Guard automatically:
+QueryAudit automatically:
 
 1. **Intercepts** every SQL query (SELECT, INSERT, UPDATE, DELETE) executed during the test
 2. **Collects index metadata** via `SHOW INDEX` (MySQL) or `pg_catalog` (PostgreSQL) from your test database
@@ -121,7 +121,7 @@ Query Guard automatically:
 
 ```
 ================================================================================
-                          QUERY GUARD REPORT
+                          QUERY AUDIT REPORT
                    OrderServiceTest (12 queries analyzed)
 ================================================================================
 

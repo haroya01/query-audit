@@ -1,6 +1,6 @@
 ---
 title: Spring Boot Integration
-description: How Query Guard auto-configures itself in Spring Boot test environments.
+description: How QueryAudit auto-configures itself in Spring Boot test environments.
 ---
 
 # Spring Boot Integration
@@ -8,7 +8,7 @@ description: How Query Guard auto-configures itself in Spring Boot test environm
 !!! abstract "What you'll learn"
     How the Spring Boot starter works under the hood, how to configure it via `application.yml`, and how to integrate with existing datasource-proxy setups.
 
-Query Guard provides a Spring Boot starter that automatically intercepts every SQL query
+QueryAudit provides a Spring Boot starter that automatically intercepts every SQL query
 executed during your `@SpringBootTest` tests and analyzes them for performance anti-patterns.
 
 ---
@@ -181,14 +181,14 @@ class OrderServiceTest {
 If your project already uses
 [spring-boot-data-source-decorator](https://github.com/gavlyukovskiy/spring-boot-data-source-decorator)
 (gavlyukovskiy's library), the `DataSource` is already a datasource-proxy instance.
-Adding Query Guard's `BeanPostProcessor` on top would create a **double proxy**, which
+Adding QueryAudit's `BeanPostProcessor` on top would create a **double proxy**, which
 works but adds unnecessary overhead.
 
 There are two approaches to avoid this:
 
 ### Approach 1: Hook into the existing proxy via a listener (recommended)
 
-Disable Query Guard's own `BeanPostProcessor` and instead register the `QueryInterceptor`
+Disable QueryAudit's own `BeanPostProcessor` and instead register the `QueryInterceptor`
 as an additional listener on the existing proxy.
 
 ```java
@@ -219,7 +219,7 @@ class QueryAuditTestConfig {
 }
 ```
 
-Then disable Query Guard's built-in proxy in your test configuration:
+Then disable QueryAudit's built-in proxy in your test configuration:
 
 ```yaml
 # application-test.yml
@@ -229,7 +229,7 @@ query-audit:
 ```
 
 !!! note
-    With this approach, Query Guard's auto-configuration `BeanPostProcessor` is disabled.
+    With this approach, QueryAudit's auto-configuration `BeanPostProcessor` is disabled.
     The `@QueryAudit` annotation and JUnit extension still work normally because they
     read the `QueryInterceptor` bean from the application context.
 
@@ -259,9 +259,9 @@ a normalized form of the query (for N+1 pattern detection).
 
 ---
 
-## Disabling Query Guard
+## Disabling QueryAudit
 
-To temporarily disable Query Guard without removing the dependency:
+To temporarily disable QueryAudit without removing the dependency:
 
 ```yaml
 query-audit:

@@ -1,6 +1,6 @@
 # SQL Anti-Pattern Detection
 
-Query Guard detects SQL anti-patterns by analyzing the **structure** of your queries. This page
+QueryAudit detects SQL anti-patterns by analyzing the **structure** of your queries. This page
 covers all SQL-related detectors organized by severity, including MySQL-specific patterns,
 JOIN issues, locking risks, and query structure rules.
 
@@ -42,7 +42,7 @@ WHERE DATE(created_at) = '2024-01-01'
 
 #### Detection
 
-Query Guard parses the WHERE clause and detects function calls that wrap column names.
+QueryAudit parses the WHERE clause and detects function calls that wrap column names.
 Common functions caught: `DATE()`, `YEAR()`, `MONTH()`, `LOWER()`, `UPPER()`, `TRIM()`,
 `SUBSTRING()`, `CAST()`, and others.
 
@@ -129,7 +129,7 @@ the column on one side for the index to be usable.
 
 #### Detection
 
-Query Guard detects patterns where a column is wrapped in arithmetic (`+`, `-`, `*`, `/`)
+QueryAudit detects patterns where a column is wrapped in arithmetic (`+`, `-`, `*`, `/`)
 before being compared.
 
 #### Examples and Fixes

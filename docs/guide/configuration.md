@@ -1,6 +1,6 @@
 # Configuration Reference
 
-Query Guard can be configured at three levels. When multiple levels conflict, the
+QueryAudit can be configured at three levels. When multiple levels conflict, the
 most specific one wins:
 
 ```
@@ -196,7 +196,7 @@ Copy-paste these presets for typical use cases.
 | `or-clause.threshold` | 5 | 3 | 2 |
 
 !!! tip "Choosing the right profile"
-    - **Conservative**: Use when adopting Query Guard in a large existing codebase.
+    - **Conservative**: Use when adopting QueryAudit in a large existing codebase.
       Minimizes false positives at the cost of missing some real issues.
     - **Moderate (default)**: Balanced for most projects. Good starting point.
     - **Strict**: Use for new projects or performance-critical services. May require
@@ -256,7 +256,7 @@ See the [Annotations Guide](annotations.md) for detailed usage patterns.
 
 ## Programmatic Configuration
 
-When using Query Guard without Spring Boot:
+When using QueryAudit without Spring Boot:
 
 ```java
 QueryAuditConfig config = QueryAuditConfig.builder()
@@ -415,7 +415,7 @@ Of these, 60 are actively emitted by 57 detection rules. The remaining 4 are dis
 
 ## Memory Optimization
 
-Query Guard records every SQL statement executed during a test for analysis.
+QueryAudit records every SQL statement executed during a test for analysis.
 In large test suites or tests that generate many queries, this can consume
 significant heap memory. The following settings help control memory usage.
 
@@ -441,7 +441,7 @@ QueryAuditConfig config = QueryAuditConfig.builder()
 
 ### Automatic String Pooling
 
-Query Guard automatically deduplicates SQL strings and stack traces in memory.
+QueryAudit automatically deduplicates SQL strings and stack traces in memory.
 N+1 queries originate from the same call site and execute the same SQL, so
 pooling ensures that identical strings share a single object reference. This
 optimization is always active and requires no configuration.

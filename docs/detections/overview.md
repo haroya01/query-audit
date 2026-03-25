@@ -1,6 +1,6 @@
 # Detection Rules Overview
 
-Query Guard ships with **57 active detection rules** that catch SQL performance issues,
+QueryAudit ships with **57 active detection rules** that catch SQL performance issues,
 logic bugs, and anti-patterns during your test runs. These 57 rules emit **60 distinct
 issue types** (because `MissingIndexDetector` alone emits 4 different issue types).
 Rules are organized by severity and confidence model to help you prioritize fixes.
@@ -16,7 +16,7 @@ Rules are organized by severity and confidence model to help you prioritize fixe
 ### Confirmed (100% Reliable)
 
 These rules analyze **SQL structure and database schema** -- things that do not change with data
-volume. If Query Guard reports a Confirmed issue, it is a real problem regardless of whether you
+volume. If QueryAudit reports a Confirmed issue, it is a real problem regardless of whether you
 are running against 5 test rows or 5 million production rows.
 
 !!! success "Confirmed = Structural / Pattern-based"
