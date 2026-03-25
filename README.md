@@ -52,8 +52,8 @@ QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.2.0-SNAPSHOT'
-    testImplementation 'io.github.haroya01:query-audit-mysql:0.2.0-SNAPSHOT'
+    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.1.0'
+    testImplementation 'io.github.haroya01:query-audit-mysql:0.1.0'
 }
 ```
 
@@ -61,8 +61,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.2.0-SNAPSHOT'
-    testImplementation 'io.github.haroya01:query-audit-postgresql:0.2.0-SNAPSHOT'
+    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.1.0'
+    testImplementation 'io.github.haroya01:query-audit-postgresql:0.1.0'
 }
 ```
 
@@ -75,13 +75,13 @@ dependencies {
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-spring-boot-starter</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <scope>test</scope>
 </dependency>
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-mysql</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <scope>test</scope>
 </dependency>
 ```
@@ -92,13 +92,13 @@ dependencies {
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-spring-boot-starter</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <scope>test</scope>
 </dependency>
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-postgresql</artifactId>
-    <version>0.2.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <scope>test</scope>
 </dependency>
 ```
@@ -109,8 +109,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-junit5:0.2.0-SNAPSHOT'
-    testRuntimeOnly 'io.github.haroya01:query-audit-mysql:0.2.0-SNAPSHOT'  // or query-audit-postgresql
+    testImplementation 'io.github.haroya01:query-audit-junit5:0.1.0'
+    testRuntimeOnly 'io.github.haroya01:query-audit-mysql:0.1.0'  // or query-audit-postgresql
 }
 ```
 
