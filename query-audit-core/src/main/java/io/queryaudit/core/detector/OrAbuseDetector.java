@@ -48,6 +48,17 @@ public class OrAbuseDetector implements DetectionRule {
         List<String> tables = SqlParser.extractTableNames(query.sql());
         String table = tables.isEmpty() ? null : tables.get(0);
 
+        // If index metadata is available for this table and every OR'd column has its own
+        // individual index, MySQL can satisfy the query via index_merge optimization
+        // (union of range scans). Flagging such queries would be a false positive.
+        if (table != null && indexMetadata != null && indexMetadata.hasTable(table)) {
+          List<String> orColumns = SqlParser.extractOrBranchColumns(query.sql());
+          if (!orColumns.isEmpty()
+              && orColumns.stream().allMatch(col -> indexMetadata.hasIndexOn(table, col))) {
+            continue;
+          }
+        }
+
         issues.add(
             new Issue(
                 IssueType.OR_ABUSE,

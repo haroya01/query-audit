@@ -1053,6 +1053,47 @@ public final class SqlParser {
   }
 
   /**
+   * Extracts the distinct column names referenced in each OR-separated branch of the WHERE clause.
+   * Useful for determining whether every OR'd column has its own index (enabling MySQL index_merge
+   * optimization).
+   *
+   * <p>For {@code WHERE email = ? OR phone = ? OR username = ?} this returns {@code ["email",
+   * "phone", "username"]} (lowercase).
+   *
+   * @return list of column names (lowercase) for each OR branch, in order; empty if the WHERE
+   *     clause cannot be parsed or contains no OR conditions
+   */
+  public static List<String> extractOrBranchColumns(String sql) {
+    if (sql == null) {
+      return List.of();
+    }
+
+    sql = stripComments(sql);
+    String cleaned = removeSubqueries(sql);
+    String whereBody = extractWhereBody(cleaned);
+    if (whereBody == null) {
+      return List.of();
+    }
+
+    whereBody = replaceStringLiterals(whereBody);
+    whereBody = DOUBLE_QUOTED.matcher(whereBody).replaceAll("?");
+    whereBody = removeInLists(whereBody);
+
+    String[] orParts = OR_PATTERN.split(whereBody);
+    List<String> columns = new ArrayList<>();
+    for (String part : orParts) {
+      Matcher m = OR_BRANCH_COL.matcher(part.trim());
+      if (m.find()) {
+        String column = m.group(2);
+        if (column != null && !isKeyword(column)) {
+          columns.add(column.toLowerCase());
+        }
+      }
+    }
+    return columns;
+  }
+
+  /**
    * Check whether all OR conditions in the WHERE clause reference the same column. This is
    * equivalent to an IN clause (e.g., "type = 'A' OR type = 'B'" is the same as "type IN ('A',
    * 'B')"), which MySQL optimizes identically.
