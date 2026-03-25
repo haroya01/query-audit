@@ -1,6 +1,7 @@
 plugins {
     id 'com.diffplug.spotless' version '7.0.2' apply false
     id 'info.solidsoft.pitest' version '1.15.0' apply false
+    id 'com.vanniktech.maven.publish' version '0.30.0' apply false
 }
 
 allprojects {
@@ -10,9 +11,8 @@ allprojects {
 
 subprojects {
     apply plugin: 'java-library'
-    apply plugin: 'maven-publish'
-    apply plugin: 'signing'
     apply plugin: 'com.diffplug.spotless'
+    apply plugin: 'com.vanniktech.maven.publish'
 
     spotless {
         java {
@@ -37,8 +37,6 @@ subprojects {
     java {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        withJavadocJar()
-        withSourcesJar()
     }
 
     repositories {
@@ -62,73 +60,42 @@ subprojects {
         useJUnitPlatform()
     }
 
-    publishing {
-        publications {
-            mavenJava(MavenPublication) {
-                from components.java
+    mavenPublishing {
+        publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
+        signAllPublications()
 
-                pom {
-                    name = "QueryAudit - ${project.name}"
-                    description = 'Automatic query performance analysis for JUnit tests'
+        pom {
+            name = "QueryAudit - ${project.name}"
+            description = 'Automatic query performance analysis for JUnit tests'
+            url = 'https://github.com/haroya01/query-audit'
+            inceptionYear = '2025'
+
+            licenses {
+                license {
+                    name = 'The Apache License, Version 2.0'
+                    url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                    distribution = 'repo'
+                }
+            }
+
+            developers {
+                developer {
+                    id = 'haroya01'
+                    name = 'QueryAudit Contributors'
                     url = 'https://github.com/haroya01/query-audit'
-                    inceptionYear = '2025'
-
-                    licenses {
-                        license {
-                            name = 'The Apache License, Version 2.0'
-                            url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
-                            distribution = 'repo'
-                        }
-                    }
-
-                    developers {
-                        developer {
-                            id = 'queryaudit'
-                            name = 'QueryAudit Contributors'
-                            url = 'https://github.com/haroya01/query-audit'
-                        }
-                    }
-
-                    scm {
-                        url = 'https://github.com/haroya01/query-audit'
-                        connection = 'scm:git:git://github.com/haroya01/query-audit.git'
-                        developerConnection = 'scm:git:ssh://git@github.com/haroya01/query-audit.git'
-                    }
-
-                    issueManagement {
-                        system = 'GitHub Issues'
-                        url = 'https://github.com/haroya01/query-audit/issues'
-                    }
                 }
             }
-        }
 
-        repositories {
-            maven {
-                name = 'OSSRH'
-                def isSnapshot = version.toString().endsWith('-SNAPSHOT')
-                url = isSnapshot
-                        ? 'https://s01.oss.sonatype.org/content/repositories/snapshots/'
-                        : 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
-                credentials {
-                    username = findProperty('ossrhUsername') ?: System.getenv('MAVEN_CENTRAL_USERNAME') ?: ''
-                    password = findProperty('ossrhPassword') ?: System.getenv('MAVEN_CENTRAL_PASSWORD') ?: ''
-                }
+            scm {
+                url = 'https://github.com/haroya01/query-audit'
+                connection = 'scm:git:git://github.com/haroya01/query-audit.git'
+                developerConnection = 'scm:git:ssh://git@github.com/haroya01/query-audit.git'
+            }
+
+            issueManagement {
+                system = 'GitHub Issues'
+                url = 'https://github.com/haroya01/query-audit/issues'
             }
         }
-    }
-
-    signing {
-        def signingKey = findProperty('signingKey') ?: System.getenv('GPG_SIGNING_KEY')
-        def signingPassword = findProperty('signingPassword') ?: System.getenv('GPG_SIGNING_PASSWORD')
-
-        if (signingKey && signingPassword) {
-            useInMemoryPgpKeys(signingKey, signingPassword)
-        }
-
-        sign publishing.publications.mavenJava
-
-        // Only require signing for release builds (not SNAPSHOT)
-        required = { !version.toString().endsWith('-SNAPSHOT') && gradle.taskGraph.hasTask('publish') }
     }
 }
