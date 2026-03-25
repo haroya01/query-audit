@@ -1,0 +1,7 @@
+rootProject.name = 'query-audit'
+
+include 'query-audit-core'
+include 'query-audit-mysql'
+include 'query-audit-junit5'
+include 'query-audit-spring-boot-starter'
+include 'query-audit-postgresql'

@@ -1,0 +1,30 @@
+// NOTE: pitest plugin 1.15.0 triggers a ReportingExtension.getBaseDir() deprecation warning.
+// This is fixed on the plugin's master branch but not yet released.
+// See: https://github.com/szpak/gradle-pitest-plugin
+apply plugin: 'info.solidsoft.pitest'
+
+dependencies {
+    implementation 'net.ttddyy:datasource-proxy:1.10'
+
+    compileOnly 'org.slf4j:slf4j-api:2.0.16'
+    compileOnly 'org.hibernate.orm:hibernate-core:6.6.4.Final'
+    compileOnly 'com.github.jsqlparser:jsqlparser:5.3'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testImplementation 'org.assertj:assertj-core:3.27.3'
+    testImplementation 'org.mockito:mockito-core:5.14.2'
+    testImplementation 'ch.qos.logback:logback-classic:1.5.15'
+    testImplementation 'org.hibernate.orm:hibernate-core:6.6.4.Final'
+    testImplementation 'com.github.jsqlparser:jsqlparser:5.3'
+}
+
+pitest {
+    junit5PluginVersion = '1.2.1'
+    targetClasses = ['io.queryaudit.core.detector.*']
+    targetTests = ['io.queryaudit.core.detector.*']
+    threads = 4
+    outputFormats = ['HTML', 'XML']
+    timestampedReports = false
+    mutationThreshold = 70
+    coverageThreshold = 60
+}

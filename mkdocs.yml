@@ -1,0 +1,98 @@
+site_name: Query Guard
+site_url: https://query-audit.github.io/query-audit
+site_description: Automatic query performance analysis for JUnit tests
+site_author: Query Guard Contributors
+repo_url: https://github.com/query-audit/query-audit
+repo_name: query-audit/query-audit
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/query-audit/query-audit
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Spring Boot: getting-started/spring-boot.md
+  - Detection Rules:
+    - Overview: detections/overview.md
+    - "N+1 Query": detections/n-plus-one.md
+    - Missing Index: detections/missing-index.md
+    - SQL Anti-Patterns: detections/sql-anti-patterns.md
+    - DML Anti-Patterns: detections/dml-anti-patterns.md
+  - References: references.md
+  - Guide:
+    - Annotations: guide/annotations.md
+    - Configuration: guide/configuration.md
+    - Reports: guide/reports.md
+    - Suppressing Issues: guide/suppressing.md
+    - CI/CD Integration: guide/ci-cd.md
+    - Troubleshooting: guide/troubleshooting.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Adding Database Support: architecture/new-database.md
+    - Contributing: architecture/contributing.md

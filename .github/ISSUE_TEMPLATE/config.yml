@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://query-audit.github.io/query-audit
+    about: Check the docs before opening an issue
