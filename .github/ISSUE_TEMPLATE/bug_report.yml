@@ -1,0 +1,74 @@
+name: Bug Report
+description: Report a bug in Query Guard
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting a bug! Please fill out the details below.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Add @QueryAudit to test class
+        2. Run test with this SQL: ...
+        3. See incorrect detection
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Query Guard Version
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: java-version
+    attributes:
+      label: Java Version
+      options:
+        - "17"
+        - "21"
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: database
+    attributes:
+      label: Database
+      options:
+        - MySQL 8.x
+        - MySQL 5.7
+        - H2
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: sql
+    attributes:
+      label: Relevant SQL
+      description: The SQL query that caused the issue (if applicable)
+      render: sql

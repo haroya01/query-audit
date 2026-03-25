@@ -1,0 +1,59 @@
+name: New Detector Proposal
+description: Propose a new SQL anti-pattern detector
+title: "[Detector]: "
+labels: ["new-detector"]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Anti-Pattern Name
+      placeholder: "e.g., ORDER BY RAND()"
+    validations:
+      required: true
+  - type: textarea
+    id: bad-sql
+    attributes:
+      label: Bad SQL (anti-pattern)
+      description: Show the SQL that should be detected
+      render: sql
+    validations:
+      required: true
+  - type: textarea
+    id: good-sql
+    attributes:
+      label: Fixed SQL
+      description: Show the corrected SQL
+      render: sql
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this bad?
+      description: Explain the performance or correctness impact
+    validations:
+      required: true
+  - type: input
+    id: reference
+    attributes:
+      label: Reference
+      description: Link to MySQL docs, academic paper, or blog post
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Suggested Severity
+      options:
+        - ERROR (correctness bug or severe performance)
+        - WARNING (significant performance impact)
+        - INFO (best practice suggestion)
+    validations:
+      required: true
+  - type: dropdown
+    id: fp-risk
+    attributes:
+      label: False Positive Risk
+      options:
+        - Very Low
+        - Low
+        - Medium
+        - High
