@@ -43,8 +43,8 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
 
     ```kotlin
     dependencies {
-        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.2.0-SNAPSHOT")
-        testImplementation("io.github.haroya01:query-audit-mysql:0.2.0-SNAPSHOT")
+        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.1.0")
+        testImplementation("io.github.haroya01:query-audit-mysql:0.1.0")
     }
     ```
 
@@ -52,8 +52,8 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.2.0-SNAPSHOT'
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.2.0-SNAPSHOT'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.1.0'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.1.0'
     }
     ```
 
@@ -63,13 +63,13 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.2.0-SNAPSHOT</version>
+        <version>0.1.0</version>
         <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-mysql</artifactId>
-        <version>0.2.0-SNAPSHOT</version>
+        <version>0.1.0</version>
         <scope>test</scope>
     </dependency>
     ```

@@ -45,8 +45,8 @@ No configuration. No extra beans. No proxy setup. Just the annotation.
 
     ```gradle
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.2.0-SNAPSHOT'
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.2.0-SNAPSHOT'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.1.0'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.1.0'
     }
     ```
 
@@ -56,13 +56,13 @@ No configuration. No extra beans. No proxy setup. Just the annotation.
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.2.0-SNAPSHOT</version>
+        <version>0.1.0</version>
         <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-mysql</artifactId>
-        <version>0.2.0-SNAPSHOT</version>
+        <version>0.1.0</version>
         <scope>test</scope>
     </dependency>
     ```
