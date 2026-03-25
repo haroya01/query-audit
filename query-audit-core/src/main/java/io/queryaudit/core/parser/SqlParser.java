@@ -1053,6 +1053,48 @@ public final class SqlParser {
   }
 
   /**
+   * Extracts the column name referenced in each OR branch of the WHERE clause. Used to determine
+   * whether every OR-branched column has its own index, enabling index_merge optimisation.
+   *
+   * @return list of lowercase column names (one per OR branch); empty list if unparseable
+   */
+  public static List<String> extractOrBranchColumns(String sql) {
+    if (sql == null) {
+      return List.of();
+    }
+
+    sql = stripComments(sql);
+    String cleaned = removeSubqueries(sql);
+    String whereBody = extractWhereBody(cleaned);
+    if (whereBody == null) {
+      return List.of();
+    }
+
+    whereBody = replaceStringLiterals(whereBody);
+    whereBody = DOUBLE_QUOTED.matcher(whereBody).replaceAll("?");
+    whereBody = removeInLists(whereBody);
+
+    String[] orParts = OR_PATTERN.split(whereBody);
+    if (orParts.length < 2) {
+      return List.of();
+    }
+
+    List<String> columns = new java.util.ArrayList<>();
+    for (String part : orParts) {
+      Matcher m = OR_BRANCH_COL.matcher(part.trim());
+      if (!m.find()) {
+        return List.of();
+      }
+      String col = m.group(2);
+      if (col == null || isKeyword(col)) {
+        return List.of();
+      }
+      columns.add(col.toLowerCase(java.util.Locale.ROOT));
+    }
+    return columns;
+  }
+
+  /**
    * Check whether all OR conditions in the WHERE clause reference the same column. This is
    * equivalent to an IN clause (e.g., "type = 'A' OR type = 'B'" is the same as "type IN ('A',
    * 'B')"), which MySQL optimizes identically.
