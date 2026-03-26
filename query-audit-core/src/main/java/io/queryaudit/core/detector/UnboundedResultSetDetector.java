@@ -50,6 +50,10 @@ public class UnboundedResultSetDetector implements DetectionRule {
   private static final Pattern LIMIT_PATTERN =
       Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE);
 
+  /** SQL:2008 standard row-limiting clause used by Hibernate 6 / H2 / PostgreSQL. */
+  private static final Pattern FETCH_FIRST_PATTERN =
+      Pattern.compile("\\bFETCH\\s+FIRST\\b", Pattern.CASE_INSENSITIVE);
+
   private static final Pattern FOR_UPDATE_PATTERN =
       Pattern.compile("\\bFOR\\s+UPDATE\\b", Pattern.CASE_INSENSITIVE);
 
@@ -131,6 +135,10 @@ public class UnboundedResultSetDetector implements DetectionRule {
       }
 
       if (LIMIT_PATTERN.matcher(sql).find()) {
+        continue;
+      }
+
+      if (FETCH_FIRST_PATTERN.matcher(sql).find()) {
         continue;
       }
 
