@@ -370,6 +370,95 @@ class UnboundedResultSetDetectorTest {
     }
   }
 
+  // ── Issue #32: multi-column WHERE false positives ──────────────────
+
+  @Nested
+  class MultiColumnWhereFalsePositives {
+
+    @Test
+    void falsePositiveOnCompositeUniqueWhere() {
+      // Issue #32: WHERE oauth_provider = ? AND oauth_sub = ? forms a composite unique key
+      // but is flagged because SINGLE_EQUALITY_PATTERN requires end-of-string after first `= ?`
+      IndexMetadata metadata =
+          new IndexMetadata(
+              Map.of(
+                  "users",
+                  List.of(
+                      new IndexInfo("users", "uk_oauth", "oauth_provider", 1, false, 100),
+                      new IndexInfo("users", "uk_oauth", "oauth_sub", 2, false, 1000))));
+
+      String sql = "SELECT * FROM users WHERE oauth_provider = ? AND oauth_sub = ?";
+
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
+
+      assertThat(issues)
+          .as("Composite unique index with all columns matched should not be flagged")
+          .isEmpty();
+    }
+
+    @Test
+    void falsePositiveOnMultiColumnWhereWithoutIndex() {
+      // Even without a unique index, multi-column equality with ORDER BY + Optional return
+      // pattern from Issue #32: queries returning Optional<T> are bounded
+      String sql =
+          "SELECT s FROM user_suspensions s "
+              + "WHERE s.user_id = ? AND s.unsuspended_at IS NULL "
+              + "AND (s.is_permanent = ? OR s.suspended_until > ?) "
+              + "ORDER BY s.suspended_at DESC";
+
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      // This should still be flagged (no LIMIT, no unique index match)
+      // — included here to document the current behavior
+      assertThat(issues).hasSize(1);
+    }
+
+    @Test
+    void noFalsePositiveOnMultiColumnEqualityWithAllUniqueColumns() {
+      // Two equality conditions covering all columns of a composite unique index
+      IndexMetadata metadata =
+          new IndexMetadata(
+              Map.of(
+                  "warehouse_items",
+                  List.of(
+                      new IndexInfo(
+                          "warehouse_items", "uk_wh_item", "warehouse_id", 1, false, 50),
+                      new IndexInfo(
+                          "warehouse_items", "uk_wh_item", "item_code", 2, false, 500))));
+
+      String sql =
+          "SELECT * FROM warehouse_items WHERE warehouse_id = ? AND item_code = ?";
+
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
+
+      assertThat(issues)
+          .as("All columns of composite unique index matched → should not flag")
+          .isEmpty();
+    }
+
+    @Test
+    void stillFlagsPartialCompositeUniqueMatch() {
+      // Only one column of 2-column composite unique index is used
+      IndexMetadata metadata =
+          new IndexMetadata(
+              Map.of(
+                  "warehouse_items",
+                  List.of(
+                      new IndexInfo(
+                          "warehouse_items", "uk_wh_item", "region", 1, false, 50),
+                      new IndexInfo(
+                          "warehouse_items", "uk_wh_item", "item_code", 2, false, 500))));
+
+      String sql = "SELECT * FROM warehouse_items WHERE region = ?";
+
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
+
+      assertThat(issues)
+          .as("Partial composite unique match does not guarantee single row")
+          .hasSize(1);
+    }
+  }
+
   // ── false positive fix: EXISTS subquery ────────────────────────────
 
   @Nested

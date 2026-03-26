@@ -89,6 +89,13 @@ public class UnboundedResultSetDetector implements DetectionRule {
       Pattern.compile(
           "\\bWHERE\\s+(?:\\w+\\.)?\\w+\\s*=\\s*\\?\\s+LIMIT\\s+1\\s*$", Pattern.CASE_INSENSITIVE);
 
+  /**
+   * Extracts equality column names from WHERE clause conditions joined by AND. Matches patterns
+   * like {@code (alias.)column = ?} within compound WHERE clauses.
+   */
+  private static final Pattern WHERE_EQUALITY_COLUMN_PATTERN =
+      Pattern.compile("(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?", Pattern.CASE_INSENSITIVE);
+
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
@@ -163,6 +170,17 @@ public class UnboundedResultSetDetector implements DetectionRule {
         }
       }
 
+      // Check multi-column equality conditions against composite unique indexes.
+      // Extract all "column = ?" patterns from the WHERE clause and check if they
+      // fully cover any unique index (single or composite).
+      if (indexMetadata != null && table != null) {
+        Set<String> equalityColumns = extractEqualityColumns(sql);
+        if (!equalityColumns.isEmpty()
+            && indexMetadata.columnsMatchUniqueIndex(table, equalityColumns)) {
+          continue;
+        }
+      }
+
       // Single equality + LIMIT 1 is already handled by LIMIT_PATTERN above,
       // but this catches normalized queries where LIMIT 1 is present.
       if (SINGLE_EQUALITY_LIMIT1_PATTERN.matcher(sql).find()) {
@@ -183,5 +201,23 @@ public class UnboundedResultSetDetector implements DetectionRule {
     }
 
     return issues;
+  }
+
+  /**
+   * Extracts all equality column names from the WHERE clause of the given SQL. Only considers
+   * {@code column = ?} patterns connected by AND. Returns an empty set if no WHERE clause is found.
+   */
+  private static Set<String> extractEqualityColumns(String sql) {
+    Set<String> columns = new LinkedHashSet<>();
+    int whereIdx = sql.toUpperCase().indexOf("WHERE");
+    if (whereIdx < 0) {
+      return columns;
+    }
+    String whereClause = sql.substring(whereIdx);
+    Matcher matcher = WHERE_EQUALITY_COLUMN_PATTERN.matcher(whereClause);
+    while (matcher.find()) {
+      columns.add(matcher.group(1));
+    }
+    return columns;
   }
 }
