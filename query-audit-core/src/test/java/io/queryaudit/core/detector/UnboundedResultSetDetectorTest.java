@@ -407,4 +407,308 @@ class UnboundedResultSetDetectorTest {
       assertThat(issues).isEmpty();
     }
   }
+
+  // ── #44 before/after verification ─────────────────────────────────
+  //
+  // 동일한 SQL + 동일한 스택 트레이스에 대해
+  // resolver 없음(before) → resolver 있음(after) 결과가 어떻게 달라지는지 검증.
+
+  @Nested
+  class Issue44_ReturnTypeAnalysisVerification {
+
+    private static final String PROXY_STACK =
+        "jdk.proxy3.$Proxy296.findByChannelName:-1\n"
+            + "com.example.service.ChatService.getMessages:42";
+
+    private static final String NON_PROXY_STACK =
+        "com.example.dao.CustomDao.fetchMessages:30\n"
+            + "com.example.service.MessageService.getAll:12";
+
+    private static QueryRecord recordWithStack(String sql, String stackTrace) {
+      return new QueryRecord(sql, 0L, System.currentTimeMillis(), stackTrace);
+    }
+
+    private final UnboundedResultSetDetector withoutResolver =
+        new UnboundedResultSetDetector();
+
+    // ── Case 1: List<ChatMessage> findByChannelName(String) ──
+    // 이슈 #44의 핵심 시나리오. WHERE 절이 있는 List<T> 반환 메서드.
+
+    @Test
+    void listWithWhere_before_warningWithoutResolver() {
+      String sql =
+          "SELECT cm.id, cm.channel_name, cm.content "
+              + "FROM chat_messages cm "
+              + "WHERE cm.channel_name = ?";
+
+      List<Issue> issues =
+          withoutResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      // Before: resolver 없으면 WARNING (false positive)
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+    }
+
+    @Test
+    void listWithWhere_after_downgradedToInfoWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack -> {
+            // 스택에 프록시 프레임이 있을 때만 COLLECTION 반환
+            if (stack.contains("$Proxy")) {
+              return RepositoryReturnType.COLLECTION;
+            }
+            return RepositoryReturnType.UNKNOWN;
+          });
+
+      String sql =
+          "SELECT cm.id, cm.channel_name, cm.content "
+              + "FROM chat_messages cm "
+              + "WHERE cm.channel_name = ?";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      // After: 같은 쿼리 + 같은 스택인데 INFO로 다운그레이드됨
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
+    }
+
+    // ── Case 2: 복합 WHERE + JOIN ──
+
+    @Test
+    void joinWithWhere_before_warningWithoutResolver() {
+      String sql =
+          "SELECT cm.id, u.name, cm.content "
+              + "FROM chat_messages cm "
+              + "JOIN users u ON cm.user_id = u.id "
+              + "WHERE cm.channel_name = ?";
+
+      List<Issue> issues =
+          withoutResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+    }
+
+    @Test
+    void joinWithWhere_after_downgradedToInfoWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack ->
+              stack.contains("$Proxy")
+                  ? RepositoryReturnType.COLLECTION
+                  : RepositoryReturnType.UNKNOWN);
+
+      String sql =
+          "SELECT cm.id, u.name, cm.content "
+              + "FROM chat_messages cm "
+              + "JOIN users u ON cm.user_id = u.id "
+              + "WHERE cm.channel_name = ?";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
+    }
+
+    // ── Case 3: Optional<User> findByPhone(String) ──
+    // PK_LOOKUP_PATTERN에 매칭 안 되는 컬럼이지만 Optional이므로 단건.
+
+    @Test
+    void optionalByNonPkColumn_before_warningWithoutResolver() {
+      String proxyStack =
+          "jdk.proxy3.$Proxy101.findByPhone:-1\n"
+              + "com.example.service.UserService.findUser:25";
+
+      String sql = "SELECT u.id, u.name, u.phone FROM users u WHERE u.phone = ?";
+
+      List<Issue> issues =
+          withoutResolver.evaluate(
+              List.of(recordWithStack(sql, proxyStack)), EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+    }
+
+    @Test
+    void optionalByNonPkColumn_after_suppressedWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack ->
+              stack.contains("$Proxy")
+                  ? RepositoryReturnType.OPTIONAL
+                  : RepositoryReturnType.UNKNOWN);
+
+      String proxyStack =
+          "jdk.proxy3.$Proxy101.findByPhone:-1\n"
+              + "com.example.service.UserService.findUser:25";
+
+      String sql = "SELECT u.id, u.name, u.phone FROM users u WHERE u.phone = ?";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, proxyStack)), EMPTY_INDEX);
+
+      // After: Optional 반환이므로 완전 suppress
+      assertThat(issues).isEmpty();
+    }
+
+    // ── Case 4: Page<T> / Slice<T> ──
+
+    @Test
+    void pageReturn_after_suppressedWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack ->
+              stack.contains("$Proxy")
+                  ? RepositoryReturnType.PAGE_OR_SLICE
+                  : RepositoryReturnType.UNKNOWN);
+
+      String sql = "SELECT o.id, o.status FROM orders o WHERE o.status = ?";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      assertThat(issues).isEmpty();
+    }
+
+    // ── Case 5: User findByPhone(String) — SINGLE_ENTITY suppress ──
+
+    @Test
+    void singleEntity_after_suppressedWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack ->
+              stack.contains("$Proxy")
+                  ? RepositoryReturnType.SINGLE_ENTITY
+                  : RepositoryReturnType.UNKNOWN);
+
+      String sql = "SELECT u.id, u.name, u.phone FROM users u WHERE u.phone = ?";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      // SINGLE_ENTITY 반환이므로 완전 suppress
+      assertThat(issues).isEmpty();
+    }
+
+    @Test
+    void singleEntityWithoutWhere_after_suppressedWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack ->
+              stack.contains("$Proxy")
+                  ? RepositoryReturnType.SINGLE_ENTITY
+                  : RepositoryReturnType.UNKNOWN);
+
+      // SINGLE_ENTITY는 WHERE 유무와 무관하게 단건 반환이므로 suppress
+      String sql = "SELECT u.id, u.name FROM users u";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      assertThat(issues).isEmpty();
+    }
+
+    // ── Case 6: findAll() — WHERE 없는 Collection은 여전히 WARNING ──
+
+    @Test
+    void collectionWithoutWhere_after_stillWarningWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack ->
+              stack.contains("$Proxy")
+                  ? RepositoryReturnType.COLLECTION
+                  : RepositoryReturnType.UNKNOWN);
+
+      String sql = "SELECT r.id, r.name FROM rooms r";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      // findAll()은 진짜 unbounded → resolver가 있어도 WARNING 유지
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+    }
+
+    // ── Case 6: 프록시 아닌 일반 DAO — resolver가 있어도 UNKNOWN → WARNING ──
+
+    @Test
+    void nonProxyStack_after_stillWarningWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack ->
+              stack.contains("$Proxy")
+                  ? RepositoryReturnType.COLLECTION
+                  : RepositoryReturnType.UNKNOWN);
+
+      String sql =
+          "SELECT m.id, m.content FROM messages m WHERE m.channel_name = ?";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, NON_PROXY_STACK)), EMPTY_INDEX);
+
+      // 프록시가 없으면 UNKNOWN → WARNING 유지
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+    }
+
+    // ── Case 7: 빈 스택 트레이스 — resolver가 있어도 WARNING ──
+
+    @Test
+    void emptyStack_after_stillWarningWithResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack -> RepositoryReturnType.OPTIONAL);
+
+      String sql =
+          "SELECT cm.id, cm.content FROM chat_messages cm WHERE cm.channel_name = ?";
+
+      List<Issue> issues =
+          withResolver.evaluate(List.of(recordWithStack(sql, "")), EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+    }
+
+    // ── Case 8: 기존 PK exclusion은 resolver와 무관하게 동작 ──
+
+    @Test
+    void pkLookup_stillSuppressedRegardlessOfResolver() {
+      UnboundedResultSetDetector withResolver =
+          new UnboundedResultSetDetector(stack -> RepositoryReturnType.COLLECTION);
+
+      String sql = "SELECT * FROM users WHERE id = ?";
+
+      List<Issue> issues =
+          withResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      assertThat(issues).isEmpty();
+    }
+
+    // ── Case 9: resolver 예외 시 WARNING으로 fallback ──
+
+    @Test
+    void resolverException_fallsBackToWarning() {
+      UnboundedResultSetDetector withBrokenResolver =
+          new UnboundedResultSetDetector(stack -> {
+            throw new RuntimeException("resolver broke");
+          });
+
+      String sql =
+          "SELECT cm.id, cm.content FROM chat_messages cm WHERE cm.channel_name = ?";
+
+      List<Issue> issues =
+          withBrokenResolver.evaluate(
+              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+
+      // 예외가 전파되지 않고 WARNING으로 fallback
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+    }
+  }
 }

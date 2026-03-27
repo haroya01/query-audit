@@ -37,6 +37,16 @@ import java.util.regex.Pattern;
  */
 public class UnboundedResultSetDetector implements DetectionRule {
 
+  private final RepositoryReturnTypeResolver returnTypeResolver;
+
+  public UnboundedResultSetDetector() {
+    this(null);
+  }
+
+  public UnboundedResultSetDetector(RepositoryReturnTypeResolver returnTypeResolver) {
+    this.returnTypeResolver = returnTypeResolver;
+  }
+
   private static final Pattern SELECT_PATTERN =
       Pattern.compile("^\\s*SELECT\\b", Pattern.CASE_INSENSITIVE);
 
@@ -83,6 +93,10 @@ public class UnboundedResultSetDetector implements DetectionRule {
    */
   private static final Pattern SINGLE_EQUALITY_PATTERN =
       Pattern.compile("\\bWHERE\\s+(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?\\s*$", Pattern.CASE_INSENSITIVE);
+
+  /** Detects presence of a WHERE clause (used for Collection return type downgrade). */
+  private static final Pattern WHERE_PATTERN =
+      Pattern.compile("\\bWHERE\\b", Pattern.CASE_INSENSITIVE);
 
   /** Matches a single equality condition followed by LIMIT 1. */
   private static final Pattern SINGLE_EQUALITY_LIMIT1_PATTERN =
@@ -169,16 +183,52 @@ public class UnboundedResultSetDetector implements DetectionRule {
         continue;
       }
 
+      // Return type analysis: suppress or downgrade based on repository method return type
+      Severity severity = Severity.WARNING;
+      String detail = "SELECT query without LIMIT could return unbounded rows";
+      String suggestion =
+          "Add LIMIT to prevent unbounded result sets in production. "
+              + "For JPA: use Pageable parameter or setMaxResults().";
+
+      if (returnTypeResolver != null
+          && query.stackTrace() != null
+          && !query.stackTrace().isEmpty()) {
+        RepositoryReturnType returnType;
+        try {
+          returnType = returnTypeResolver.resolve(query.stackTrace());
+        } catch (Exception e) {
+          returnType = RepositoryReturnType.UNKNOWN;
+        }
+
+        switch (returnType) {
+          case OPTIONAL, SINGLE_ENTITY, PAGE_OR_SLICE -> {
+            continue;
+          }
+          case COLLECTION -> {
+            if (WHERE_PATTERN.matcher(sql).find()) {
+              severity = Severity.INFO;
+              detail =
+                  "Collection-returning repository method with WHERE clause "
+                      + "(intentional fetch, not unbounded)";
+              suggestion =
+                  "If the result set could grow large, consider adding Pageable or LIMIT.";
+            }
+          }
+          case UNKNOWN -> {
+            // fall through — keep WARNING
+          }
+        }
+      }
+
       issues.add(
           new Issue(
               IssueType.UNBOUNDED_RESULT_SET,
-              Severity.WARNING,
+              severity,
               normalized,
               table,
               null,
-              "SELECT query without LIMIT could return unbounded rows",
-              "Add LIMIT to prevent unbounded result sets in production. "
-                  + "For JPA: use Pageable parameter or setMaxResults().",
+              detail,
+              suggestion,
               query.stackTrace()));
     }
 

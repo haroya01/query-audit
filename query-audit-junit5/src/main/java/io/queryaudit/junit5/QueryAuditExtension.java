@@ -5,6 +5,7 @@ import io.queryaudit.core.baseline.Baseline;
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
+import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
@@ -14,6 +15,9 @@ import io.queryaudit.core.regression.QueryCounts;
 import io.queryaudit.core.reporter.ConsoleReporter;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import io.queryaudit.core.reporter.JsonReporter;
+import java.awt.Desktop;
+import java.lang.reflect.Method;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.*;
@@ -48,6 +52,7 @@ public class QueryAuditExtension
   private static final String KEY_COUNT_BASELINE = "countBaseline";
   private static final String KEY_CURRENT_COUNTS = "currentCounts";
   private static final String KEY_DATASOURCE = "dataSource";
+  private static final String KEY_RETURN_TYPE_RESOLVER = "returnTypeResolver";
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
@@ -78,6 +83,16 @@ public class QueryAuditExtension
       if (metadata != null) {
         store.put(KEY_INDEX_METADATA, metadata);
       }
+    }
+
+    // Build return type resolver from Spring Data repositories if available
+    try {
+      Object appContext = resolveApplicationContext(context);
+      if (appContext != null) {
+        store.put(KEY_RETURN_TYPE_RESOLVER, new SpringDataReturnTypeResolver(appContext));
+      }
+    } catch (Exception | NoClassDefFoundError e) {
+      System.err.println("[QueryAudit] Failed to initialize return type resolver: " + e.getMessage());
     }
 
     // Load query count baseline for regression detection
@@ -133,10 +148,10 @@ public class QueryAuditExtension
     IndexMetadata indexMetadata = getIndexMetadata(context);
 
     // Resolve baseline path
-    java.nio.file.Path baselinePath =
+    Path baselinePath =
         config.getBaselinePath() != null
-            ? java.nio.file.Path.of(config.getBaselinePath())
-            : java.nio.file.Path.of(Baseline.DEFAULT_FILE_NAME);
+            ? Path.of(config.getBaselinePath())
+            : Path.of(Baseline.DEFAULT_FILE_NAME);
 
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, baselinePath);
     // Use outermost class name (resolve @Nested inner classes to parent)
@@ -287,9 +302,9 @@ public class QueryAuditExtension
     }
 
     try {
-      java.nio.file.Path outputDir = java.nio.file.Path.of("build", "reports", "query-audit");
+      Path outputDir = Path.of("build", "reports", "query-audit");
       aggregator.writeReport(outputDir);
-      java.nio.file.Path reportPath = outputDir.toAbsolutePath().resolve("index.html");
+      Path reportPath = outputDir.toAbsolutePath().resolve("index.html");
 
       // Summary line — visible even without opening the report
       long totalErrors = aggregator.getReports().stream()
@@ -406,7 +421,7 @@ public class QueryAuditExtension
 
     DetectNPlusOne detectNPlusOne = null;
     // getTestMethod() returns Optional.empty() in beforeAll (class-level context)
-    java.util.Optional<java.lang.reflect.Method> method = context.getTestMethod();
+    Optional<Method> method = context.getTestMethod();
     if (method.isPresent()) {
       detectNPlusOne = method.get().getAnnotation(DetectNPlusOne.class);
     }
@@ -419,6 +434,13 @@ public class QueryAuditExtension
     }
     if (detectNPlusOne != null) {
       builder.nPlusOneThreshold(detectNPlusOne.threshold());
+    }
+
+    // Wire return type resolver if available
+    RepositoryReturnTypeResolver resolver =
+        getReturnTypeResolver(context);
+    if (resolver != null) {
+      builder.repositoryReturnTypeResolver(resolver);
     }
 
     return builder.build();
@@ -435,7 +457,7 @@ public class QueryAuditExtension
 
   private QueryAudit findAnnotation(ExtensionContext context) {
     // getTestMethod() returns Optional.empty() in afterAll (class-level context)
-    java.util.Optional<java.lang.reflect.Method> testMethod = context.getTestMethod();
+    Optional<Method> testMethod = context.getTestMethod();
     if (testMethod.isPresent()) {
       QueryAudit annotation = testMethod.get().getAnnotation(QueryAudit.class);
       if (annotation != null) return annotation;
@@ -496,9 +518,9 @@ public class QueryAuditExtension
   // ── JSON report ───────────────────────────────────────────────────
 
   private void writeJsonReport(
-      List<io.queryaudit.core.model.QueryAuditReport> reports, java.nio.file.Path outputDir) {
+      List<QueryAuditReport> reports, Path outputDir) {
     try {
-      java.nio.file.Files.createDirectories(outputDir);
+      Files.createDirectories(outputDir);
       StringBuilder sb = new StringBuilder();
       sb.append("[\n");
       for (int i = 0; i < reports.size(); i++) {
@@ -509,8 +531,8 @@ public class QueryAuditExtension
         sb.append("\n");
       }
       sb.append("]");
-      java.nio.file.Path jsonPath = outputDir.resolve("report.json");
-      java.nio.file.Files.writeString(jsonPath, sb.toString());
+      Path jsonPath = outputDir.resolve("report.json");
+      Files.writeString(jsonPath, sb.toString());
       System.out.println("[QueryAudit] JSON report: " + jsonPath.toAbsolutePath());
     } catch (Exception e) {
       System.err.println("[QueryAudit] Failed to write JSON report: " + e.getMessage());
@@ -586,16 +608,16 @@ public class QueryAuditExtension
     return true;
   }
 
-  private void openReportInBrowser(java.nio.file.Path reportPath) {
+  private void openReportInBrowser(Path reportPath) {
     try {
       java.io.File reportFile = reportPath.toFile();
       if (!reportFile.exists()) {
         return;
       }
 
-      if (java.awt.Desktop.isDesktopSupported()) {
-        java.awt.Desktop desktop = java.awt.Desktop.getDesktop();
-        if (desktop.isSupported(java.awt.Desktop.Action.BROWSE)) {
+      if (Desktop.isDesktopSupported()) {
+        Desktop desktop = Desktop.getDesktop();
+        if (desktop.isSupported(Desktop.Action.BROWSE)) {
           desktop.browse(reportFile.toURI());
           System.out.println("[QueryAudit] Report opened in browser.");
           return;
@@ -620,7 +642,38 @@ public class QueryAuditExtension
     }
   }
 
+  // ── Spring context helper ──────────────────────────────────────────
+
+  private Object resolveApplicationContext(ExtensionContext context) {
+    try {
+      Class<?> springExtensionClass =
+          Class.forName("org.springframework.test.context.junit.jupiter.SpringExtension");
+      Method getAppContext =
+          springExtensionClass.getMethod("getApplicationContext", ExtensionContext.class);
+      return getAppContext.invoke(null, context);
+    } catch (Exception | NoClassDefFoundError ignored) {
+      return null;
+    }
+  }
+
   // ── Store helpers ──────────────────────────────────────────────────
+
+  private RepositoryReturnTypeResolver getReturnTypeResolver(
+      ExtensionContext context) {
+    ExtensionContext.Store store = context.getStore(NAMESPACE);
+    Object resolver = store.get(KEY_RETURN_TYPE_RESOLVER);
+    if (resolver instanceof RepositoryReturnTypeResolver r) {
+      return r;
+    }
+    ExtensionContext parent = context.getParent().orElse(null);
+    if (parent != null) {
+      resolver = parent.getStore(NAMESPACE).get(KEY_RETURN_TYPE_RESOLVER);
+      if (resolver instanceof RepositoryReturnTypeResolver r) {
+        return r;
+      }
+    }
+    return null;
+  }
 
   private QueryInterceptor getInterceptor(ExtensionContext context) {
     ExtensionContext.Store store = context.getStore(NAMESPACE);

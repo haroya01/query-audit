@@ -11,6 +11,7 @@ import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -70,7 +71,7 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
         continue;
       }
 
-      java.util.Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
+      Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
       List<String> tables = SqlParser.extractTableNames(sql);
       if (tables.isEmpty()) {
         continue;
@@ -166,7 +167,7 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
   }
 
   private String resolveTable(
-      String tableOrAlias, java.util.Map<String, String> aliasToTable, List<String> tables) {
+      String tableOrAlias, Map<String, String> aliasToTable, List<String> tables) {
     if (tableOrAlias != null) {
       String resolved = aliasToTable.get(tableOrAlias.toLowerCase());
       if (resolved != null) return resolved;

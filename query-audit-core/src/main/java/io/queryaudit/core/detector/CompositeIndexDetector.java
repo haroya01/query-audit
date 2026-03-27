@@ -12,6 +12,8 @@ import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.parser.EnhancedSqlParser;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -56,12 +58,12 @@ public class CompositeIndexDetector implements DetectionRule {
       List<ColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumns(sql);
 
       // Collect WHERE column names per resolved table
-      Map<String, Set<String>> whereColumnsByTable = new java.util.HashMap<>();
+      Map<String, Set<String>> whereColumnsByTable = new HashMap<>();
       for (ColumnReference col : whereColumns) {
         String table = resolveTable(col.tableOrAlias(), aliasToTable);
         if (table != null) {
           whereColumnsByTable
-              .computeIfAbsent(table, k -> new java.util.HashSet<>())
+              .computeIfAbsent(table, k -> new HashSet<>())
               .add(col.columnName().toLowerCase());
         }
       }
@@ -220,14 +222,14 @@ public class CompositeIndexDetector implements DetectionRule {
         // If left side is constrained, expand right side
         if (leftCols.contains(leftCol) && !rightCols.contains(rightCol)) {
           whereColumnsByTable
-              .computeIfAbsent(rightTable, k -> new java.util.HashSet<>())
+              .computeIfAbsent(rightTable, k -> new HashSet<>())
               .add(rightCol);
           changed = true;
         }
         // If right side is constrained, expand left side
         if (rightCols.contains(rightCol) && !leftCols.contains(leftCol)) {
           whereColumnsByTable
-              .computeIfAbsent(leftTable, k -> new java.util.HashSet<>())
+              .computeIfAbsent(leftTable, k -> new HashSet<>())
               .add(leftCol);
           changed = true;
         }

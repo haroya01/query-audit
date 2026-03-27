@@ -5,6 +5,7 @@ import io.queryaudit.core.detector.LazyLoadNPlusOneDetector;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
+import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -59,9 +60,9 @@ class HibernateIntegration {
       Field initCollectionField = eventTypeClass.getField("INIT_COLLECTION");
       Object initCollectionEventType = initCollectionField.get(null);
       Object initCollListenersArray =
-          java.lang.reflect.Array.newInstance(
+          Array.newInstance(
               Class.forName("org.hibernate.event.spi.InitializeCollectionEventListener"), 1);
-      java.lang.reflect.Array.set(initCollListenersArray, 0, tracker);
+      Array.set(initCollListenersArray, 0, tracker);
       appendListenersMethod.invoke(
           eventListenerRegistry, initCollectionEventType, initCollListenersArray);
 
@@ -69,9 +70,9 @@ class HibernateIntegration {
       Field postLoadField = eventTypeClass.getField("POST_LOAD");
       Object postLoadEventType = postLoadField.get(null);
       Object postLoadListenersArray =
-          java.lang.reflect.Array.newInstance(
+          Array.newInstance(
               Class.forName("org.hibernate.event.spi.PostLoadEventListener"), 1);
-      java.lang.reflect.Array.set(postLoadListenersArray, 0, tracker);
+      Array.set(postLoadListenersArray, 0, tracker);
       appendListenersMethod.invoke(
           eventListenerRegistry, postLoadEventType, postLoadListenersArray);
 

@@ -1,5 +1,6 @@
 package io.queryaudit.core.config;
 
+import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.model.Severity;
 import java.util.Collections;
 import java.util.HashMap;
@@ -38,6 +39,7 @@ public class QueryAuditConfig {
   private final int writeAmplificationThreshold;
   private final long slowQueryWarningMs;
   private final long slowQueryErrorMs;
+  private final RepositoryReturnTypeResolver repositoryReturnTypeResolver;
 
   private QueryAuditConfig(Builder builder) {
     this.enabled = builder.enabled;
@@ -60,6 +62,7 @@ public class QueryAuditConfig {
     this.writeAmplificationThreshold = builder.writeAmplificationThreshold;
     this.slowQueryWarningMs = builder.slowQueryWarningMs;
     this.slowQueryErrorMs = builder.slowQueryErrorMs;
+    this.repositoryReturnTypeResolver = builder.repositoryReturnTypeResolver;
   }
 
   public static Builder builder() {
@@ -182,6 +185,17 @@ public class QueryAuditConfig {
     return slowQueryErrorMs;
   }
 
+  /**
+   * Returns the resolver for Spring Data repository return types, or {@code null} if not
+   * configured. When {@code null}, the unbounded-result-set detector falls back to its default
+   * behavior (all flagged queries are WARNING).
+   *
+   * @since 0.3.0
+   */
+  public RepositoryReturnTypeResolver getRepositoryReturnTypeResolver() {
+    return repositoryReturnTypeResolver;
+  }
+
   public boolean isSuppressed(String issueCode, String table, String column) {
     if (suppressPatterns.isEmpty()) {
       return false;
@@ -233,6 +247,7 @@ public class QueryAuditConfig {
     private int writeAmplificationThreshold = 6;
     private long slowQueryWarningMs = 500;
     private long slowQueryErrorMs = 3000;
+    private RepositoryReturnTypeResolver repositoryReturnTypeResolver = null;
 
     public Builder enabled(boolean enabled) {
       this.enabled = enabled;
@@ -351,6 +366,11 @@ public class QueryAuditConfig {
 
     public Builder slowQueryErrorMs(long slowQueryErrorMs) {
       this.slowQueryErrorMs = slowQueryErrorMs;
+      return this;
+    }
+
+    public Builder repositoryReturnTypeResolver(RepositoryReturnTypeResolver resolver) {
+      this.repositoryReturnTypeResolver = resolver;
       return this;
     }
 

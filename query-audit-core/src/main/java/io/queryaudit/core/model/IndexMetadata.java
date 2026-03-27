@@ -1,8 +1,12 @@
 package io.queryaudit.core.model;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -35,11 +39,6 @@ public class IndexMetadata {
 
   /**
    * Returns {@code true} if the given column on the given table has a UNIQUE (or PRIMARY KEY)
-   * index. A unique single-column index guarantees at most one row for an equality predicate, so
-   * queries filtered on such a column do not need a LIMIT clause.
-   */
-  /**
-   * Returns {@code true} if the given column on the given table has a UNIQUE (or PRIMARY KEY)
    * single-column index. A unique single-column index guarantees at most one row for an equality
    * predicate, so queries filtered on such a column do not need a LIMIT clause.
    */
@@ -52,7 +51,7 @@ public class IndexMetadata {
       return false;
     }
     // Collect unique index names that contain the target column at position 1
-    java.util.Set<String> candidateIndexNames =
+    Set<String> candidateIndexNames =
         indexes.stream()
             .filter(
                 idx ->
@@ -62,7 +61,7 @@ public class IndexMetadata {
                         && idx.columnName().equalsIgnoreCase(column)
                         && idx.indexName() != null)
             .map(IndexInfo::indexName)
-            .collect(java.util.stream.Collectors.toSet());
+            .collect(Collectors.toSet());
 
     // Verify that at least one candidate index is a single-column index
     for (String indexName : candidateIndexNames) {
@@ -123,11 +122,11 @@ public class IndexMetadata {
       return other;
     }
 
-    Map<String, List<IndexInfo>> merged = new java.util.HashMap<>();
+    Map<String, List<IndexInfo>> merged = new HashMap<>();
 
     // Copy all entries from this (primary source)
     for (Map.Entry<String, List<IndexInfo>> entry : this.indexesByTable.entrySet()) {
-      merged.put(entry.getKey(), new java.util.ArrayList<>(entry.getValue()));
+      merged.put(entry.getKey(), new ArrayList<>(entry.getValue()));
     }
 
     // Add entries from other, skipping index names that already exist in primary
@@ -136,15 +135,15 @@ public class IndexMetadata {
       List<IndexInfo> otherIndexes = entry.getValue();
 
       if (!merged.containsKey(table)) {
-        merged.put(table, new java.util.ArrayList<>(otherIndexes));
+        merged.put(table, new ArrayList<>(otherIndexes));
       } else {
         List<IndexInfo> existing = merged.get(table);
-        java.util.Set<String> existingNames =
+        Set<String> existingNames =
             existing.stream()
                 .map(IndexInfo::indexName)
-                .filter(java.util.Objects::nonNull)
+                .filter(Objects::nonNull)
                 .map(String::toLowerCase)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
 
         for (IndexInfo info : otherIndexes) {
           String name = info.indexName();
