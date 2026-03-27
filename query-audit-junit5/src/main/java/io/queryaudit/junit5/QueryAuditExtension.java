@@ -153,6 +153,11 @@ public class QueryAuditExtension
       report = hibernateIntegration.mergeNPlusOneIssues(report, tracker, config);
     }
 
+    // Merge findById-for-association issues if tracker recorded explicit loads
+    if (tracker != null && !tracker.getExplicitLoads().isEmpty()) {
+      report = hibernateIntegration.mergeFindByIdIssues(report, tracker, config);
+    }
+
     // --- Query count regression detection ---
     report = detectQueryCountRegression(context, report, queries, testClass, testName);
 

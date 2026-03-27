@@ -5,7 +5,6 @@ import io.queryaudit.core.analyzer.JpaIndexScanner;
 import io.queryaudit.core.model.IndexMetadata;
 import java.sql.Connection;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.ServiceLoader;
 import javax.sql.DataSource;
@@ -78,41 +77,13 @@ class IndexMetadataCollector {
   private List<Class<?>> discoverEntityClasses() {
     List<Class<?>> entities = new ArrayList<>();
 
-    // Strategy 1: Use Spring's LocalContainerEntityManagerFactoryBean if available
-    try {
-      entities = discoverEntitiesFromSpring();
-      if (!entities.isEmpty()) {
-        return entities;
-      }
-    } catch (Exception | NoClassDefFoundError ignored) {
-    }
-
-    // Strategy 2: Scan common base packages from the classpath
+    // Scan common base packages from the classpath
     try {
       entities = discoverEntitiesFromClasspath();
     } catch (Exception | NoClassDefFoundError ignored) {
     }
 
     return entities;
-  }
-
-  @SuppressWarnings("unchecked")
-  private List<Class<?>> discoverEntitiesFromSpring() {
-    try {
-      // Try to get the EntityManagerFactory from Spring context
-      Class<?> emfClass = Class.forName("jakarta.persistence.EntityManagerFactory");
-      Class<?> metamodelClass = Class.forName("jakarta.persistence.metamodel.Metamodel");
-
-      try {
-        Class<?> springExtensionClass =
-            Class.forName("org.springframework.test.context.junit.jupiter.SpringExtension");
-        return Collections.emptyList();
-      } catch (Exception ignored) {
-        return Collections.emptyList();
-      }
-    } catch (ClassNotFoundException ignored) {
-      return Collections.emptyList();
-    }
   }
 
   private List<Class<?>> discoverEntitiesFromClasspath() {
