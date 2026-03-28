@@ -831,4 +831,35 @@ class SqlParserTest {
       assertThat(SqlParser.hasWhereClause(null)).isFalse();
     }
   }
+
+  // ── removeSubqueries ───────────────────────────────────────────────
+
+  @Nested
+  class RemoveSubqueries {
+
+    @Test
+    void removesActualSubquery() {
+      String sql = "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders)";
+      String result = SqlParser.removeSubqueries(sql);
+      assertThat(result).contains("(?)");
+      assertThat(result).doesNotContain("SELECT user_id");
+    }
+
+    @Test
+    void preservesStringLiteralContainingSelectKeyword() {
+      String sql =
+          "SELECT * FROM logs WHERE message = 'Error in (SELECT query failed)' AND status = 'active'";
+      String result = SqlParser.removeSubqueries(sql);
+      assertThat(result).contains("AND status = 'active'");
+      assertThat(result).contains("'Error in (SELECT query failed)'");
+    }
+
+    @Test
+    void preservesEscapedQuoteInsideStringLiteral() {
+      String sql =
+          "SELECT * FROM t WHERE col = 'it''s a (SELECT trick)' AND x = 1";
+      String result = SqlParser.removeSubqueries(sql);
+      assertThat(result).contains("AND x = 1");
+    }
+  }
 }

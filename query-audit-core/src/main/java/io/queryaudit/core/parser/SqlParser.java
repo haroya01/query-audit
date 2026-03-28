@@ -1233,6 +1233,44 @@ public final class SqlParser {
 
     for (int i = 0; i < sql.length(); i++) {
       char c = sql.charAt(i);
+
+      // Skip single-quoted string literals so embedded keywords like '(SELECT' are not
+      // mistaken for subquery starts (mirrors the approach used in stripComments).
+      if (c == '\'') {
+        if (!inSubquery) {
+          sb.append(c);
+        }
+        i++;
+        while (i < sql.length()) {
+          char inner = sql.charAt(i);
+          if (inner == '\\' && i + 1 < sql.length()) {
+            if (!inSubquery) {
+              sb.append(inner);
+              sb.append(sql.charAt(i + 1));
+            }
+            i += 2;
+          } else if (inner == '\'' && i + 1 < sql.length() && sql.charAt(i + 1) == '\'') {
+            if (!inSubquery) {
+              sb.append('\'');
+              sb.append('\'');
+            }
+            i += 2;
+          } else if (inner == '\'') {
+            if (!inSubquery) {
+              sb.append(inner);
+            }
+            i++;
+            break;
+          } else {
+            if (!inSubquery) {
+              sb.append(inner);
+            }
+            i++;
+          }
+        }
+        continue;
+      }
+
       if (c == '(') {
         // Check if this opens a subquery
         int ahead = i + 1;
