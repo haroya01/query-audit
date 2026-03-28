@@ -14,6 +14,7 @@ import io.queryaudit.core.regression.QueryCounts;
 import io.queryaudit.core.reporter.ConsoleReporter;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import io.queryaudit.core.reporter.JsonReporter;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.*;
@@ -381,15 +382,25 @@ public class QueryAuditExtension
   // ── Config building ────────────────────────────────────────────────
 
   private QueryAuditConfig buildConfig(ExtensionContext context) {
-    QueryAuditConfig.Builder builder = QueryAuditConfig.builder();
+    // Layer 1: Start from Spring config (application.yml) if available, else hardcoded defaults
+    QueryAuditConfig springConfig = resolveSpringConfig(context);
+    QueryAuditConfig.Builder builder =
+        springConfig != null
+            ? QueryAuditConfig.Builder.from(springConfig)
+            : QueryAuditConfig.builder();
 
+    // Layer 2: @EnableQueryInspector override
     if (hasEnableQueryInspector(context)) {
       builder.failOnDetection(false);
     }
 
+    // Layer 3: @QueryAudit annotation overrides (only explicitly specified values)
     QueryAudit annotation = findAnnotation(context);
     if (annotation != null) {
-      builder.failOnDetection(annotation.failOnDetection());
+      // failOnDetection: only override when explicitly specified in the annotation
+      if (annotation.failOnDetection().isSpecified()) {
+        builder.failOnDetection(annotation.failOnDetection().toBoolean());
+      }
 
       if (annotation.nPlusOneThreshold() >= 0) {
         builder.nPlusOneThreshold(annotation.nPlusOneThreshold());
@@ -404,9 +415,10 @@ public class QueryAuditExtension
       }
     }
 
+    // Layer 4: @DetectNPlusOne override (highest priority for threshold)
     DetectNPlusOne detectNPlusOne = null;
-    // getTestMethod() returns Optional.empty() in beforeAll (class-level context)
-    java.util.Optional<java.lang.reflect.Method> method = context.getTestMethod();
+    // getTestMethod() returns java.util.Optional.empty() in beforeAll (class-level context)
+    java.util.Optional<Method> method = context.getTestMethod();
     if (method.isPresent()) {
       detectNPlusOne = method.get().getAnnotation(DetectNPlusOne.class);
     }
@@ -424,6 +436,32 @@ public class QueryAuditExtension
     return builder.build();
   }
 
+  /**
+   * Attempts to resolve a {@link QueryAuditConfig} bean from the Spring ApplicationContext via
+   * reflection. Returns {@code null} if Spring is not on the classpath, the test does not use a
+   * Spring context, or no {@code QueryAuditConfig} bean is registered.
+   */
+  private QueryAuditConfig resolveSpringConfig(ExtensionContext context) {
+    try {
+      Class<?> springExtensionClass =
+          Class.forName("org.springframework.test.context.junit.jupiter.SpringExtension");
+      Method getAppContext =
+          springExtensionClass.getMethod("getApplicationContext", ExtensionContext.class);
+      Object appContext = getAppContext.invoke(null, context);
+      if (appContext != null) {
+        Method getBean =
+            appContext.getClass().getMethod("getBean", Class.class);
+        Object bean = getBean.invoke(appContext, QueryAuditConfig.class);
+        if (bean instanceof QueryAuditConfig config) {
+          return config;
+        }
+      }
+    } catch (Exception ignored) {
+      // Spring not available, no context, or no QueryAuditConfig bean — fall back to defaults
+    }
+    return null;
+  }
+
   private boolean hasEnableQueryInspector(ExtensionContext context) {
     Class<?> clazz = context.getRequiredTestClass();
     while (clazz != null) {
@@ -434,8 +472,8 @@ public class QueryAuditExtension
   }
 
   private QueryAudit findAnnotation(ExtensionContext context) {
-    // getTestMethod() returns Optional.empty() in afterAll (class-level context)
-    java.util.Optional<java.lang.reflect.Method> testMethod = context.getTestMethod();
+    // getTestMethod() returns java.util.Optional.empty() in afterAll (class-level context)
+    java.util.Optional<Method> testMethod = context.getTestMethod();
     if (testMethod.isPresent()) {
       QueryAudit annotation = testMethod.get().getAnnotation(QueryAudit.class);
       if (annotation != null) return annotation;
@@ -578,8 +616,13 @@ public class QueryAuditExtension
     }
 
     QueryAudit annotation = findAnnotation(context);
-    if (annotation != null) {
-      return annotation.autoOpenReport();
+    if (annotation != null && annotation.autoOpenReport().isSpecified()) {
+      return annotation.autoOpenReport().toBoolean();
+    }
+
+    QueryAuditConfig springConfig = resolveSpringConfig(context);
+    if (springConfig != null) {
+      return springConfig.isAutoOpenReport();
     }
 
     // Default: auto-open when running locally (not in CI)
