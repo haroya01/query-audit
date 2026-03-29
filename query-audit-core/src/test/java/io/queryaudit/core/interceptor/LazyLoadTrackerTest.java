@@ -87,4 +87,57 @@ class LazyLoadTrackerTest {
     tracker.start();
     assertThat(tracker.getRecords()).isEmpty();
   }
+
+  // ====================================================================
+  //  hasFindByIdInStack tests
+  // ====================================================================
+
+  @Test
+  void hasFindByIdInStack_normalCall_returnsFalse() {
+    assertThat(LazyLoadTracker.hasFindByIdInStack()).isFalse();
+  }
+
+  @Test
+  void hasFindByIdInStack_withFindByIdInStack_returnsTrue() {
+    // Simulate a call from a method named findById
+    boolean result = callFromFindById();
+    assertThat(result).isTrue();
+  }
+
+  /** Helper that mimics a call stack containing {@code findById}. */
+  @SuppressWarnings("unused")
+  private boolean findById() {
+    return LazyLoadTracker.hasFindByIdInStack();
+  }
+
+  private boolean callFromFindById() {
+    return findById();
+  }
+
+  // ====================================================================
+  //  Explicit loads lifecycle
+  // ====================================================================
+
+  @Test
+  void explicitLoads_emptyByDefault() {
+    LazyLoadTracker tracker = new LazyLoadTracker();
+    assertThat(tracker.getExplicitLoads()).isEmpty();
+  }
+
+  @Test
+  void start_clearsExplicitLoads() {
+    LazyLoadTracker tracker = new LazyLoadTracker();
+    tracker.start();
+    tracker.stop();
+    tracker.start();
+    assertThat(tracker.getExplicitLoads()).isEmpty();
+  }
+
+  @Test
+  void clear_clearsExplicitLoads() {
+    LazyLoadTracker tracker = new LazyLoadTracker();
+    tracker.start();
+    tracker.clear();
+    assertThat(tracker.getExplicitLoads()).isEmpty();
+  }
 }

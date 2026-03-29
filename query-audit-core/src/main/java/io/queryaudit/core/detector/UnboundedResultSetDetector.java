@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,6 +38,16 @@ import java.util.regex.Pattern;
  */
 public class UnboundedResultSetDetector implements DetectionRule {
 
+  private final RepositoryReturnTypeResolver returnTypeResolver;
+
+  public UnboundedResultSetDetector() {
+    this(null);
+  }
+
+  public UnboundedResultSetDetector(RepositoryReturnTypeResolver returnTypeResolver) {
+    this.returnTypeResolver = returnTypeResolver;
+  }
+
   private static final Pattern SELECT_PATTERN =
       Pattern.compile("^\\s*SELECT\\b", Pattern.CASE_INSENSITIVE);
 
@@ -49,6 +60,10 @@ public class UnboundedResultSetDetector implements DetectionRule {
 
   private static final Pattern LIMIT_PATTERN =
       Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE);
+
+  /** SQL:2008 standard row-limiting clause used by Hibernate 6 / H2 / PostgreSQL. */
+  private static final Pattern FETCH_FIRST_PATTERN =
+      Pattern.compile("\\bFETCH\\s+FIRST\\b", Pattern.CASE_INSENSITIVE);
 
   private static final Pattern FOR_UPDATE_PATTERN =
       Pattern.compile("\\bFOR\\s+UPDATE\\b", Pattern.CASE_INSENSITIVE);
@@ -84,10 +99,40 @@ public class UnboundedResultSetDetector implements DetectionRule {
   private static final Pattern SINGLE_EQUALITY_PATTERN =
       Pattern.compile("\\bWHERE\\s+(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?\\s*$", Pattern.CASE_INSENSITIVE);
 
+  /** Detects presence of a WHERE clause (used for Collection return type downgrade). */
+  private static final Pattern WHERE_PATTERN =
+      Pattern.compile("\\bWHERE\\b", Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Extracts column names from equality conditions: {@code (alias.)column = ?}. Used to collect
+   * all equality columns in a WHERE clause for unique index checks.
+   */
+  private static final Pattern EQUALITY_COLUMN_PATTERN =
+      Pattern.compile("(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?", Pattern.CASE_INSENSITIVE);
+
+  /** Matches OR — unique index check is unsafe when OR is present in the WHERE clause. */
+  private static final Pattern OR_PATTERN =
+      Pattern.compile("\\bOR\\b", Pattern.CASE_INSENSITIVE);
+
+  /** Extracts the WHERE clause from a SQL statement. */
+  private static final Pattern WHERE_CLAUSE_PATTERN =
+      Pattern.compile("\\bWHERE\\b(.+)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+  /** Matches parenthesized subqueries to strip before column extraction. */
+  private static final Pattern SUBQUERY_PATTERN =
+      Pattern.compile("\\([^()]*\\bSELECT\\b[^()]*\\)", Pattern.CASE_INSENSITIVE);
+
   /** Matches a single equality condition followed by LIMIT 1. */
   private static final Pattern SINGLE_EQUALITY_LIMIT1_PATTERN =
       Pattern.compile(
           "\\bWHERE\\s+(?:\\w+\\.)?\\w+\\s*=\\s*\\?\\s+LIMIT\\s+1\\s*$", Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Extracts equality column names from WHERE clause conditions joined by AND. Matches patterns
+   * like {@code (alias.)column = ?} within compound WHERE clauses.
+   */
+  private static final Pattern WHERE_EQUALITY_COLUMN_PATTERN =
+      Pattern.compile("(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?", Pattern.CASE_INSENSITIVE);
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
@@ -127,6 +172,10 @@ public class UnboundedResultSetDetector implements DetectionRule {
         continue;
       }
 
+      if (FETCH_FIRST_PATTERN.matcher(sql).find()) {
+        continue;
+      }
+
       if (FOR_UPDATE_PATTERN.matcher(sql).find()) {
         continue;
       }
@@ -148,18 +197,20 @@ public class UnboundedResultSetDetector implements DetectionRule {
         continue;
       }
 
-      // Check index metadata: if the query has a single equality condition
-      // on a column with a unique index, skip it.
+      // Check index metadata: if all columns of a unique index (single or composite)
+      // appear as AND-connected equality conditions, the result is at most one row.
       List<String> tables = SqlParser.extractTableNames(sql);
       String table = tables.isEmpty() ? null : tables.get(0);
 
-      Matcher singleEqMatcher = SINGLE_EQUALITY_PATTERN.matcher(sql);
-      if (singleEqMatcher.find()) {
-        String column = singleEqMatcher.group(1);
-        if (indexMetadata != null
-            && table != null
-            && indexMetadata.hasUniqueIndexOn(table, column)) {
-          continue;
+      if (indexMetadata != null && table != null) {
+        String whereClause = extractWhereClause(sql);
+        if (whereClause != null && !OR_PATTERN.matcher(whereClause).find()) {
+          String cleaned = stripSubqueries(whereClause);
+          Set<String> eqColumns = extractEqualityColumns(cleaned);
+          if (!eqColumns.isEmpty()
+              && indexMetadata.hasUniqueIndexCoveredBy(table, eqColumns)) {
+            continue;
+          }
         }
       }
 
@@ -169,19 +220,82 @@ public class UnboundedResultSetDetector implements DetectionRule {
         continue;
       }
 
+      // Return type analysis: suppress or downgrade based on repository method return type
+      Severity severity = Severity.WARNING;
+      String detail = "SELECT query without LIMIT could return unbounded rows";
+      String suggestion =
+          "Add LIMIT to prevent unbounded result sets in production. "
+              + "For JPA: use Pageable parameter or setMaxResults().";
+
+      if (returnTypeResolver != null
+          && query.stackTrace() != null
+          && !query.stackTrace().isEmpty()) {
+        RepositoryReturnType returnType;
+        try {
+          returnType = returnTypeResolver.resolve(query.stackTrace());
+        } catch (Exception e) {
+          returnType = RepositoryReturnType.UNKNOWN;
+        }
+
+        switch (returnType) {
+          case OPTIONAL, SINGLE_ENTITY, PAGE_OR_SLICE -> {
+            continue;
+          }
+          case COLLECTION -> {
+            if (WHERE_PATTERN.matcher(sql).find()) {
+              severity = Severity.INFO;
+              detail =
+                  "Collection-returning repository method with WHERE clause "
+                      + "(intentional fetch, not unbounded)";
+              suggestion =
+                  "If the result set could grow large, consider adding Pageable or LIMIT.";
+            }
+          }
+          case UNKNOWN -> {
+            // fall through — keep WARNING
+          }
+        }
+      }
+
       issues.add(
           new Issue(
               IssueType.UNBOUNDED_RESULT_SET,
-              Severity.WARNING,
+              severity,
               normalized,
               table,
               null,
-              "SELECT query without LIMIT could return unbounded rows",
-              "Add LIMIT to prevent unbounded result sets in production. "
-                  + "For JPA: use Pageable parameter or setMaxResults().",
+              detail,
+              suggestion,
               query.stackTrace()));
     }
 
     return issues;
+  }
+
+  private static String extractWhereClause(String sql) {
+    Matcher m = WHERE_CLAUSE_PATTERN.matcher(sql);
+    return m.find() ? m.group(1).trim() : null;
+  }
+
+  /** Removes parenthesized subqueries so that inner columns are not extracted. */
+  private static String stripSubqueries(String whereClause) {
+    String result = whereClause;
+    while (SUBQUERY_PATTERN.matcher(result).find()) {
+      result = SUBQUERY_PATTERN.matcher(result).replaceAll("");
+    }
+    return result;
+  }
+
+  /**
+   * Extracts all equality column names from the WHERE clause of the given SQL. Only considers
+   * {@code column = ?} patterns connected by AND. Returns an empty set if no WHERE clause is found.
+   */
+  private static Set<String> extractEqualityColumns(String whereClause) {
+    Set<String> columns = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+    Matcher m = EQUALITY_COLUMN_PATTERN.matcher(whereClause);
+    while (m.find()) {
+      columns.add(m.group(1));
+    }
+    return columns;
   }
 }

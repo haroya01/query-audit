@@ -42,6 +42,13 @@ public class CountInsteadOfExistsDetector implements DetectionRule {
   private static final Pattern COUNT_IN_SUBQUERY_PATTERN =
       Pattern.compile("\\(\\s*SELECT\\s+COUNT\\s*\\(", Pattern.CASE_INSENSITIVE);
 
+  // COUNT(...) followed by a comparison operator (>, >=) already expresses boolean intent
+  // in SQL itself — e.g. Hibernate translates existsBy* into "count(col) > ?"
+  private static final Pattern COUNT_COMPARISON_PATTERN =
+      Pattern.compile(
+          "\\bCOUNT\\s*\\(\\s*(?:\\*|\\w+(?:\\.\\w+)?)\\s*\\)\\s*(?:>|>=)\\s*(?:\\?|\\d+)",
+          Pattern.CASE_INSENSITIVE);
+
   private static final Pattern WHERE_PATTERN =
       Pattern.compile("\\bWHERE\\b", Pattern.CASE_INSENSITIVE);
 
@@ -79,6 +86,12 @@ public class CountInsteadOfExistsDetector implements DetectionRule {
 
       // COUNT inside a subquery SELECT is used as a column value
       if (COUNT_IN_SUBQUERY_PATTERN.matcher(sql).find()) {
+        continue;
+      }
+
+      // COUNT(...) > ? or COUNT(...) >= N — already a boolean expression in SQL
+      // (e.g. Hibernate existsBy* generates "count(col) > ?")
+      if (COUNT_COMPARISON_PATTERN.matcher(sql).find()) {
         continue;
       }
 

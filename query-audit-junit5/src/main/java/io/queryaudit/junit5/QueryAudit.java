@@ -32,8 +32,11 @@ public @interface QueryAudit {
   /** N+1 detection threshold. A value of {@code -1} means use the default. */
   int nPlusOneThreshold() default -1;
 
-  /** Whether to fail on any confirmed detection. */
-  boolean failOnDetection() default true;
+  /**
+   * Whether to fail on any confirmed detection. Use {@link BooleanOverride#INHERIT} to use the
+   * application.yml setting or hardcoded default.
+   */
+  BooleanOverride failOnDetection() default BooleanOverride.INHERIT;
 
   /**
    * Path to the baseline file. An empty string means use the default ({@code .query-audit-baseline}
@@ -42,8 +45,15 @@ public @interface QueryAudit {
   String baselinePath() default "";
 
   /**
-   * Whether to automatically open the HTML report in a browser after tests complete. Defaults to
-   * false (must be opted in).
+   * Whether to automatically open the HTML report in a browser after tests complete. Use {@link
+   * BooleanOverride#INHERIT} to use the default behavior (auto-open locally, skip in CI).
    */
-  boolean autoOpenReport() default false;
+  BooleanOverride autoOpenReport() default BooleanOverride.INHERIT;
+
+  /**
+   * Whether to include {@code @BeforeEach}/{@code @AfterEach} lifecycle queries in analysis.
+   * Defaults to {@code false} — only queries from the {@code @Test} method are analyzed.
+   * Set to {@code true} to analyze all lifecycle phases.
+   */
+  boolean includeSetupQueries() default false;
 }
