@@ -16,6 +16,10 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
   List<Member> findByNameContaining(String name);
 
+  boolean existsByEmail(String email);
+
+  void deleteByStatus(String status);
+
   /** Derived query: Spring Data adds LIMIT automatically for Optional return type. */
   Optional<Member> findFirstByStatusOrderByNameDesc(String status);
 
