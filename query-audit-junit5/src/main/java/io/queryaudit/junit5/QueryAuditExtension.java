@@ -8,6 +8,7 @@ import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
+import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCountRegressionDetector;
 import io.queryaudit.core.regression.QueryCounts;
@@ -37,7 +38,12 @@ import org.junit.jupiter.api.extension.*;
  * @since 0.2.0
  */
 public class QueryAuditExtension
-    implements BeforeAllCallback, BeforeEachCallback, AfterEachCallback, AfterAllCallback {
+    implements BeforeAllCallback,
+        BeforeEachCallback,
+        BeforeTestExecutionCallback,
+        AfterTestExecutionCallback,
+        AfterEachCallback,
+        AfterAllCallback {
 
   private static final ExtensionContext.Namespace NAMESPACE =
       ExtensionContext.Namespace.create(QueryAuditExtension.class);
@@ -100,11 +106,34 @@ public class QueryAuditExtension
     QueryInterceptor interceptor = getInterceptor(context);
     if (interceptor != null) {
       interceptor.start();
+      interceptor.setPhase(LifecyclePhase.SETUP);
     }
 
     LazyLoadTracker tracker = getLazyLoadTracker(context);
     if (tracker != null) {
       tracker.start();
+    }
+  }
+
+  // ── BeforeTestExecutionCallback ─────────────────────────────────────
+  // Runs AFTER @BeforeEach methods, BEFORE the @Test method.
+
+  @Override
+  public void beforeTestExecution(ExtensionContext context) {
+    QueryInterceptor interceptor = getInterceptor(context);
+    if (interceptor != null) {
+      interceptor.setPhase(LifecyclePhase.TEST);
+    }
+  }
+
+  // ── AfterTestExecutionCallback ──────────────────────────────────────
+  // Runs AFTER the @Test method, BEFORE @AfterEach methods.
+
+  @Override
+  public void afterTestExecution(ExtensionContext context) {
+    QueryInterceptor interceptor = getInterceptor(context);
+    if (interceptor != null) {
+      interceptor.setPhase(LifecyclePhase.TEARDOWN);
     }
   }
 
@@ -281,43 +310,87 @@ public class QueryAuditExtension
 
     writeCountBaselineIfRequested(context);
 
-    HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
-    if (aggregator.getReports().isEmpty()) {
-      return;
+    // Register a ReportFinalizer in the root context store so that
+    // writeReport + openReportInBrowser runs exactly once after ALL test classes finish,
+    // instead of once per test class (see issue #41).
+    boolean autoOpen = shouldAutoOpenReport(context);
+    ExtensionContext root = context.getRoot();
+    ReportFinalizer finalizer =
+        (ReportFinalizer)
+            root.getStore(NAMESPACE)
+                .getOrComputeIfAbsent(
+                    ReportFinalizer.class.getName(),
+                    key -> new ReportFinalizer(this));
+    if (autoOpen) {
+      finalizer.enableAutoOpen();
+    }
+  }
+
+  /**
+   * Registered once in the root {@link ExtensionContext.Store} via {@code getOrComputeIfAbsent}.
+   * JUnit calls {@link #close()} exactly once when the root context is torn down — after all
+   * test classes have completed.
+   */
+  static final class ReportFinalizer implements ExtensionContext.Store.CloseableResource {
+
+    private final QueryAuditExtension extension;
+    private volatile boolean autoOpen;
+
+    ReportFinalizer(QueryAuditExtension extension) {
+      this.extension = extension;
     }
 
-    try {
-      java.nio.file.Path outputDir = java.nio.file.Path.of("build", "reports", "query-audit");
-      aggregator.writeReport(outputDir);
-      java.nio.file.Path reportPath = outputDir.toAbsolutePath().resolve("index.html");
+    void enableAutoOpen() {
+      this.autoOpen = true;
+    }
 
-      // Summary line — visible even without opening the report
-      long totalErrors = aggregator.getReports().stream()
-              .mapToLong(r -> r.getErrors().size()).sum();
-      long totalWarnings = aggregator.getReports().stream()
-              .mapToLong(r -> r.getWarnings().size()).sum();
-      int totalQueries = aggregator.getReports().stream()
-              .mapToInt(r -> r.getTotalQueryCount()).sum();
-      int totalTests = aggregator.getReports().size();
-
-      // Summary + clickable link on its own line (IDE auto-detects file:// URLs)
-      String summary = "[QueryAudit] " + totalTests + " tests, " + totalQueries + " queries"
-              + (totalErrors > 0 ? ", " + totalErrors + " ERROR" + (totalErrors > 1 ? "S" : "") : "")
-              + (totalWarnings > 0 ? ", " + totalWarnings + " WARNING" + (totalWarnings > 1 ? "S" : "") : "")
-              + (totalErrors == 0 && totalWarnings == 0 ? " — all clean" : "");
-      System.out.println();
-      System.out.println(summary);
-      System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
-      System.out.println();
-
-      // Write JSON report alongside HTML
-      writeJsonReport(aggregator.getReports(), outputDir);
-
-      if (shouldAutoOpenReport(context)) {
-        openReportInBrowser(reportPath);
+    @Override
+    public void close() {
+      HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
+      if (aggregator.getReports().isEmpty()) {
+        return;
       }
-    } catch (Exception e) {
-      System.err.println("[QueryAudit] Failed to write HTML report: " + e.getMessage());
+
+      try {
+        java.nio.file.Path outputDir = java.nio.file.Path.of("build", "reports", "query-audit");
+        aggregator.writeReport(outputDir);
+        java.nio.file.Path reportPath = outputDir.toAbsolutePath().resolve("index.html");
+
+        // Summary line — visible even without opening the report
+        long totalErrors =
+            aggregator.getReports().stream().mapToLong(r -> r.getErrors().size()).sum();
+        long totalWarnings =
+            aggregator.getReports().stream().mapToLong(r -> r.getWarnings().size()).sum();
+        int totalQueries =
+            aggregator.getReports().stream().mapToInt(r -> r.getTotalQueryCount()).sum();
+        int totalTests = aggregator.getReports().size();
+
+        String summary =
+            "[QueryAudit] "
+                + totalTests
+                + " tests, "
+                + totalQueries
+                + " queries"
+                + (totalErrors > 0
+                    ? ", " + totalErrors + " ERROR" + (totalErrors > 1 ? "S" : "")
+                    : "")
+                + (totalWarnings > 0
+                    ? ", " + totalWarnings + " WARNING" + (totalWarnings > 1 ? "S" : "")
+                    : "")
+                + (totalErrors == 0 && totalWarnings == 0 ? " — all clean" : "");
+        System.out.println();
+        System.out.println(summary);
+        System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
+        System.out.println();
+
+        extension.writeJsonReport(aggregator.getReports(), outputDir);
+
+        if (autoOpen) {
+          extension.openReportInBrowser(reportPath);
+        }
+      } catch (Exception e) {
+        System.err.println("[QueryAudit] Failed to write HTML report: " + e.getMessage());
+      }
     }
   }
 
@@ -402,6 +475,8 @@ public class QueryAuditExtension
       if (!annotation.baselinePath().isEmpty()) {
         builder.baselinePath(annotation.baselinePath());
       }
+
+      builder.includeSetupQueries(annotation.includeSetupQueries());
     }
 
     DetectNPlusOne detectNPlusOne = null;

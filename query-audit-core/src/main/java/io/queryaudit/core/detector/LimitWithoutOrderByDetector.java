@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 public class LimitWithoutOrderByDetector implements DetectionRule {
 
   private static final Pattern LIMIT_PATTERN =
-      Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("\\bLIMIT\\b|\\bFETCH\\s+FIRST\\b", Pattern.CASE_INSENSITIVE);
 
   private static final Pattern ORDER_BY_PATTERN =
       Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE);
@@ -40,11 +40,21 @@ public class LimitWithoutOrderByDetector implements DetectionRule {
           "\\b(?:COUNT|SUM|AVG|MIN|MAX)\\s*\\(", Pattern.CASE_INSENSITIVE);
 
   /**
-   * Matches LIMIT 1 — existence checks (e.g., {@code SELECT id FROM t WHERE cond LIMIT 1})
+   * Matches LIMIT 1 or LIMIT ? — existence checks (e.g., {@code SELECT id FROM t WHERE cond LIMIT 1})
    * intentionally use LIMIT 1 without ORDER BY to quickly check if any row matches.
+   * JPA existsBy* methods generate parameterized LIMIT (LIMIT ?) which should also be excluded.
    */
   private static final Pattern LIMIT_ONE_PATTERN =
-      Pattern.compile("\\bLIMIT\\s+1\\b", Pattern.CASE_INSENSITIVE);
+      Pattern.compile(
+          "\\bLIMIT\\s+(?:1\\b|\\?)|\\bFETCH\\s+FIRST\\s+(?:1\\b|\\?)\\s+ROWS?\\s+ONLY\\b",
+          Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Matches JPA existsBy* method names in the captured stack trace.
+   * When a query originates from an existsBy* call, ordering is irrelevant.
+   */
+  private static final Pattern EXISTS_BY_METHOD =
+      Pattern.compile("\\.existsBy\\w+:");
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
@@ -83,8 +93,13 @@ public class LimitWithoutOrderByDetector implements DetectionRule {
         continue;
       }
 
-      // Skip LIMIT 1 — commonly used for existence checks where ordering is irrelevant
+      // Skip LIMIT 1 or LIMIT ? — commonly used for existence checks where ordering is irrelevant
       if (LIMIT_ONE_PATTERN.matcher(outerSql).find()) {
+        continue;
+      }
+
+      // Skip queries originating from JPA existsBy* methods (intent-based detection)
+      if (query.stackTrace() != null && EXISTS_BY_METHOD.matcher(query.stackTrace()).find()) {
         continue;
       }
 

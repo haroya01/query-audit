@@ -46,4 +46,11 @@ public @interface QueryAudit {
    * false (must be opted in).
    */
   boolean autoOpenReport() default false;
+
+  /**
+   * Whether to include {@code @BeforeEach}/{@code @AfterEach} lifecycle queries in analysis.
+   * Defaults to {@code false} — only queries from the {@code @Test} method are analyzed.
+   * Set to {@code true} to analyze all lifecycle phases.
+   */
+  boolean includeSetupQueries() default false;
 }
