@@ -12,6 +12,7 @@ import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.junit5.EnableQueryInspector;
+import io.queryaudit.junit5.BooleanOverride;
 import io.queryaudit.junit5.QueryAudit;
 import io.queryaudit.junit5.integration.entity.Member;
 import io.queryaudit.junit5.integration.entity.Team;
@@ -396,7 +397,7 @@ class LifecyclePhaseExclusionTest {
   @Nested
   @DisplayName("Extension Auto-Phase — Extension automatically tags lifecycle phases")
   @QueryAudit(
-      failOnDetection = true,
+      failOnDetection = BooleanOverride.TRUE,
       failOn = {IssueType.UPDATE_WITHOUT_WHERE, IssueType.REPEATED_SINGLE_INSERT})
   class ExtensionAutoPhase {
 
@@ -444,7 +445,7 @@ class LifecyclePhaseExclusionTest {
   @Nested
   @DisplayName("Extension Auto-Phase Teardown — @AfterEach queries also excluded")
   @QueryAudit(
-      failOnDetection = true,
+      failOnDetection = BooleanOverride.TRUE,
       failOn = {IssueType.UPDATE_WITHOUT_WHERE, IssueType.REPEATED_SINGLE_INSERT})
   class ExtensionAutoTeardown {
 
