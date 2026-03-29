@@ -109,6 +109,65 @@ class LimitWithoutOrderByDetectorTest {
     assertThat(issues).isEmpty();
   }
 
+  // ── #34: JPA existsBy* false positive fix ──────────────────────
+
+  @Test
+  void noIssueForParameterizedLimitInExistenceCheck() {
+    // JPA existsBy* generates: SELECT id FROM users WHERE nickname=? AND discriminator=? LIMIT ?
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(q("SELECT id FROM users WHERE nickname=? AND discriminator=? LIMIT ?")),
+            emptyIndex);
+    assertThat(issues).isEmpty();
+  }
+
+  @Test
+  void noIssueForSelect1WithParameterizedLimit() {
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(q("SELECT 1 FROM users WHERE username = ? LIMIT ?")),
+            emptyIndex);
+    assertThat(issues).isEmpty();
+  }
+
+  @Test
+  void noIssueForFetchFirstParameterized() {
+    // Hibernate generates "fetch first ? rows only" instead of "LIMIT ?"
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(q("select m1_0.id from members m1_0 where m1_0.email=? fetch first ? rows only")),
+            emptyIndex);
+    assertThat(issues).isEmpty();
+  }
+
+  @Test
+  void noIssueForExistsByMethodInStackTrace() {
+    // Even with a non-trivial LIMIT, existsBy* in the stack trace should skip
+    String stackTrace =
+        "jdk.proxy3.$Proxy122.existsByEmail:-1\n"
+            + "com.example.UserService.checkExists:42";
+    QueryRecord record =
+        new QueryRecord(
+            "select m1_0.id from members m1_0 where m1_0.email=? fetch first ? rows only",
+            1000L, System.currentTimeMillis(), stackTrace);
+    List<Issue> issues = detector.evaluate(List.of(record), emptyIndex);
+    assertThat(issues).isEmpty();
+  }
+
+  @Test
+  void stillDetectsWhenStackTraceHasNoExistsBy() {
+    // Non-existsBy call with LIMIT but no ORDER BY should still be flagged
+    String stackTrace =
+        "jdk.proxy3.$Proxy122.findByStatus:-1\n"
+            + "com.example.UserService.getUsers:50";
+    QueryRecord record =
+        new QueryRecord(
+            "SELECT id, name FROM users WHERE status = ? LIMIT 10",
+            1000L, System.currentTimeMillis(), stackTrace);
+    List<Issue> issues = detector.evaluate(List.of(record), emptyIndex);
+    assertThat(issues).hasSize(1);
+  }
+
   @Test
   void stillDetectsLimitGreaterThan1WithoutOrderBy() {
     // LIMIT > 1 without ORDER BY is still non-deterministic
