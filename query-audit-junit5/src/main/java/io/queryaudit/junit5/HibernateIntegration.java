@@ -1,6 +1,7 @@
 package io.queryaudit.junit5;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.detector.FindByIdForAssociationDetector;
 import io.queryaudit.core.detector.LazyLoadNPlusOneDetector;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.model.Issue;
@@ -110,6 +111,42 @@ class HibernateIntegration {
         report.getTestName(),
         mergedConfirmed,
         report.getInfoIssues(),
+        report.getAcknowledgedIssues(),
+        report.getAllQueries(),
+        report.getUniquePatternCount(),
+        report.getTotalQueryCount(),
+        report.getTotalExecutionTimeNanos());
+  }
+
+  /**
+   * Merges findById-for-association issues into the report. These are INFO-level issues suggesting
+   * {@code getReferenceById()} when {@code findById()} is used only for FK assignment.
+   */
+  QueryAuditReport mergeFindByIdIssues(
+      QueryAuditReport report, LazyLoadTracker tracker, QueryAuditConfig config) {
+
+    if (config.getDisabledRules().contains("find-by-id-for-association")) {
+      return report;
+    }
+
+    FindByIdForAssociationDetector detector = new FindByIdForAssociationDetector();
+    List<Issue> findByIdIssues =
+        detector.evaluate(
+            tracker.getExplicitLoads(), tracker.getRecords(), report.getAllQueries());
+
+    if (findByIdIssues.isEmpty()) {
+      return report;
+    }
+
+    // findById issues are INFO severity → add to infoIssues
+    List<Issue> mergedInfo = new ArrayList<>(report.getInfoIssues());
+    mergedInfo.addAll(findByIdIssues);
+
+    return new QueryAuditReport(
+        report.getTestClass(),
+        report.getTestName(),
+        report.getConfirmedIssues(),
+        mergedInfo,
         report.getAcknowledgedIssues(),
         report.getAllQueries(),
         report.getUniquePatternCount(),

@@ -131,7 +131,11 @@ public enum IssueType {
       WARNING),
   CASE_IN_WHERE("case-in-where", "CASE expression in WHERE prevents index usage", WARNING),
   FORCE_INDEX_HINT(
-      "force-index-hint", "FORCE INDEX/USE INDEX hint may become stale as schema evolves", INFO);
+      "force-index-hint", "FORCE INDEX/USE INDEX hint may become stale as schema evolves", INFO),
+  FIND_BY_ID_FOR_ASSOCIATION(
+      "find-by-id-for-association",
+      "findById() used only for FK association; consider getReferenceById()",
+      INFO);
 
   private final String code;
   private final String description;
