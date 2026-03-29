@@ -9,6 +9,7 @@ import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -179,7 +180,7 @@ public class CoveringIndexDetector implements DetectionRule {
    * In InnoDB, secondary indexes always include PK columns, so they are effectively covered.
    */
   private Set<String> getPrimaryKeyColumns(IndexMetadata indexMetadata, String table) {
-    Set<String> pkCols = new java.util.HashSet<>();
+    Set<String> pkCols = new HashSet<>();
     for (IndexInfo idx : indexMetadata.getIndexesForTable(table)) {
       if ("PRIMARY".equalsIgnoreCase(idx.indexName()) && idx.columnName() != null) {
         pkCols.add(idx.columnName().toLowerCase());

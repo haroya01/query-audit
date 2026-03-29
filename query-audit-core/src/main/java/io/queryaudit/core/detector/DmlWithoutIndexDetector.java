@@ -71,7 +71,7 @@ public class DmlWithoutIndexDetector implements DetectionRule {
       // Check if at least one WHERE column is the leading column of any index
       Set<String> leadingIndexColumns = new HashSet<>();
       for (IndexInfo idx : tableIndexes) {
-        if (idx.seqInIndex() == 1) {
+        if (idx.seqInIndex() == 1 && idx.columnName() != null) {
           leadingIndexColumns.add(idx.columnName().toLowerCase());
         }
       }

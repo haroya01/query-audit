@@ -1,8 +1,10 @@
 package io.queryaudit.junit5;
 
+import io.queryaudit.core.interceptor.DataSourceProxyFactory;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -37,7 +39,7 @@ class DataSourceResolver {
     Class<?> testClass = context.getRequiredTestClass();
     for (Field field : getAllFields(testClass)) {
       if (DataSource.class.isAssignableFrom(field.getType())
-          && java.lang.reflect.Modifier.isStatic(field.getModifiers())) {
+          && Modifier.isStatic(field.getModifiers())) {
         try {
           field.setAccessible(true);
           Object value = field.get(null);
@@ -68,7 +70,7 @@ class DataSourceResolver {
     // Strategy 2: Wrap with our own proxy via DataSourceProxyFactory
     QueryAuditDataSourceStore.set(
         dataSource,
-        io.queryaudit.core.interceptor.DataSourceProxyFactory.wrap(dataSource, interceptor),
+        DataSourceProxyFactory.wrap(dataSource, interceptor),
         interceptor);
   }
 

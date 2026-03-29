@@ -3,9 +3,13 @@ package io.queryaudit.junit5;
 import io.queryaudit.core.analyzer.IndexMetadataProvider;
 import io.queryaudit.core.analyzer.JpaIndexScanner;
 import io.queryaudit.core.model.IndexMetadata;
+import java.io.File;
+import java.lang.annotation.Annotation;
+import java.net.URL;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.ServiceLoader;
 import javax.sql.DataSource;
@@ -120,12 +124,12 @@ class IndexMetadataCollector {
     List<Class<?>> entities = new ArrayList<>();
     String[] entityAnnotationNames = {"jakarta.persistence.Entity", "javax.persistence.Entity"};
 
-    Class<? extends java.lang.annotation.Annotation> entityAnnotation = null;
+    Class<? extends Annotation> entityAnnotation = null;
     for (String name : entityAnnotationNames) {
       try {
         @SuppressWarnings("unchecked")
-        Class<? extends java.lang.annotation.Annotation> cls =
-            (Class<? extends java.lang.annotation.Annotation>) Class.forName(name);
+        Class<? extends Annotation> cls =
+            (Class<? extends Annotation>) Class.forName(name);
         entityAnnotation = cls;
         break;
       } catch (ClassNotFoundException ignored) {
@@ -141,11 +145,11 @@ class IndexMetadataCollector {
       ClassLoader cl = Thread.currentThread().getContextClassLoader();
       if (cl == null) cl = getClass().getClassLoader();
 
-      java.util.Enumeration<java.net.URL> roots = cl.getResources("");
+      Enumeration<URL> roots = cl.getResources("");
       while (roots.hasMoreElements()) {
-        java.net.URL root = roots.nextElement();
+        URL root = roots.nextElement();
         if ("file".equals(root.getProtocol())) {
-          java.io.File rootDir = new java.io.File(root.toURI());
+          File rootDir = new File(root.toURI());
           scanForEntities(rootDir, rootDir, entityAnnotation, entities);
         }
       }
@@ -156,14 +160,14 @@ class IndexMetadataCollector {
   }
 
   private void scanForEntities(
-      java.io.File rootDir,
-      java.io.File dir,
-      Class<? extends java.lang.annotation.Annotation> entityAnnotation,
+      File rootDir,
+      File dir,
+      Class<? extends Annotation> entityAnnotation,
       List<Class<?>> result) {
-    java.io.File[] files = dir.listFiles();
+    File[] files = dir.listFiles();
     if (files == null) return;
 
-    for (java.io.File file : files) {
+    for (File file : files) {
       if (file.isDirectory()) {
         scanForEntities(rootDir, file, entityAnnotation, result);
       } else if (file.getName().endsWith(".class")) {

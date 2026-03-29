@@ -16,7 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * class OrderServiceTest { ... }
  * }</pre>
  *
- * Equivalent to {@code @QueryAudit(failOnDetection = false)}.
+ * Equivalent to {@code @QueryAudit(failOnDetection = BooleanOverride.FALSE)}.
  *
  * @author haroya
  * @since 0.2.0
