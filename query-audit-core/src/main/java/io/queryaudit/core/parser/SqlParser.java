@@ -3,6 +3,7 @@ package io.queryaudit.core.parser;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -1275,8 +1276,8 @@ public final class SqlParser {
     return sql.replaceAll("(?i)\\bIN\\s*\\([^)]*\\)", "IN (?)");
   }
 
-  private static final java.util.Set<String> SQL_KEYWORDS =
-      java.util.Set.of(
+  private static final Set<String> SQL_KEYWORDS =
+      Set.of(
           "select",
           "from",
           "where",

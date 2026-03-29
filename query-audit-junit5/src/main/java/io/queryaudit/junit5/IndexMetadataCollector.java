@@ -3,39 +3,45 @@ package io.queryaudit.junit5;
 import io.queryaudit.core.analyzer.IndexMetadataProvider;
 import io.queryaudit.core.analyzer.JpaIndexScanner;
 import io.queryaudit.core.model.IndexMetadata;
+import java.io.File;
+import java.lang.annotation.Annotation;
+import java.net.URL;
 import java.sql.Connection;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.ServiceLoader;
 import javax.sql.DataSource;
 
 /**
- * Collects index metadata from both the database (via {@link IndexMetadataProvider} SPI) and JPA
- * entity annotations ({@code @Table(indexes=...)}). The two sources are merged, with database
- * metadata being authoritative.
+ * Collects index metadata from the database (via {@link IndexMetadataProvider} SPI), falling back
+ * to JPA entity annotations ({@code @Table(indexes=...)}) only when no database provider is
+ * available (e.g., H2 or other unsupported databases).
+ *
+ * <p>When database metadata is successfully collected, it is used exclusively. JPA annotations are
+ * not merged in, because they may declare indexes that do not exist in the actual database schema
+ * (e.g., when {@code ddl-auto=none} and migrations have not been applied). Merging JPA-only
+ * indexes would cause false positives in index-related detectors.
  *
  * @author haroya
  * @since 0.2.0
+ * @see <a href="https://github.com/haroya01/query-guard/issues/43">#43</a>
  */
 class IndexMetadataCollector {
 
-  /** Collects and merges index metadata from the database and JPA annotations. */
+  /**
+   * Collects index metadata from the database if a matching provider exists, otherwise falls back
+   * to JPA annotations.
+   */
   IndexMetadata collect(DataSource dataSource) {
     IndexMetadata dbMetadata = collectDatabaseIndexMetadata(dataSource);
-    IndexMetadata jpaMetadata = collectJpaIndexMetadata();
-
-    if (dbMetadata == null && jpaMetadata == null) {
-      return null;
-    }
-    if (dbMetadata == null) {
-      return jpaMetadata;
-    }
-    if (jpaMetadata == null || jpaMetadata.isEmpty()) {
+    if (dbMetadata != null) {
       return dbMetadata;
     }
 
-    // Merge: DB metadata is authoritative, JPA supplements missing indexes
-    return dbMetadata.merge(jpaMetadata);
+    // Fallback: no DB provider matched (e.g., H2) — use JPA annotations as best-effort source
+    return collectJpaIndexMetadata();
   }
 
   private IndexMetadata collectDatabaseIndexMetadata(DataSource dataSource) {
@@ -90,12 +96,12 @@ class IndexMetadataCollector {
     List<Class<?>> entities = new ArrayList<>();
     String[] entityAnnotationNames = {"jakarta.persistence.Entity", "javax.persistence.Entity"};
 
-    Class<? extends java.lang.annotation.Annotation> entityAnnotation = null;
+    Class<? extends Annotation> entityAnnotation = null;
     for (String name : entityAnnotationNames) {
       try {
         @SuppressWarnings("unchecked")
-        Class<? extends java.lang.annotation.Annotation> cls =
-            (Class<? extends java.lang.annotation.Annotation>) Class.forName(name);
+        Class<? extends Annotation> cls =
+            (Class<? extends Annotation>) Class.forName(name);
         entityAnnotation = cls;
         break;
       } catch (ClassNotFoundException ignored) {
@@ -111,11 +117,11 @@ class IndexMetadataCollector {
       ClassLoader cl = Thread.currentThread().getContextClassLoader();
       if (cl == null) cl = getClass().getClassLoader();
 
-      java.util.Enumeration<java.net.URL> roots = cl.getResources("");
+      Enumeration<URL> roots = cl.getResources("");
       while (roots.hasMoreElements()) {
-        java.net.URL root = roots.nextElement();
+        URL root = roots.nextElement();
         if ("file".equals(root.getProtocol())) {
-          java.io.File rootDir = new java.io.File(root.toURI());
+          File rootDir = new File(root.toURI());
           scanForEntities(rootDir, rootDir, entityAnnotation, entities);
         }
       }
@@ -126,14 +132,14 @@ class IndexMetadataCollector {
   }
 
   private void scanForEntities(
-      java.io.File rootDir,
-      java.io.File dir,
-      Class<? extends java.lang.annotation.Annotation> entityAnnotation,
+      File rootDir,
+      File dir,
+      Class<? extends Annotation> entityAnnotation,
       List<Class<?>> result) {
-    java.io.File[] files = dir.listFiles();
+    File[] files = dir.listFiles();
     if (files == null) return;
 
-    for (java.io.File file : files) {
+    for (File file : files) {
       if (file.isDirectory()) {
         scanForEntities(rootDir, file, entityAnnotation, result);
       } else if (file.getName().endsWith(".class")) {

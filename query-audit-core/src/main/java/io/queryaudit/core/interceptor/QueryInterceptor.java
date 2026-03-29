@@ -1,6 +1,8 @@
 package io.queryaudit.core.interceptor;
 
+import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +67,7 @@ public class QueryInterceptor implements QueryExecutionListener {
   private volatile boolean active = false;
   private volatile int maxQueries = DEFAULT_MAX_QUERIES;
   private volatile boolean capacityWarningLogged = false;
+  private volatile LifecyclePhase currentPhase = LifecyclePhase.TEST;
 
   // SQL string pool: identical SQL strings share the same object reference,
   // saving memory when the same query pattern appears many times (e.g., N+1).
@@ -104,14 +107,29 @@ public class QueryInterceptor implements QueryExecutionListener {
         }
         String pooledSql = poolString(sqlPool, sql);
         String stackTrace = poolString(stackTracePool, captureStackTrace());
+        String normalized = SqlParser.normalize(pooledSql);
+        int stackHash = stackTrace == null ? 0 : stackTrace.hashCode();
         recordedQueries.add(
             new QueryRecord(
                 pooledSql,
+                normalized,
                 execInfo.getElapsedTime() * 1_000_000L,
                 System.currentTimeMillis(),
-                stackTrace));
+                stackTrace,
+                stackHash,
+                currentPhase));
       }
     }
+  }
+
+  /**
+   * Sets the current lifecycle phase. Queries recorded after this call will be
+   * tagged with the given phase.
+   *
+   * @param phase the lifecycle phase (SETUP, TEST, or TEARDOWN)
+   */
+  public void setPhase(LifecyclePhase phase) {
+    this.currentPhase = phase;
   }
 
   public void start() {
@@ -119,6 +137,7 @@ public class QueryInterceptor implements QueryExecutionListener {
     sqlPool.clear();
     stackTracePool.clear();
     capacityWarningLogged = false;
+    currentPhase = LifecyclePhase.TEST;
     active = true;
   }
 
