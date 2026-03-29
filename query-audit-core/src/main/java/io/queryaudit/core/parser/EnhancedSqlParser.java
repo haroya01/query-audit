@@ -204,8 +204,8 @@ public final class EnhancedSqlParser {
       List<String> result = new ArrayList<>();
       Set<String> tables = net.sf.jsqlparser.util.TablesNamesFinder.findTables(sql);
       for (String table : tables) {
-        // Remove backticks and schema qualifiers
-        String cleaned = table.replace("`", "");
+        // Remove backticks, double quotes, and schema qualifiers
+        String cleaned = table.replace("`", "").replace("\"", "");
         if (cleaned.contains(".")) {
           cleaned = cleaned.substring(cleaned.lastIndexOf('.') + 1);
         }
