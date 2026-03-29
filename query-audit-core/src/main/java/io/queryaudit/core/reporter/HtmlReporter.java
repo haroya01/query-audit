@@ -244,12 +244,15 @@ public class HtmlReporter implements Reporter {
     // HTML document in memory at once (prevents OOM with large test suites).
     StringBuilder sb = new StringBuilder(16_384);
 
+    String reportHash = computeReportHash(classReports);
+
     sb.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
     sb.append("<meta charset=\"UTF-8\">\n");
     sb.append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+    sb.append("<meta name=\"qg-report-hash\" content=\"").append(reportHash).append("\">\n");
     sb.append("<title>Query Guard Report — ").append(esc(className)).append("</title>\n");
     appendStyles(sb);
-    sb.append("</head>\n<body>\n");
+    sb.append("</head>\n<body data-class=\"").append(esc(className)).append("\">\n");
 
     // Header
     sb.append("<header class=\"header\">\n");
@@ -291,6 +294,7 @@ public class HtmlReporter implements Reporter {
     if (totalErrors == 0 && totalWarnings == 0) {
       sb.append("  <div class=\"stat ok\">all clean</div>\n");
     }
+    sb.append("  <div class=\"stat ok class-reviewed-status\" style=\"display:none\">all reviewed</div>\n");
     sb.append("</div>\n");
     flushSection(sb, writer);
 
@@ -576,7 +580,10 @@ public class HtmlReporter implements Reporter {
               ? String.format("%.1fs", durationMs / 1000.0)
               : durationMs + "ms";
 
-      sb.append("    <tr class=\"").append(hasIssues ? "row-fail" : "row-pass").append("\">\n");
+      String classHash = computeReportHash(classReports);
+      sb.append("    <tr class=\"").append(hasIssues ? "row-fail" : "row-pass")
+          .append("\" data-class=\"").append(esc(className))
+          .append("\" data-hash=\"").append(classHash).append("\">\n");
       sb.append("      <td><a href=\"")
           .append(esc(classFileName(className)))
           .append("\">")
@@ -1233,9 +1240,7 @@ public class HtmlReporter implements Reporter {
    */
   private void appendCompactIssue(StringBuilder sb, Issue issue) {
     String sevClass = severityCssClass(issue.severity());
-    // Unique key for checkbox persistence: type + query hash
-    String checkKey = issue.type().getCode() + "-" +
-        (issue.query() != null ? Integer.toHexString(issue.query().hashCode()) : "0");
+    String checkKey = issueCheckKey(issue);
     sb.append("    <div class=\"issue ").append(sevClass).append("\">\n");
     sb.append("      <label class=\"issue-label\"><input type=\"checkbox\" class=\"issue-check\" data-key=\"")
         .append(esc(checkKey)).append("\"> ");
@@ -2018,7 +2023,10 @@ public class HtmlReporter implements Reporter {
                     }
                 }
                 .row-fail { }
-                .row-pass { }
+                .row-pass { background: rgba(25, 135, 84, 0.04); }
+                @media (prefers-color-scheme: dark) {
+                    .row-pass { background: rgba(25, 135, 84, 0.08); }
+                }
 
                 /* Status dots */
                 .status-dot {
@@ -2098,6 +2106,7 @@ public class HtmlReporter implements Reporter {
                     flex: 1;
                     min-width: 150px;
                     color: var(--color-text);
+                    user-select: text;
                 }
                 .method .meta {
                     font-size: 0.8rem;
@@ -2135,6 +2144,24 @@ public class HtmlReporter implements Reporter {
                 }
                 @media (prefers-color-scheme: dark) {
                     .method .issues .issue.resolved { background: rgba(25,135,84,0.1) !important; }
+                }
+                .method.all-reviewed {
+                    border-left-color: var(--color-ok) !important;
+                    background: linear-gradient(135deg, rgba(25,135,84,0.05), transparent);
+                }
+                .method.all-reviewed > summary .review-badge {
+                    display: inline-block;
+                    font-size: 0.72rem;
+                    color: var(--color-ok);
+                    font-weight: 600;
+                    padding: 0.1em 0.5em;
+                    border: 1px solid var(--color-ok);
+                    border-radius: 9999px;
+                }
+                @media (prefers-color-scheme: dark) {
+                    .method.all-reviewed {
+                        background: linear-gradient(135deg, rgba(25,135,84,0.1), transparent);
+                    }
                 }
                 .issue-label { cursor: pointer; display: flex; align-items: center; gap: 0.4rem; }
                 .issue-check { width: 16px; height: 16px; cursor: pointer; accent-color: var(--color-ok); }
@@ -2474,6 +2501,7 @@ public class HtmlReporter implements Reporter {
                     flex: 1;
                     min-width: 150px;
                     color: var(--color-text);
+                    user-select: text;
                 }
                 .test-meta {
                     display: flex;
@@ -2608,6 +2636,7 @@ public class HtmlReporter implements Reporter {
                     flex: 1;
                     min-width: 150px;
                     color: var(--color-text);
+                    user-select: text;
                 }
                 .method-meta {
                     display: flex;
@@ -2853,11 +2882,88 @@ public class HtmlReporter implements Reporter {
                     }
                 });
 
-                // Issue checkbox — persist to localStorage
-                // Checked issues turn green and stay checked across page reloads
                 document.addEventListener('DOMContentLoaded', function() {
+                    var className = document.body.dataset['class'] || '';
+                    var storeKey = className ? 'qg-checked:' + className : 'qg-checked';
+                    var hashKey = className ? 'qg-report-hash:' + className : 'qg-report-hash';
+
+                    var reportHash = document.querySelector('meta[name="qg-report-hash"]');
+                    if (reportHash) {
+                        var hash = reportHash.content;
+                        var prevHash = localStorage.getItem(hashKey);
+                        if (prevHash && prevHash !== hash) {
+                            localStorage.removeItem(storeKey);
+                            if (className) localStorage.removeItem('qg-class-reviewed:' + className);
+                        }
+                        localStorage.setItem(hashKey, hash);
+                    }
+
                     var checks = document.querySelectorAll('.issue-check');
-                    var store = JSON.parse(localStorage.getItem('qg-checked') || '{}');
+                    var store = JSON.parse(localStorage.getItem(storeKey) || '{}');
+
+                    function updateClassStatus() {
+                        if (!className) return;
+                        var methods = document.querySelectorAll('.method');
+                        var hasAnyIssue = false;
+                        var allMethodsReviewed = true;
+                        methods.forEach(function(m) {
+                            var issues = m.querySelectorAll('.issues .issue');
+                            if (issues.length === 0) return;
+                            hasAnyIssue = true;
+                            if (!m.classList.contains('all-reviewed')) allMethodsReviewed = false;
+                        });
+                        if (!hasAnyIssue) return;
+                        var key = 'qg-class-reviewed:' + className;
+                        if (allMethodsReviewed) {
+                            localStorage.setItem(key, 'true');
+                            var bar = document.querySelector('.summary-bar');
+                            if (bar) {
+                                bar.querySelectorAll('.stat.error, .stat.warning').forEach(function(s) {
+                                    s.style.textDecoration = 'line-through';
+                                    s.style.opacity = '0.5';
+                                });
+                                var reviewed = bar.querySelector('.class-reviewed-status');
+                                if (reviewed) reviewed.style.display = '';
+                            }
+                        } else {
+                            localStorage.removeItem(key);
+                            var bar = document.querySelector('.summary-bar');
+                            if (bar) {
+                                bar.querySelectorAll('.stat.error, .stat.warning').forEach(function(s) {
+                                    s.style.textDecoration = '';
+                                    s.style.opacity = '';
+                                });
+                                var reviewed = bar.querySelector('.class-reviewed-status');
+                                if (reviewed) reviewed.style.display = 'none';
+                            }
+                        }
+                    }
+
+                    function updateMethodCard(issueEl) {
+                        var method = issueEl.closest('.method');
+                        if (!method) return;
+                        var allIssues = method.querySelectorAll('.issues .issue');
+                        if (allIssues.length === 0) return;
+                        var allResolved = true;
+                        allIssues.forEach(function(iss) {
+                            if (!iss.classList.contains('resolved')) allResolved = false;
+                        });
+                        if (allResolved) {
+                            method.classList.add('all-reviewed');
+                            var summary = method.querySelector(':scope > summary');
+                            if (summary && !summary.querySelector('.review-badge')) {
+                                var badge = document.createElement('span');
+                                badge.className = 'review-badge';
+                                badge.textContent = 'Reviewed';
+                                summary.appendChild(badge);
+                            }
+                        } else {
+                            method.classList.remove('all-reviewed');
+                            var existing = method.querySelector('.review-badge');
+                            if (existing) existing.remove();
+                        }
+                        updateClassStatus();
+                    }
 
                     checks.forEach(function(cb) {
                         var key = cb.dataset.key;
@@ -2873,8 +2979,14 @@ public class HtmlReporter implements Reporter {
                                 delete store[key];
                                 cb.closest('.issue').classList.remove('resolved');
                             }
-                            localStorage.setItem('qg-checked', JSON.stringify(store));
+                            localStorage.setItem(storeKey, JSON.stringify(store));
+                            updateMethodCard(cb.closest('.issue'));
                         });
+                    });
+
+                    document.querySelectorAll('.method').forEach(function(m) {
+                        var firstIssue = m.querySelector('.issues .issue');
+                        if (firstIssue) updateMethodCard(firstIssue);
                     });
                 });
 
@@ -2913,6 +3025,43 @@ public class HtmlReporter implements Reporter {
                         }
                     }
                 });
+
+                document.addEventListener('DOMContentLoaded', function() {
+                    if (document.body.dataset['class']) return;
+                    var rows = document.querySelectorAll('.classes-table tbody tr[data-class]');
+                    var currentClasses = new Set();
+                    rows.forEach(function(row) {
+                        var cls = row.dataset['class'];
+                        var expectedHash = row.dataset.hash;
+                        currentClasses.add(cls);
+                        var storedHash = localStorage.getItem('qg-report-hash:' + cls);
+                        if (storedHash && expectedHash && storedHash !== expectedHash) {
+                            localStorage.removeItem('qg-class-reviewed:' + cls);
+                            localStorage.removeItem('qg-checked:' + cls);
+                            localStorage.removeItem('qg-report-hash:' + cls);
+                        }
+                        if (localStorage.getItem('qg-class-reviewed:' + cls) === 'true') {
+                            row.classList.remove('row-fail');
+                            row.classList.add('row-pass');
+                            var dot = row.querySelector('.status-dot');
+                            if (dot) {
+                                dot.classList.remove('error-dot', 'warning-dot');
+                                dot.classList.add('ok-dot');
+                            }
+                            var badge = row.querySelector('.badge');
+                            if (badge) {
+                                badge.classList.remove('badge-error', 'badge-warning');
+                                badge.classList.add('badge-acknowledged');
+                            }
+                        }
+                    });
+                    Object.keys(localStorage).forEach(function(k) {
+                        if (k.startsWith('qg-class-reviewed:') || k.startsWith('qg-checked:') || k.startsWith('qg-report-hash:')) {
+                            var cls = k.substring(k.indexOf(':') + 1);
+                            if (!currentClasses.has(cls)) localStorage.removeItem(k);
+                        }
+                    });
+                });
                 """);
     sb.append("</script>\n");
   }
@@ -2948,6 +3097,26 @@ public class HtmlReporter implements Reporter {
       case WARNING -> "badge-warning";
       case INFO -> "badge-info";
     };
+  }
+
+  private static String issueCheckKey(Issue issue) {
+    String nq = issue.query() != null ? SqlParser.normalize(issue.query()) : "";
+    return issue.type().getCode() + "-" + Integer.toHexString(nq.hashCode());
+  }
+
+  private static String computeReportHash(List<QueryAuditReport> reports) {
+    int hash = 0;
+    for (QueryAuditReport r : reports) {
+      List<List<Issue>> allIssueLists = List.of(
+          r.getErrors(), r.getWarnings(),
+          r.getInfoIssues() != null ? r.getInfoIssues() : List.of());
+      for (List<Issue> issues : allIssueLists) {
+        for (Issue issue : issues) {
+          hash = 31 * hash + issueCheckKey(issue).hashCode();
+        }
+      }
+    }
+    return Integer.toHexString(hash);
   }
 
   private static String esc(String text) {
