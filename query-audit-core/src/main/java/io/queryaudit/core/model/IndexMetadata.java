@@ -39,35 +39,82 @@ public class IndexMetadata {
 
   /**
    * Returns {@code true} if the given column on the given table has a UNIQUE (or PRIMARY KEY)
-   * single-column index. A unique single-column index guarantees at most one row for an equality
-   * predicate, so queries filtered on such a column do not need a LIMIT clause.
+   * single-column index. Convenience delegate to {@link #hasUniqueIndexCoveredBy(String, Set)}.
    */
   public boolean hasUniqueIndexOn(String table, String column) {
-    if (table == null || column == null) {
+    if (column == null) {
+      return false;
+    }
+    return hasUniqueIndexCoveredBy(table, Set.of(column));
+  }
+
+  /**
+   * Returns {@code true} if there exists a UNIQUE (or PRIMARY KEY) index on the given table
+   * whose columns are all contained in the provided set of equality columns. Handles both
+   * single-column and composite unique indexes — when all columns of such an index appear as
+   * equality conditions, the query is guaranteed to return at most one row.
+   */
+  public boolean hasUniqueIndexCoveredBy(String table, Set<String> columns) {
+    if (table == null || columns == null || columns.isEmpty()) {
       return false;
     }
     List<IndexInfo> indexes = indexesByTable.get(table);
     if (indexes == null) {
       return false;
     }
-    // Collect unique index names that contain the target column at position 1
-    Set<String> candidateIndexNames =
-        indexes.stream()
-            .filter(
-                idx ->
-                    !idx.nonUnique()
-                        && idx.seqInIndex() == 1
-                        && idx.columnName() != null
-                        && idx.columnName().equalsIgnoreCase(column)
-                        && idx.indexName() != null)
-            .map(IndexInfo::indexName)
-            .collect(Collectors.toSet());
 
-    // Verify that at least one candidate index is a single-column index
-    for (String indexName : candidateIndexNames) {
-      long columnsInIndex =
-          indexes.stream().filter(idx -> indexName.equals(idx.indexName())).count();
-      if (columnsInIndex == 1) {
+    // Group unique index entries by index name
+    Map<String, List<IndexInfo>> uniqueIndexes =
+        indexes.stream()
+            .filter(idx -> !idx.nonUnique() && idx.indexName() != null)
+            .collect(Collectors.groupingBy(IndexInfo::indexName));
+
+    // Check if any unique index has all its columns covered by the equality columns
+    for (List<IndexInfo> indexEntries : uniqueIndexes.values()) {
+      boolean allCovered =
+          indexEntries.stream()
+              .allMatch(
+                  idx ->
+                      idx.columnName() != null
+                          && columns.stream()
+                              .anyMatch(col -> col.equalsIgnoreCase(idx.columnName())));
+      if (allCovered) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Returns {@code true} if the given set of columns fully covers all columns of any UNIQUE (or
+   * PRIMARY KEY) index on the given table. This handles both single-column and composite unique
+   * indexes. A full cover guarantees at most one row for equality predicates on all those columns.
+   */
+  public boolean columnsMatchUniqueIndex(String table, java.util.Set<String> columns) {
+    if (table == null || columns == null || columns.isEmpty()) {
+      return false;
+    }
+    List<IndexInfo> indexes = indexesByTable.get(table);
+    if (indexes == null) {
+      return false;
+    }
+
+    // Group unique indexes by name
+    java.util.Map<String, List<IndexInfo>> uniqueIndexes =
+        indexes.stream()
+            .filter(idx -> !idx.nonUnique() && idx.indexName() != null)
+            .collect(Collectors.groupingBy(IndexInfo::indexName));
+
+    // Check if any unique index has all its columns covered by the given column set
+    for (List<IndexInfo> indexColumns : uniqueIndexes.values()) {
+      boolean allCovered =
+          indexColumns.stream()
+              .allMatch(
+                  idx ->
+                      idx.columnName() != null
+                          && columns.stream()
+                              .anyMatch(c -> c.equalsIgnoreCase(idx.columnName())));
+      if (allCovered) {
         return true;
       }
     }

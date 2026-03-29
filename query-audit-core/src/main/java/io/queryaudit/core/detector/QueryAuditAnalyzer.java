@@ -5,6 +5,7 @@ import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
+import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
@@ -277,14 +278,24 @@ public class QueryAuditAnalyzer {
           testName, List.of(), List.of(), queries != null ? queries : List.of(), 0, 0, 0L);
     }
 
-    // Filter out suppressed queries
+    // Filter out suppressed queries (used for stats: total count, unique patterns, exec time)
     List<QueryRecord> filteredQueries =
         queries.stream().filter(q -> !config.isQuerySuppressed(q.sql())).toList();
 
-    // Collect all issues from all rules
+    // For detection, further filter by lifecycle phase.
+    // By default only TEST-phase queries are analyzed; setup/teardown queries are excluded
+    // to prevent false positives from test infrastructure (e.g., deleteAll, repeated save).
+    List<QueryRecord> detectableQueries =
+        config.isIncludeSetupQueries()
+            ? filteredQueries
+            : filteredQueries.stream()
+                .filter(q -> q.phase() == LifecyclePhase.TEST)
+                .toList();
+
+    // Collect all issues from all rules (only against detectable queries)
     List<Issue> allIssues = new ArrayList<>();
     for (DetectionRule rule : rules) {
-      List<Issue> ruleIssues = rule.evaluate(filteredQueries, indexMetadata);
+      List<Issue> ruleIssues = rule.evaluate(detectableQueries, indexMetadata);
       allIssues.addAll(ruleIssues);
     }
 

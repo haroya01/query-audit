@@ -1,0 +1,92 @@
+name: Close Unapproved PRs
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # 매일 자정 (UTC) 실행
+  workflow_dispatch: # 수동 실행 가능
+
+permissions:
+  pull-requests: write
+  issues: read
+
+jobs:
+  close-unapproved-prs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close PRs without approved issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // 페이지네이션으로 모든 open PR 조회
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'open',
+              sort: 'created',
+              direction: 'asc',
+              per_page: 100,
+            });
+
+            for (const pr of prs) {
+              // 메인테이너(OWNER, MEMBER, COLLABORATOR)의 PR은 스킵
+              if (['OWNER', 'MEMBER', 'COLLABORATOR'].includes(pr.author_association)) {
+                console.log(`Skipping #${pr.number} (${pr.author_association})`);
+                continue;
+              }
+
+              // PR body에서 연결된 이슈 번호 추출 (#123 패턴)
+              const issueRefs = (pr.body || '').match(/#(\d+)/g) || [];
+              const issueNumbers = issueRefs.map(ref => parseInt(ref.slice(1)));
+
+              let hasApprovedIssue = false;
+
+              for (const issueNumber of issueNumbers) {
+                try {
+                  const { data: issue } = await github.rest.issues.get({
+                    owner,
+                    repo,
+                    issue_number: issueNumber,
+                  });
+
+                  const labels = issue.labels.map(l => l.name);
+                  if (labels.includes('approved')) {
+                    hasApprovedIssue = true;
+                    break;
+                  }
+                } catch (e) {
+                  console.log(`Issue #${issueNumber} not found`);
+                }
+              }
+
+              if (!hasApprovedIssue) {
+                console.log(`Closing PR #${pr.number}: no approved issue found`);
+
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  body: [
+                    'This PR has been automatically closed because it is not linked to an approved issue.',
+                    '',
+                    'Our contribution process requires:',
+                    '1. Open an issue describing your proposed change',
+                    '2. Wait for a maintainer to add the `approved` label',
+                    '3. Reference the approved issue in your PR body (e.g., `#123`)',
+                    '',
+                    `Please see [CONTRIBUTING.md](https://github.com/${owner}/${repo}/blob/main/CONTRIBUTING.md#issue-first-policy) for details.`,
+                    '',
+                    'Feel free to reopen this PR once you have an approved issue. Thank you for your interest in contributing!'
+                  ].join('\n'),
+                });
+
+                await github.rest.pulls.update({
+                  owner,
+                  repo,
+                  pull_number: pr.number,
+                  state: 'closed',
+                });
+              }
+            }
