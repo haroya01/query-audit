@@ -791,7 +791,7 @@ class RealWorldCorpusBenchmarkTest {
       allIssues.addAll(report.getConfirmedIssues());
       allIssues.addAll(report.getInfoIssues());
 
-      assertThat(allIssues.stream().filter(i -> i.type() == IssueType.N_PLUS_ONE).toList())
+      assertThat(allIssues.stream().filter(i -> i.type() == IssueType.N_PLUS_ONE_SUSPECT).toList())
           .as("N+1 pattern should be detected")
           .isNotEmpty();
     }
@@ -1166,6 +1166,7 @@ class RealWorldCorpusBenchmarkTest {
             IssueType.HAVING_MISUSE,
             IssueType.CORRELATED_SUBQUERY,
             IssueType.N_PLUS_ONE,
+            IssueType.N_PLUS_ONE_SUSPECT,
             IssueType.UNBOUNDED_RESULT_SET,
             IssueType.DML_WITHOUT_INDEX,
             IssueType.COVERING_INDEX_OPPORTUNITY,

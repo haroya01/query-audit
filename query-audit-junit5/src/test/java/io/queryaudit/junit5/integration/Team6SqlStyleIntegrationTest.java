@@ -197,7 +197,7 @@ class Team6SqlStyleIntegrationTest {
 
       QueryAuditReport report = analyze("nPlusOne", queryInterceptor.getRecordedQueries());
       assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.N_PLUS_ONE);
+          .anyMatch(i -> i.type() == IssueType.N_PLUS_ONE || i.type() == IssueType.N_PLUS_ONE_SUSPECT);
     }
   }
 
@@ -222,7 +222,7 @@ class Team6SqlStyleIntegrationTest {
       QueryAuditReport report = analyze("lazyLoadNPlusOne", queries);
       // SQL-level N+1 detected as INFO
       assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.N_PLUS_ONE);
+          .anyMatch(i -> i.type() == IssueType.N_PLUS_ONE || i.type() == IssueType.N_PLUS_ONE_SUSPECT);
     }
   }
 }

@@ -96,7 +96,7 @@ class NPlusOneVerificationTest {
 
       assertThat(issues).hasSize(1);
       assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
-      assertThat(issues.get(0).type()).isEqualTo(IssueType.N_PLUS_ONE);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.N_PLUS_ONE_SUSPECT);
       assertThat(issues.get(0).detail()).contains("5 times");
     }
 
