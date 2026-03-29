@@ -603,21 +603,21 @@ class RobustnessTest {
                   .count())
           .isEqualTo(0);
 
-      // At threshold (3 consecutive queries with null stacks): SQL-level N+1 is now INFO
+      // At threshold (3 consecutive queries with null stacks): SQL-level N+1 suspect is INFO
       List<QueryRecord> threeQueries = createRepeatedQueriesNoStack(sql, 3);
       QueryAuditReport r3 = analyzer.analyze("test", threeQueries, null);
       assertThat(
               r3.getInfoIssues().stream()
-                  .filter(i -> i.type().getCode().equals("n-plus-one"))
+                  .filter(i -> i.type().getCode().equals("n-plus-one-suspect"))
                   .count())
           .isGreaterThan(0);
 
-      // At threshold+2 (5 queries with null stacks): SQL-level N+1 is INFO
+      // At threshold+2 (5 queries with null stacks): SQL-level N+1 suspect is INFO
       List<QueryRecord> fiveQueries = createRepeatedQueriesNoStack(sql, 5);
       QueryAuditReport r5 = analyzer.analyze("test", fiveQueries, null);
       assertThat(
               r5.getInfoIssues().stream()
-                  .filter(i -> i.type().getCode().equals("n-plus-one"))
+                  .filter(i -> i.type().getCode().equals("n-plus-one-suspect"))
                   .count())
           .isGreaterThan(0);
     }
@@ -1300,11 +1300,11 @@ class RobustnessTest {
                 "stack"));
       }
       QueryAuditReport report = analyzer.analyze("n+1-test", queries, null);
-      // SQL-level N+1 is now INFO (Hibernate-level is authoritative)
+      // SQL-level N+1 suspect is INFO (Hibernate-level is authoritative)
       assertThat(report.getInfoIssues()).isNotEmpty();
       assertThat(
               report.getInfoIssues().stream()
-                  .anyMatch(i -> i.type().getCode().equals("n-plus-one")))
+                  .anyMatch(i -> i.type().getCode().equals("n-plus-one-suspect")))
           .isTrue();
     }
   }
