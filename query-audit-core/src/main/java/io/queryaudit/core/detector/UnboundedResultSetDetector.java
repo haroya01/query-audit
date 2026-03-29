@@ -51,6 +51,10 @@ public class UnboundedResultSetDetector implements DetectionRule {
   private static final Pattern LIMIT_PATTERN =
       Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE);
 
+  /** SQL:2008 standard row-limiting clause used by Hibernate 6 / H2 / PostgreSQL. */
+  private static final Pattern FETCH_FIRST_PATTERN =
+      Pattern.compile("\\bFETCH\\s+FIRST\\b", Pattern.CASE_INSENSITIVE);
+
   private static final Pattern FOR_UPDATE_PATTERN =
       Pattern.compile("\\bFOR\\s+UPDATE\\b", Pattern.CASE_INSENSITIVE);
 
@@ -109,6 +113,13 @@ public class UnboundedResultSetDetector implements DetectionRule {
       Pattern.compile(
           "\\bWHERE\\s+(?:\\w+\\.)?\\w+\\s*=\\s*\\?\\s+LIMIT\\s+1\\s*$", Pattern.CASE_INSENSITIVE);
 
+  /**
+   * Extracts equality column names from WHERE clause conditions joined by AND. Matches patterns
+   * like {@code (alias.)column = ?} within compound WHERE clauses.
+   */
+  private static final Pattern WHERE_EQUALITY_COLUMN_PATTERN =
+      Pattern.compile("(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?", Pattern.CASE_INSENSITIVE);
+
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
@@ -144,6 +155,10 @@ public class UnboundedResultSetDetector implements DetectionRule {
       }
 
       if (LIMIT_PATTERN.matcher(sql).find()) {
+        continue;
+      }
+
+      if (FETCH_FIRST_PATTERN.matcher(sql).find()) {
         continue;
       }
 
@@ -221,6 +236,10 @@ public class UnboundedResultSetDetector implements DetectionRule {
     return result;
   }
 
+  /**
+   * Extracts all equality column names from the WHERE clause of the given SQL. Only considers
+   * {@code column = ?} patterns connected by AND. Returns an empty set if no WHERE clause is found.
+   */
   private static Set<String> extractEqualityColumns(String whereClause) {
     Set<String> columns = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
     Matcher m = EQUALITY_COLUMN_PATTERN.matcher(whereClause);

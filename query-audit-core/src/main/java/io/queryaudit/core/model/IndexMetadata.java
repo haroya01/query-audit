@@ -85,6 +85,42 @@ public class IndexMetadata {
     return false;
   }
 
+  /**
+   * Returns {@code true} if the given set of columns fully covers all columns of any UNIQUE (or
+   * PRIMARY KEY) index on the given table. This handles both single-column and composite unique
+   * indexes. A full cover guarantees at most one row for equality predicates on all those columns.
+   */
+  public boolean columnsMatchUniqueIndex(String table, java.util.Set<String> columns) {
+    if (table == null || columns == null || columns.isEmpty()) {
+      return false;
+    }
+    List<IndexInfo> indexes = indexesByTable.get(table);
+    if (indexes == null) {
+      return false;
+    }
+
+    // Group unique indexes by name
+    java.util.Map<String, List<IndexInfo>> uniqueIndexes =
+        indexes.stream()
+            .filter(idx -> !idx.nonUnique() && idx.indexName() != null)
+            .collect(Collectors.groupingBy(IndexInfo::indexName));
+
+    // Check if any unique index has all its columns covered by the given column set
+    for (List<IndexInfo> indexColumns : uniqueIndexes.values()) {
+      boolean allCovered =
+          indexColumns.stream()
+              .allMatch(
+                  idx ->
+                      idx.columnName() != null
+                          && columns.stream()
+                              .anyMatch(c -> c.equalsIgnoreCase(idx.columnName())));
+      if (allCovered) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   public List<IndexInfo> getIndexesForTable(String table) {
     if (table == null) {
       return Collections.emptyList();
