@@ -12,8 +12,10 @@ import io.queryaudit.core.model.Severity;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ServiceLoader;
+import java.util.Set;
 
 /**
  * Central analyzer that runs all detection rules against captured queries and produces a report.
@@ -136,7 +138,7 @@ public class QueryAuditAnalyzer {
     ruleList.add(new IndexRedundancyDetector());
     ruleList.add(new SlowQueryDetector(config.getSlowQueryWarningMs(), config.getSlowQueryErrorMs()));
     ruleList.add(new CountInsteadOfExistsDetector());
-    ruleList.add(new UnboundedResultSetDetector());
+    ruleList.add(new UnboundedResultSetDetector(config.getRepositoryReturnTypeResolver()));
     ruleList.add(new WriteAmplificationDetector(config.getWriteAmplificationThreshold()));
     ruleList.add(new ImplicitTypeConversionDetector());
     ruleList.add(new UnionWithoutAllDetector());
@@ -335,7 +337,7 @@ public class QueryAuditAnalyzer {
 
     // Single-pass calculation of unique patterns and total execution time.
     // Replaces two separate stream passes over filteredQueries.
-    java.util.Set<String> uniquePatterns = new java.util.HashSet<>();
+    Set<String> uniquePatterns = new HashSet<>();
     long totalExecutionTimeNanos = 0L;
     for (QueryRecord q : filteredQueries) {
       if (q.normalizedSql() != null) {

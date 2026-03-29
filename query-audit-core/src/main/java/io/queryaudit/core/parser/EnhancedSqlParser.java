@@ -1,6 +1,8 @@
 package io.queryaudit.core.parser;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * JSqlParser-backed SQL parser for complex structural extraction (WHERE columns, JOIN columns,
@@ -157,7 +159,7 @@ public final class EnhancedSqlParser {
         return List.of();
       }
 
-      List<ColumnReference> result = new java.util.ArrayList<>();
+      List<ColumnReference> result = new ArrayList<>();
       where.accept(
           new net.sf.jsqlparser.expression.ExpressionVisitorAdapter<Void>() {
             @Override
@@ -181,7 +183,7 @@ public final class EnhancedSqlParser {
         return SqlParser.extractJoinColumns(sql);
       }
 
-      List<JoinColumnPair> result = new java.util.ArrayList<>();
+      List<JoinColumnPair> result = new ArrayList<>();
       net.sf.jsqlparser.statement.select.PlainSelect plainSelect = extractPlainSelect(selectStmt);
 
       if (plainSelect == null || plainSelect.getJoins() == null) {
@@ -199,8 +201,8 @@ public final class EnhancedSqlParser {
     }
 
     static List<String> extractTableNames(String sql) throws Exception {
-      List<String> result = new java.util.ArrayList<>();
-      java.util.Set<String> tables = net.sf.jsqlparser.util.TablesNamesFinder.findTables(sql);
+      List<String> result = new ArrayList<>();
+      Set<String> tables = net.sf.jsqlparser.util.TablesNamesFinder.findTables(sql);
       for (String table : tables) {
         // Remove backticks and schema qualifiers
         String cleaned = table.replace("`", "");
