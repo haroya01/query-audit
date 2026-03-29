@@ -683,16 +683,17 @@ public class QueryAuditExtension
       return Boolean.parseBoolean(envVar);
     }
 
+    // Explicit annotation overrides CI detection
+    QueryAudit annotation = findAnnotation(context);
+    if (annotation != null && annotation.autoOpenReport().isSpecified()) {
+      return annotation.autoOpenReport().toBoolean();
+    }
+
     if (System.getenv("CI") != null
         || System.getenv("JENKINS_HOME") != null
         || System.getenv("GITHUB_ACTIONS") != null
         || System.getenv("GITLAB_CI") != null) {
       return false;
-    }
-
-    QueryAudit annotation = findAnnotation(context);
-    if (annotation != null && annotation.autoOpenReport().isSpecified()) {
-      return annotation.autoOpenReport().toBoolean();
     }
 
     QueryAuditConfig springConfig = resolveSpringConfig(context);

@@ -13,6 +13,7 @@ import java.lang.reflect.Method;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
@@ -360,13 +361,14 @@ class AnnotationOverridesYmlReproductionTest {
   /**
    * Tests for {@code shouldAutoOpenReport()} which handles autoOpenReport separately from
    * {@code buildConfig()}. This method has its own priority chain:
-   * sysProp > envVar > CI detection > annotation > Spring config > default(true).
+   * sysProp > envVar > explicit annotation > CI detection > Spring config > default(true).
    */
   @Nested
   @DisplayName("shouldAutoOpenReport() priority chain")
   class ShouldAutoOpenReport {
 
     @Test
+    @DisabledIfEnvironmentVariable(named = "CI", matches = ".*")
     @DisplayName("INHERIT annotation falls through to Spring config value")
     void inheritFallsToSpringConfig() throws Exception {
       // @QueryAudit with defaults (autoOpenReport = INHERIT)
@@ -402,6 +404,7 @@ class AnnotationOverridesYmlReproductionTest {
     }
 
     @Test
+    @DisabledIfEnvironmentVariable(named = "CI", matches = ".*")
     @DisplayName("No annotation falls through to default true")
     void noAnnotationReturnsDefault() throws Exception {
       boolean result = invokeShouldAutoOpenReport(NoAnnotation.class);
