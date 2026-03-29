@@ -49,4 +49,11 @@ public @interface QueryAudit {
    * BooleanOverride#INHERIT} to use the default behavior (auto-open locally, skip in CI).
    */
   BooleanOverride autoOpenReport() default BooleanOverride.INHERIT;
+
+  /**
+   * Whether to include {@code @BeforeEach}/{@code @AfterEach} lifecycle queries in analysis.
+   * Defaults to {@code false} — only queries from the {@code @Test} method are analyzed.
+   * Set to {@code true} to analyze all lifecycle phases.
+   */
+  boolean includeSetupQueries() default false;
 }
