@@ -44,7 +44,7 @@ class QueryAuditAnalyzerTest {
     assertThat(report.getInfoIssues()).anyMatch(i -> i.type() == IssueType.SELECT_ALL);
 
     // N+1: SQL-level detection is now INFO (Hibernate-level is authoritative)
-    assertThat(report.getInfoIssues()).anyMatch(i -> i.type() == IssueType.N_PLUS_ONE);
+    assertThat(report.getInfoIssues()).anyMatch(i -> i.type() == IssueType.N_PLUS_ONE_SUSPECT);
   }
 
   @Test

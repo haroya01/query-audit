@@ -88,7 +88,7 @@ class QueryAuditJpaIntegrationTest {
 
       // SQL-level N+1 is now INFO (Hibernate-level LazyLoadTracker is authoritative)
       List<Issue> infoNPlusOne =
-          report.getInfoIssues().stream().filter(i -> i.type() == IssueType.N_PLUS_ONE).toList();
+          report.getInfoIssues().stream().filter(i -> i.type() == IssueType.N_PLUS_ONE_SUSPECT).toList();
 
       // The SQL-level N+1 should be detected as INFO
       assertThat(infoNPlusOne).isNotEmpty();

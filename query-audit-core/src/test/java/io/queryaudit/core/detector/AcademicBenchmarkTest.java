@@ -639,7 +639,7 @@ class AcademicBenchmarkTest {
       List<Issue> bad = detector.evaluate(badQueries, EMPTY_INDEX);
       List<Issue> good = detector.evaluate(goodQueries, EMPTY_INDEX);
 
-      assertAntiPatternDetected(bad, IssueType.N_PLUS_ONE, good);
+      assertAntiPatternDetected(bad, IssueType.N_PLUS_ONE_SUSPECT, good);
     }
 
     @Test
@@ -715,7 +715,7 @@ class AcademicBenchmarkTest {
       List<Issue> bad = detector.evaluate(badQueries, EMPTY_INDEX);
       List<Issue> good = detector.evaluate(goodQueries, EMPTY_INDEX);
 
-      assertAntiPatternDetected(bad, IssueType.N_PLUS_ONE, good);
+      assertAntiPatternDetected(bad, IssueType.N_PLUS_ONE_SUSPECT, good);
     }
 
     @Test
