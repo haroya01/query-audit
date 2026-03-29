@@ -16,7 +16,8 @@ public record QueryRecord(
     long executionTimeNanos,
     long timestamp,
     String stackTrace,
-    int fullStackHash) {
+    int fullStackHash,
+    LifecyclePhase phase) {
 
   public QueryRecord(String sql, long executionTimeNanos, long timestamp, String stackTrace) {
     this(
@@ -25,12 +26,26 @@ public record QueryRecord(
         executionTimeNanos,
         timestamp,
         stackTrace,
-        stackTrace == null ? 0 : stackTrace.hashCode());
+        stackTrace == null ? 0 : stackTrace.hashCode(),
+        LifecyclePhase.TEST);
   }
 
   public QueryRecord(
       String sql, long executionTimeNanos, long timestamp, String stackTrace, int fullStackHash) {
-    this(sql, SqlParser.normalize(sql), executionTimeNanos, timestamp, stackTrace, fullStackHash);
+    this(sql, SqlParser.normalize(sql), executionTimeNanos, timestamp, stackTrace, fullStackHash,
+        LifecyclePhase.TEST);
+  }
+
+  /** Canonical constructor with all fields including phase. */
+  public QueryRecord(
+      String sql,
+      String normalizedSql,
+      long executionTimeNanos,
+      long timestamp,
+      String stackTrace,
+      int fullStackHash) {
+    this(sql, normalizedSql, executionTimeNanos, timestamp, stackTrace, fullStackHash,
+        LifecyclePhase.TEST);
   }
 
   /**

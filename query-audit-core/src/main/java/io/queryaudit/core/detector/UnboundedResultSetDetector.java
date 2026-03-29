@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -84,6 +85,25 @@ public class UnboundedResultSetDetector implements DetectionRule {
   private static final Pattern SINGLE_EQUALITY_PATTERN =
       Pattern.compile("\\bWHERE\\s+(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?\\s*$", Pattern.CASE_INSENSITIVE);
 
+  /**
+   * Extracts column names from equality conditions: {@code (alias.)column = ?}. Used to collect
+   * all equality columns in a WHERE clause for unique index checks.
+   */
+  private static final Pattern EQUALITY_COLUMN_PATTERN =
+      Pattern.compile("(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?", Pattern.CASE_INSENSITIVE);
+
+  /** Matches OR — unique index check is unsafe when OR is present in the WHERE clause. */
+  private static final Pattern OR_PATTERN =
+      Pattern.compile("\\bOR\\b", Pattern.CASE_INSENSITIVE);
+
+  /** Extracts the WHERE clause from a SQL statement. */
+  private static final Pattern WHERE_CLAUSE_PATTERN =
+      Pattern.compile("\\bWHERE\\b(.+)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+
+  /** Matches parenthesized subqueries to strip before column extraction. */
+  private static final Pattern SUBQUERY_PATTERN =
+      Pattern.compile("\\([^()]*\\bSELECT\\b[^()]*\\)", Pattern.CASE_INSENSITIVE);
+
   /** Matches a single equality condition followed by LIMIT 1. */
   private static final Pattern SINGLE_EQUALITY_LIMIT1_PATTERN =
       Pattern.compile(
@@ -148,18 +168,20 @@ public class UnboundedResultSetDetector implements DetectionRule {
         continue;
       }
 
-      // Check index metadata: if the query has a single equality condition
-      // on a column with a unique index, skip it.
+      // Check index metadata: if all columns of a unique index (single or composite)
+      // appear as AND-connected equality conditions, the result is at most one row.
       List<String> tables = SqlParser.extractTableNames(sql);
       String table = tables.isEmpty() ? null : tables.get(0);
 
-      Matcher singleEqMatcher = SINGLE_EQUALITY_PATTERN.matcher(sql);
-      if (singleEqMatcher.find()) {
-        String column = singleEqMatcher.group(1);
-        if (indexMetadata != null
-            && table != null
-            && indexMetadata.hasUniqueIndexOn(table, column)) {
-          continue;
+      if (indexMetadata != null && table != null) {
+        String whereClause = extractWhereClause(sql);
+        if (whereClause != null && !OR_PATTERN.matcher(whereClause).find()) {
+          String cleaned = stripSubqueries(whereClause);
+          Set<String> eqColumns = extractEqualityColumns(cleaned);
+          if (!eqColumns.isEmpty()
+              && indexMetadata.hasUniqueIndexCoveredBy(table, eqColumns)) {
+            continue;
+          }
         }
       }
 
@@ -183,5 +205,28 @@ public class UnboundedResultSetDetector implements DetectionRule {
     }
 
     return issues;
+  }
+
+  private static String extractWhereClause(String sql) {
+    Matcher m = WHERE_CLAUSE_PATTERN.matcher(sql);
+    return m.find() ? m.group(1).trim() : null;
+  }
+
+  /** Removes parenthesized subqueries so that inner columns are not extracted. */
+  private static String stripSubqueries(String whereClause) {
+    String result = whereClause;
+    while (SUBQUERY_PATTERN.matcher(result).find()) {
+      result = SUBQUERY_PATTERN.matcher(result).replaceAll("");
+    }
+    return result;
+  }
+
+  private static Set<String> extractEqualityColumns(String whereClause) {
+    Set<String> columns = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+    Matcher m = EQUALITY_COLUMN_PATTERN.matcher(whereClause);
+    while (m.find()) {
+      columns.add(m.group(1));
+    }
+    return columns;
   }
 }

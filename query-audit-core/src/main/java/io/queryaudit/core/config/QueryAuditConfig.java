@@ -38,6 +38,7 @@ public class QueryAuditConfig {
   private final int writeAmplificationThreshold;
   private final long slowQueryWarningMs;
   private final long slowQueryErrorMs;
+  private final boolean includeSetupQueries;
 
   private QueryAuditConfig(Builder builder) {
     this.enabled = builder.enabled;
@@ -60,6 +61,7 @@ public class QueryAuditConfig {
     this.writeAmplificationThreshold = builder.writeAmplificationThreshold;
     this.slowQueryWarningMs = builder.slowQueryWarningMs;
     this.slowQueryErrorMs = builder.slowQueryErrorMs;
+    this.includeSetupQueries = builder.includeSetupQueries;
   }
 
   public static Builder builder() {
@@ -182,6 +184,14 @@ public class QueryAuditConfig {
     return slowQueryErrorMs;
   }
 
+  /**
+   * Returns whether setup/teardown lifecycle phase queries should be included in analysis.
+   * Default is {@code false} — only TEST-phase queries are analyzed.
+   */
+  public boolean isIncludeSetupQueries() {
+    return includeSetupQueries;
+  }
+
   public boolean isSuppressed(String issueCode, String table, String column) {
     if (suppressPatterns.isEmpty()) {
       return false;
@@ -233,6 +243,7 @@ public class QueryAuditConfig {
     private int writeAmplificationThreshold = 6;
     private long slowQueryWarningMs = 500;
     private long slowQueryErrorMs = 3000;
+    private boolean includeSetupQueries = false;
 
     public Builder enabled(boolean enabled) {
       this.enabled = enabled;
@@ -351,6 +362,11 @@ public class QueryAuditConfig {
 
     public Builder slowQueryErrorMs(long slowQueryErrorMs) {
       this.slowQueryErrorMs = slowQueryErrorMs;
+      return this;
+    }
+
+    public Builder includeSetupQueries(boolean includeSetupQueries) {
+      this.includeSetupQueries = includeSetupQueries;
       return this;
     }
 
