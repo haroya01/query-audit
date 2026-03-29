@@ -200,17 +200,6 @@ public class UnboundedResultSetDetector implements DetectionRule {
         }
       }
 
-      // Check multi-column equality conditions against composite unique indexes.
-      // Extract all "column = ?" patterns from the WHERE clause and check if they
-      // fully cover any unique index (single or composite).
-      if (indexMetadata != null && table != null) {
-        Set<String> equalityColumns = extractEqualityColumns(sql);
-        if (!equalityColumns.isEmpty()
-            && indexMetadata.columnsMatchUniqueIndex(table, equalityColumns)) {
-          continue;
-        }
-      }
-
       // Single equality + LIMIT 1 is already handled by LIMIT_PATTERN above,
       // but this catches normalized queries where LIMIT 1 is present.
       if (SINGLE_EQUALITY_LIMIT1_PATTERN.matcher(sql).find()) {
