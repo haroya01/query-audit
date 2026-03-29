@@ -8,6 +8,7 @@ import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
+import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCountRegressionDetector;
 import io.queryaudit.core.regression.QueryCounts;
@@ -37,7 +38,12 @@ import org.junit.jupiter.api.extension.*;
  * @since 0.2.0
  */
 public class QueryAuditExtension
-    implements BeforeAllCallback, BeforeEachCallback, AfterEachCallback, AfterAllCallback {
+    implements BeforeAllCallback,
+        BeforeEachCallback,
+        BeforeTestExecutionCallback,
+        AfterTestExecutionCallback,
+        AfterEachCallback,
+        AfterAllCallback {
 
   private static final ExtensionContext.Namespace NAMESPACE =
       ExtensionContext.Namespace.create(QueryAuditExtension.class);
@@ -100,11 +106,34 @@ public class QueryAuditExtension
     QueryInterceptor interceptor = getInterceptor(context);
     if (interceptor != null) {
       interceptor.start();
+      interceptor.setPhase(LifecyclePhase.SETUP);
     }
 
     LazyLoadTracker tracker = getLazyLoadTracker(context);
     if (tracker != null) {
       tracker.start();
+    }
+  }
+
+  // ── BeforeTestExecutionCallback ─────────────────────────────────────
+  // Runs AFTER @BeforeEach methods, BEFORE the @Test method.
+
+  @Override
+  public void beforeTestExecution(ExtensionContext context) {
+    QueryInterceptor interceptor = getInterceptor(context);
+    if (interceptor != null) {
+      interceptor.setPhase(LifecyclePhase.TEST);
+    }
+  }
+
+  // ── AfterTestExecutionCallback ──────────────────────────────────────
+  // Runs AFTER the @Test method, BEFORE @AfterEach methods.
+
+  @Override
+  public void afterTestExecution(ExtensionContext context) {
+    QueryInterceptor interceptor = getInterceptor(context);
+    if (interceptor != null) {
+      interceptor.setPhase(LifecyclePhase.TEARDOWN);
     }
   }
 
@@ -402,6 +431,8 @@ public class QueryAuditExtension
       if (!annotation.baselinePath().isEmpty()) {
         builder.baselinePath(annotation.baselinePath());
       }
+
+      builder.includeSetupQueries(annotation.includeSetupQueries());
     }
 
     DetectNPlusOne detectNPlusOne = null;
