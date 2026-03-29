@@ -8,7 +8,8 @@ import org.hibernate.event.spi.PostLoadEvent;
 import org.hibernate.event.spi.PostLoadEventListener;
 
 /**
- * Tracks Hibernate lazy loading events for N+1 detection.
+ * Tracks Hibernate lazy loading events for N+1 detection and explicit PK loads for
+ * findById-for-association detection.
  *
  * <p>Listens for two types of Hibernate events:
  *
@@ -17,12 +18,13 @@ import org.hibernate.event.spi.PostLoadEventListener;
  *       {@code @ManyToMany} collection is initialized (e.g., {@code team.getMembers()}).
  *   <li>{@link PostLoadEvent} -- fires after an entity is loaded. Combined with stack-trace
  *       inspection, this detects {@code @ManyToOne} / {@code @OneToOne} lazy proxy resolution
- *       (e.g., {@code room.getOwner().getName()}).
+ *       (e.g., {@code room.getOwner().getName()}) and explicit loads via {@code findById()}.
  * </ul>
  *
  * <p>For proxy resolution, the tracker examines the call stack to distinguish proxy-triggered loads
- * from explicit loads (e.g., {@code findById}). Only loads triggered through Hibernate's proxy
- * interceptor are recorded.
+ * from explicit loads (e.g., {@code findById}). Proxy-triggered loads are recorded as {@link
+ * LazyLoadRecord}s, while explicit loads with {@code findById} in the stack trace are recorded as
+ * {@link ExplicitLoadRecord}s for findById-for-association analysis.
  *
  * <p>This is the same approach used by:
  *
@@ -47,7 +49,16 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
       String ownerIdString, // e.g., "42"
       long timestamp) {}
 
+  /** Record of an explicit entity load via findById (non-proxy PostLoadEvent). */
+  public record ExplicitLoadRecord(
+      String entityType, // e.g., "com.example.User"
+      String idString, // e.g., "42"
+      long timestamp,
+      String stackTrace) {}
+
   private final CopyOnWriteArrayList<LazyLoadRecord> records = new CopyOnWriteArrayList<>();
+  private final CopyOnWriteArrayList<ExplicitLoadRecord> explicitLoads =
+      new CopyOnWriteArrayList<>();
   private volatile boolean active = false;
 
   // ── InitializeCollectionEventListener (collections) ──────────────
@@ -74,20 +85,66 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
   public void onPostLoad(PostLoadEvent event) {
     if (!active) return;
 
-    // Only record loads triggered by proxy resolution, not explicit findById calls
-    if (!isProxyResolution()) return;
-
     String entityName = event.getEntity().getClass().getName();
     entityName = deproxyClassName(entityName);
-
     Object id = event.getId();
 
-    records.add(
-        new LazyLoadRecord(
-            PROXY_ROLE_PREFIX + entityName,
-            entityName,
-            id != null ? id.toString() : "null",
-            System.currentTimeMillis()));
+    if (isProxyResolution()) {
+      // Proxy resolution → record for N+1 detection
+      records.add(
+          new LazyLoadRecord(
+              PROXY_ROLE_PREFIX + entityName,
+              entityName,
+              id != null ? id.toString() : "null",
+              System.currentTimeMillis()));
+    } else if (hasFindByIdInStack()) {
+      // Explicit findById load → record for findById-for-association detection
+      String stackTrace = captureApplicationStack();
+      explicitLoads.add(
+          new ExplicitLoadRecord(
+              entityName,
+              id != null ? id.toString() : "null",
+              System.currentTimeMillis(),
+              stackTrace));
+    }
+  }
+
+  /**
+   * Checks whether the current call stack contains a {@code findById} invocation, indicating an
+   * explicit entity load via Spring Data's {@code CrudRepository.findById()} or similar.
+   *
+   * @return true if {@code findById} is found in the call stack
+   */
+  static boolean hasFindByIdInStack() {
+    StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+    for (StackTraceElement frame : stack) {
+      if ("findById".equals(frame.getMethodName())) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Captures a compact stack trace of application frames (up to 10), filtering out framework
+   * classes (Spring, Hibernate, java.*, javax.*, proxy classes).
+   */
+  private static String captureApplicationStack() {
+    StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+    StringBuilder sb = new StringBuilder();
+    int count = 0;
+    for (StackTraceElement frame : stack) {
+      String cls = frame.getClassName();
+      if (cls.startsWith("java.") || cls.startsWith("javax.") || cls.startsWith("jdk.")) continue;
+      if (cls.startsWith("org.hibernate.") || cls.startsWith("org.springframework.")) continue;
+      if (cls.contains("$HibernateProxy$") || cls.contains("$ByteBuddy$")) continue;
+      if (cls.startsWith("io.queryaudit.")) continue;
+      if (cls.startsWith("sun.") || cls.startsWith("com.sun.")) continue;
+
+      if (count > 0) sb.append('\n');
+      sb.append(cls).append('.').append(frame.getMethodName());
+      sb.append('(').append(frame.getFileName()).append(':').append(frame.getLineNumber()).append(')');
+      if (++count >= 10) break;
+    }
+    return sb.toString();
   }
 
   /**
@@ -142,6 +199,7 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
 
   public void start() {
     records.clear();
+    explicitLoads.clear();
     active = true;
   }
 
@@ -151,10 +209,15 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
 
   public void clear() {
     records.clear();
+    explicitLoads.clear();
   }
 
   public List<LazyLoadRecord> getRecords() {
     return List.copyOf(records);
+  }
+
+  public List<ExplicitLoadRecord> getExplicitLoads() {
+    return List.copyOf(explicitLoads);
   }
 
   public boolean isActive() {

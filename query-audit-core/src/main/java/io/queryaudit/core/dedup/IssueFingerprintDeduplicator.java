@@ -28,7 +28,6 @@ public final class IssueFingerprintDeduplicator {
 
   private static final Pattern SINGLE_QUOTED =
       Pattern.compile("'[^'\\\\]*(?:(?:''|\\\\.)[^'\\\\]*)*'");
-  private static final Pattern DOUBLE_QUOTED = Pattern.compile("\"[^\"]*\"");
   private static final Pattern NUMERIC = Pattern.compile("\\b\\d+\\.?\\d*\\b");
   private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
@@ -112,7 +111,6 @@ public final class IssueFingerprintDeduplicator {
     }
     String result = sql;
     result = SINGLE_QUOTED.matcher(result).replaceAll("?");
-    result = DOUBLE_QUOTED.matcher(result).replaceAll("?");
     result = NUMERIC.matcher(result).replaceAll("?");
     result = result.toLowerCase();
     result = WHITESPACE.matcher(result.trim()).replaceAll(" ");

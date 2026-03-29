@@ -4,6 +4,8 @@ import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.io.File;
+import java.net.URL;
 import java.util.*;
 
 /**
@@ -214,11 +216,11 @@ public class JpaIndexScanner {
         classLoader = getClass().getClassLoader();
       }
 
-      java.util.Enumeration<java.net.URL> resources = classLoader.getResources(path);
+      Enumeration<URL> resources = classLoader.getResources(path);
       while (resources.hasMoreElements()) {
-        java.net.URL resource = resources.nextElement();
+        URL resource = resources.nextElement();
         if ("file".equals(resource.getProtocol())) {
-          java.io.File directory = new java.io.File(resource.toURI());
+          File directory = new File(resource.toURI());
           scanDirectory(directory, basePackage, entityAnnotation, result);
         }
       }

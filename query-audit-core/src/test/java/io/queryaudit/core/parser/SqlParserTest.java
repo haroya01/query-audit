@@ -22,9 +22,10 @@ class SqlParserTest {
     }
 
     @Test
-    void replacesDoubleQuotedLiterals() {
-      String result = SqlParser.normalize("SELECT * FROM users WHERE name = \"John\"");
-      assertThat(result).contains("name = ?");
+    void preservesDoubleQuotedIdentifiers() {
+      // SQL standard: double quotes are delimited identifiers, not string literals
+      String result = SqlParser.normalize("SELECT * FROM users WHERE \"name\" = 'John'");
+      assertThat(result).contains("\"name\" = ?");
       assertThat(result).doesNotContain("John");
     }
 
@@ -63,6 +64,59 @@ class SqlParserTest {
     @Test
     void returnsNullForNull() {
       assertThat(SqlParser.normalize(null)).isNull();
+    }
+
+    // ── PostgreSQL double-quoted identifiers (issue #52) ──────────────
+
+    @Test
+    void preservesDoubleQuotedColumnIdentifiers() {
+      String result =
+          SqlParser.normalize(
+              "SELECT \"userId\" FROM \"User\" WHERE \"deletedAt\" IS NULL");
+      assertThat(result)
+          .isEqualTo("select \"userid\" from \"user\" where \"deletedat\" is null");
+    }
+
+    @Test
+    void preservesDoubleQuotedIdentifiersInComplexQuery() {
+      String result =
+          SqlParser.normalize(
+              "SELECT \"userId\", \"userName\" FROM \"User\" WHERE \"deletedAt\" IS NULL AND \"status\" = 'active'");
+      assertThat(result)
+          .isEqualTo(
+              "select \"userid\", \"username\" from \"user\" where \"deletedat\" is null and \"status\" = ?");
+    }
+
+    @Test
+    void normalizeGroupsIdenticalPostgresQueries() {
+      String q1 =
+          SqlParser.normalize(
+              "SELECT \"userId\" FROM \"User\" WHERE \"deletedAt\" IS NULL AND \"id\" = 1");
+      String q2 =
+          SqlParser.normalize(
+              "SELECT \"userId\" FROM \"User\" WHERE \"deletedAt\" IS NULL AND \"id\" = 42");
+      // Verify structure is correct first
+      assertThat(q1)
+          .isEqualTo(
+              "select \"userid\" from \"user\" where \"deletedat\" is null and \"id\" = ?");
+      // Then verify grouping
+      assertThat(q1).isEqualTo(q2);
+    }
+
+    @Test
+    void preservesEscapedQuoteInsideIdentifier() {
+      String result = SqlParser.normalize("SELECT \"col\"\"name\" FROM \"User\"");
+      assertThat(result).isEqualTo("select \"col\"\"name\" from \"user\"");
+    }
+
+    @Test
+    void mixedSingleAndDoubleQuotesHandledCorrectly() {
+      String result =
+          SqlParser.normalize(
+              "SELECT \"userId\" FROM \"User\" WHERE \"name\" = 'John' AND \"age\" > 30");
+      assertThat(result)
+          .isEqualTo(
+              "select \"userid\" from \"user\" where \"name\" = ? and \"age\" > ?");
     }
   }
 
@@ -562,8 +616,9 @@ class SqlParserTest {
     }
 
     @Test
-    void orInsideDoubleQuotedStringNotCounted() {
-      assertThat(SqlParser.countOrConditions("SELECT * FROM users WHERE name LIKE \"%OR%\""))
+    void orInsideDoubleQuotedIdentifierNotCounted() {
+      // Double quotes are identifiers per SQL standard; "OR" as column name should not count
+      assertThat(SqlParser.countOrConditions("SELECT * FROM users WHERE \"OR_flag\" = 1"))
           .isEqualTo(0);
     }
 
@@ -722,6 +777,109 @@ class SqlParserTest {
     @Test
     void nullReturnsEmpty() {
       assertThat(SqlParser.extractTableNames(null)).isEmpty();
+    }
+
+    // ── PostgreSQL double-quoted identifiers (issue #52) ──────────────
+
+    @Test
+    void doubleQuotedTableName() {
+      List<String> tables =
+          SqlParser.extractTableNames(
+              "SELECT \"userId\" FROM \"User\" WHERE \"deletedAt\" IS NULL");
+      assertThat(tables).containsExactly("User");
+    }
+
+    @Test
+    void doubleQuotedTableNameWithJoin() {
+      List<String> tables =
+          SqlParser.extractTableNames(
+              "SELECT * FROM \"User\" u JOIN \"UserRole\" ur ON u.\"id\" = ur.\"userId\"");
+      assertThat(tables).containsExactlyInAnyOrder("User", "UserRole");
+    }
+  }
+
+  // ── PostgreSQL double-quoted identifiers: column extraction (issue #52) ──
+
+  @Nested
+  class PostgresDoubleQuotedColumns {
+
+    @Test
+    void extractWhereColumnsWithDoubleQuotedIdentifiers() {
+      List<ColumnReference> cols =
+          SqlParser.extractWhereColumns(
+              "SELECT * FROM \"User\" WHERE \"userId\" = 1 AND \"deletedAt\" IS NULL");
+      assertThat(cols)
+          .extracting(ColumnReference::columnName)
+          .containsExactly("userId", "deletedAt");
+    }
+
+    @Test
+    void extractWhereColumnsWithTableQualifiedDoubleQuote() {
+      List<ColumnReference> cols =
+          SqlParser.extractWhereColumns(
+              "SELECT * FROM \"User\" u WHERE u.\"status\" = 'active'");
+      assertThat(cols).extracting(ColumnReference::columnName).containsExactly("status");
+    }
+
+    @Test
+    void extractJoinColumnsWithDoubleQuotedIdentifiers() {
+      List<JoinColumnPair> pairs =
+          SqlParser.extractJoinColumns(
+              "SELECT * FROM \"User\" u JOIN \"Order\" o ON u.\"id\" = o.\"userId\"");
+      assertThat(pairs).hasSize(1);
+      assertThat(pairs.get(0).left().columnName()).isEqualTo("id");
+      assertThat(pairs.get(0).right().columnName()).isEqualTo("userId");
+    }
+
+    @Test
+    void extractOrderByWithDoubleQuotedIdentifiers() {
+      List<ColumnReference> cols =
+          SqlParser.extractOrderByColumns(
+              "SELECT * FROM \"User\" ORDER BY \"userName\" ASC, \"createdAt\" DESC");
+      assertThat(cols).extracting(ColumnReference::columnName)
+          .containsExactly("userName", "createdAt");
+    }
+
+    @Test
+    void extractGroupByWithDoubleQuotedIdentifiers() {
+      List<ColumnReference> cols =
+          SqlParser.extractGroupByColumns(
+              "SELECT \"status\", COUNT(*) FROM \"User\" GROUP BY \"status\"");
+      assertThat(cols).extracting(ColumnReference::columnName).containsExactly("status");
+    }
+
+    @Test
+    void detectWhereFunctionsWithDoubleQuotedColumn() {
+      List<FunctionUsage> funcs =
+          SqlParser.detectWhereFunctions(
+              "SELECT * FROM \"User\" WHERE LOWER(\"email\") = 'test@example.com'");
+      assertThat(funcs).hasSize(1);
+      assertThat(funcs.get(0).functionName()).isEqualTo("LOWER");
+      assertThat(funcs.get(0).columnName()).isEqualTo("email");
+    }
+  }
+
+  // ── PostgreSQL double-quoted identifiers: DML table extraction (issue #52) ──
+
+  @Nested
+  class PostgresDoubleQuotedDml {
+
+    @Test
+    void extractInsertTableWithDoubleQuote() {
+      assertThat(SqlParser.extractInsertTable("INSERT INTO \"User\" (\"name\") VALUES ('test')"))
+          .isEqualTo("User");
+    }
+
+    @Test
+    void extractUpdateTableWithDoubleQuote() {
+      assertThat(SqlParser.extractUpdateTable("UPDATE \"User\" SET \"name\" = 'test'"))
+          .isEqualTo("User");
+    }
+
+    @Test
+    void extractDeleteTableWithDoubleQuote() {
+      assertThat(SqlParser.extractDeleteTable("DELETE FROM \"User\" WHERE \"id\" = 1"))
+          .isEqualTo("User");
     }
   }
 

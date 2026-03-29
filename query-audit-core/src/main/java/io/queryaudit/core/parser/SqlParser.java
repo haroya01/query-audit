@@ -3,6 +3,7 @@ package io.queryaudit.core.parser;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -223,9 +224,6 @@ public final class SqlParser {
 
   // ── normalize ──────────────────────────────────────────────────────
 
-  private static final Pattern SINGLE_QUOTED =
-      Pattern.compile("'[^'\\\\]*(?:(?:''|\\\\.)[^'\\\\]*)*'");
-  private static final Pattern DOUBLE_QUOTED = Pattern.compile("\"[^\"]*\"");
   private static final Pattern NUMBERS =
       Pattern.compile("\\b(?:0x[0-9a-fA-F]+|\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)\\b");
   private static final Pattern IN_LIST =
@@ -242,7 +240,6 @@ public final class SqlParser {
     }
     String result = stripComments(sql);
     result = replaceStringLiterals(result);
-    result = DOUBLE_QUOTED.matcher(result).replaceAll("?");
     result = NUMBERS.matcher(result).replaceAll("?");
     result = IN_LIST.matcher(result).replaceAll("IN (?)");
     result = WHITESPACE.matcher(result).replaceAll(" ");
@@ -251,8 +248,9 @@ public final class SqlParser {
 
   /**
    * Replaces single-quoted string literals with {@code ?}, handling SQL-standard escaped quotes
-   * ({@code ''}) and MySQL backslash escaping ({@code \'}). Uses a manual loop instead of regex to
-   * avoid StackOverflowError on large inputs.
+   * ({@code ''}) and MySQL backslash escaping ({@code \'}). Double-quoted identifiers are preserved
+   * per SQL standard (PostgreSQL, Oracle, SQL Server). Uses a manual loop instead of regex to avoid
+   * StackOverflowError on large inputs.
    */
   private static String replaceStringLiterals(String sql) {
     StringBuilder sb = new StringBuilder(sql.length());
@@ -280,21 +278,25 @@ public final class SqlParser {
         }
         sb.append('?');
       } else if (c == '"') {
+        // Double-quoted identifier (SQL standard): preserve content, will be lowercased later
+        sb.append('"');
         i++;
         while (i < sql.length()) {
           char inner = sql.charAt(i);
-          if (inner == '\\' && i + 1 < sql.length()) {
-            i += 2;
-          } else if (inner == '"' && i + 1 < sql.length() && sql.charAt(i + 1) == '"') {
+          if (inner == '"' && i + 1 < sql.length() && sql.charAt(i + 1) == '"') {
+            // Escaped quote inside identifier (""): keep both
+            sb.append("\"\"");
             i += 2;
           } else if (inner == '"') {
+            // Closing quote
+            sb.append('"');
             i++;
             break;
           } else {
+            sb.append(inner);
             i++;
           }
         }
-        sb.append('?');
       } else {
         sb.append(c);
         i++;
@@ -365,14 +367,14 @@ public final class SqlParser {
   // ── extractUpdateTable ──────────────────────────────────────────────
 
   private static final Pattern UPDATE_TABLE =
-      Pattern.compile("^\\s*UPDATE\\s+(?:`(\\w+)`|(\\w+))", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("^\\s*UPDATE\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+))", Pattern.CASE_INSENSITIVE);
 
   /** Extracts the target table name from an UPDATE statement. */
   public static String extractUpdateTable(String sql) {
     if (sql == null) return null;
     Matcher m = UPDATE_TABLE.matcher(sql);
     if (m.find()) {
-      return m.group(1) != null ? m.group(1) : m.group(2);
+      return firstNonNull(m.group(1), m.group(2), m.group(3));
     }
     return null;
   }
@@ -380,14 +382,14 @@ public final class SqlParser {
   // ── extractDeleteTable ──────────────────────────────────────────────
 
   private static final Pattern DELETE_TABLE =
-      Pattern.compile("^\\s*DELETE\\s+FROM\\s+(?:`(\\w+)`|(\\w+))", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("^\\s*DELETE\\s+FROM\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+))", Pattern.CASE_INSENSITIVE);
 
   /** Extracts the target table name from a DELETE statement. */
   public static String extractDeleteTable(String sql) {
     if (sql == null) return null;
     Matcher m = DELETE_TABLE.matcher(sql);
     if (m.find()) {
-      return m.group(1) != null ? m.group(1) : m.group(2);
+      return firstNonNull(m.group(1), m.group(2), m.group(3));
     }
     return null;
   }
@@ -395,14 +397,14 @@ public final class SqlParser {
   // ── extractInsertTable ──────────────────────────────────────────────
 
   private static final Pattern INSERT_TABLE =
-      Pattern.compile("^\\s*INSERT\\s+INTO\\s+(?:`(\\w+)`|(\\w+))", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("^\\s*INSERT\\s+INTO\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+))", Pattern.CASE_INSENSITIVE);
 
   /** Extracts the target table name from an INSERT statement. */
   public static String extractInsertTable(String sql) {
     if (sql == null) return null;
     Matcher m = INSERT_TABLE.matcher(sql);
     if (m.find()) {
-      return m.group(1) != null ? m.group(1) : m.group(2);
+      return firstNonNull(m.group(1), m.group(2), m.group(3));
     }
     return null;
   }
@@ -497,17 +499,17 @@ public final class SqlParser {
 
   private static final Pattern WHERE_COLUMN =
       Pattern.compile(
-          "(?:(?:(\\w+)\\.)?(\\w+))\\s*(?:=|!=|<>|<=|>=|<|>|\\bNOT\\s+LIKE\\b|\\bLIKE\\b|\\bNOT\\s+IN\\b|\\bIN\\b|\\bIS\\s+NOT\\b|\\bIS\\b|\\bILIKE\\b|\\bBETWEEN\\b)",
+          "(?:(?:(?:\"[^\"]+\"|\\w+)\\.)?(?:\"([^\"]+)\"|(\\w+)))\\s*(?:=|!=|<>|<=|>=|<|>|\\bNOT\\s+LIKE\\b|\\bLIKE\\b|\\bNOT\\s+IN\\b|\\bIN\\b|\\bIS\\s+NOT\\b|\\bIS\\b|\\bILIKE\\b|\\bBETWEEN\\b)",
           Pattern.CASE_INSENSITIVE);
 
   private static final Pattern WHERE_COLUMN_WITH_OP =
       Pattern.compile(
-          "(?:(?:(\\w+)\\.)?(\\w+))\\s*(=|!=|<>|<=|>=|<|>|\\bNOT\\s+LIKE\\b|\\bLIKE\\b|\\bNOT\\s+IN\\b|\\bIN\\b|\\bIS\\s+NOT\\b|\\bIS\\b|\\bILIKE\\b|\\bBETWEEN\\b)",
+          "(?:(?:(\"[^\"]+\"|\\w+)\\.)?(?:\"([^\"]+)\"|(\\w+)))\\s*(=|!=|<>|<=|>=|<|>|\\bNOT\\s+LIKE\\b|\\bLIKE\\b|\\bNOT\\s+IN\\b|\\bIN\\b|\\bIS\\s+NOT\\b|\\bIS\\b|\\bILIKE\\b|\\bBETWEEN\\b)",
           Pattern.CASE_INSENSITIVE);
 
   private static final Pattern LITERAL_VALUE =
       Pattern.compile(
-          "^(?:\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?|0x[0-9a-fA-F]+|'[^']*'|\"[^\"]*\"|\\?|true|false|null)$",
+          "^(?:\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?|0x[0-9a-fA-F]+|'[^']*'|\\?|true|false|null)$",
           Pattern.CASE_INSENSITIVE);
 
   public static List<ColumnReference> extractWhereColumns(String sql) {
@@ -536,10 +538,10 @@ public final class SqlParser {
 
     Matcher colMatcher = WHERE_COLUMN_WITH_OP.matcher(whereBody);
     while (colMatcher.find()) {
-      String table = colMatcher.group(1);
-      String column = colMatcher.group(2);
-      String operator = colMatcher.group(3).trim();
-      if (!isKeyword(column) && !isLiteralValue(column)) {
+      String table = unquoteIdentifier(colMatcher.group(1));
+      String column = firstNonNull(colMatcher.group(2), colMatcher.group(3));
+      String operator = colMatcher.group(4).trim();
+      if (column != null && !isKeyword(column) && !isLiteralValue(column)) {
         result.add(new WhereColumnReference(table, column, operator));
       }
     }
@@ -558,8 +560,8 @@ public final class SqlParser {
 
   private static final Pattern JOIN_ON =
       Pattern.compile(
-          "\\bJOIN\\s+\\w+(?:\\s+(?:AS\\s+)?\\w+)?\\s+ON\\s+"
-              + "(?:(\\w+)\\.)?(\\w+)\\s*=\\s*(?:(\\w+)\\.)?(\\w+)",
+          "\\bJOIN\\s+(?:\"[^\"]+\"|\\w+)(?:\\s+(?:AS\\s+)?(?:\"[^\"]+\"|\\w+))?\\s+ON\\s+"
+              + "(?:(\"[^\"]+\"|\\w+)\\.)?(\"[^\"]+\"|\\w+)\\s*=\\s*(?:(\"[^\"]+\"|\\w+)\\.)?(\"[^\"]+\"|\\w+)",
           Pattern.CASE_INSENSITIVE);
 
   public static List<JoinColumnPair> extractJoinColumns(String sql) {
@@ -570,8 +572,10 @@ public final class SqlParser {
 
     Matcher m = JOIN_ON.matcher(sql);
     while (m.find()) {
-      ColumnReference left = new ColumnReference(m.group(1), m.group(2));
-      ColumnReference right = new ColumnReference(m.group(3), m.group(4));
+      ColumnReference left =
+          new ColumnReference(unquoteIdentifier(m.group(1)), unquoteIdentifier(m.group(2)));
+      ColumnReference right =
+          new ColumnReference(unquoteIdentifier(m.group(3)), unquoteIdentifier(m.group(4)));
       result.add(new JoinColumnPair(left, right));
     }
     return result;
@@ -588,7 +592,9 @@ public final class SqlParser {
   };
 
   private static final Pattern COLUMN_REF =
-      Pattern.compile("(?:(\\w+)\\.)?(\\w+)(?:\\s+(?:ASC|DESC))?", Pattern.CASE_INSENSITIVE);
+      Pattern.compile(
+          "(?:(\"[^\"]+\"|\\w+)\\.)?(\"[^\"]+\"|\\w+)(?:\\s+(?:ASC|DESC))?",
+          Pattern.CASE_INSENSITIVE);
 
   public static List<ColumnReference> extractOrderByColumns(String sql) {
     return extractColumnsFromClause(sql, ORDER_BY_START, ORDER_BY_TERMINATORS);
@@ -715,9 +721,9 @@ public final class SqlParser {
       }
       Matcher colMatcher = COLUMN_REF.matcher(trimmed);
       if (colMatcher.find()) {
-        String table = colMatcher.group(1);
-        String column = colMatcher.group(2);
-        if (!isKeyword(column)) {
+        String table = unquoteIdentifier(colMatcher.group(1));
+        String column = unquoteIdentifier(colMatcher.group(2));
+        if (column != null && !isKeyword(column)) {
           result.add(new ColumnReference(table, column));
         }
       }
@@ -752,7 +758,8 @@ public final class SqlParser {
 
   private static final Pattern FUNCTION_IN_WHERE =
       Pattern.compile(
-          "\\b(" + FUNC_NAMES + ")\\s*\\(\\s*(?:(\\w+)\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
+          "\\b(" + FUNC_NAMES + ")\\s*\\(\\s*(?:(\"[^\"]+\"|\\w+)\\.)?(\"[^\"]+\"|\\w+)",
+          Pattern.CASE_INSENSITIVE);
 
   /**
    * Pattern to split a WHERE clause into individual conditions. Splits on AND/OR at the top level.
@@ -824,13 +831,9 @@ public final class SqlParser {
     return result;
   }
 
-  /** Check if expression contains a plain (non-function-wrapped) column reference. */
-  private static final Pattern PLAIN_COLUMN =
-      Pattern.compile("(?:^|[^\\w])(?:(\\w+)\\.)?(\\w+)\\s*$");
-
   // Pre-compiled pattern for simple column references like "table.column" or "column".
-  // Was previously compiled inside hasPlainColumnReference() on every call.
-  private static final Pattern SIMPLE_COL = Pattern.compile("^(?:(\\w+)\\.)?(\\w+)$");
+  private static final Pattern SIMPLE_COL =
+      Pattern.compile("^(?:(?:\"[^\"]+\"|\\w+)\\.)?(?:\"([^\"]+)\"|(\\w+))$");
 
   private static boolean hasPlainColumnReference(String expr) {
     String trimmed = expr.trim();
@@ -841,8 +844,8 @@ public final class SqlParser {
     // Check if it looks like a column reference (not a literal)
     Matcher m = SIMPLE_COL.matcher(trimmed);
     if (m.matches()) {
-      String col = m.group(2);
-      return !isKeyword(col) && !isLiteralValue(col);
+      String col = firstNonNull(m.group(1), m.group(2));
+      return col != null && !isKeyword(col) && !isLiteralValue(col);
     }
     return false;
   }
@@ -851,9 +854,9 @@ public final class SqlParser {
     Matcher fm = FUNCTION_IN_WHERE.matcher(expression);
     while (fm.find()) {
       String funcName = fm.group(1).toUpperCase();
-      String tableOrAlias = fm.group(2);
-      String column = fm.group(3);
-      if (!isKeyword(column)) {
+      String tableOrAlias = unquoteIdentifier(fm.group(2));
+      String column = unquoteIdentifier(fm.group(3));
+      if (column != null && !isKeyword(column)) {
         result.add(new FunctionUsage(funcName, column, tableOrAlias));
       }
     }
@@ -868,7 +871,7 @@ public final class SqlParser {
    */
   private static final Pattern JOIN_HEADER =
       Pattern.compile(
-          "\\b(LEFT|RIGHT|INNER|CROSS|FULL)?\\s*(?:OUTER\\s+)?JOIN\\s+`?(\\w+)`?(?:\\s+(?:AS\\s+)?`?(\\w+)`?)?\\s+ON\\s+",
+          "\\b(LEFT|RIGHT|INNER|CROSS|FULL)?\\s*(?:OUTER\\s+)?JOIN\\s+[`\"]?(\\w+)[`\"]?(?:\\s+(?:AS\\s+)?[`\"]?(\\w+)[`\"]?)?\\s+ON\\s+",
           Pattern.CASE_INSENSITIVE);
 
   /**
@@ -889,7 +892,9 @@ public final class SqlParser {
 
   /** Pattern to extract the FROM table and its optional alias. */
   private static final Pattern FROM_WITH_ALIAS =
-      Pattern.compile("\\bFROM\\s+(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
+      Pattern.compile(
+          "\\bFROM\\s+[`\"]?(\\w+)[`\"]?(?:\\s+(?:AS\\s+)?[`\"]?(\\w+)[`\"]?)?",
+          Pattern.CASE_INSENSITIVE);
 
   /**
    * Detects function usage in JOIN ON conditions that disable index usage.
@@ -980,7 +985,7 @@ public final class SqlParser {
   // Was previously compiled inside isSameColumnOrPattern() on every call.
   private static final Pattern OR_BRANCH_COL =
       Pattern.compile(
-          "(?:(\\w+)\\.)?(\\w+)\\s*(?:=|!=|<>|<=|>=|<|>|\\bIS\\b|\\bLIKE\\b)",
+          "(?:(?:\"[^\"]+\"|\\w+)\\.)?(?:\"([^\"]+)\"|(\\w+))\\s*(?:=|!=|<>|<=|>=|<|>|\\bIS\\b|\\bLIKE\\b)",
           Pattern.CASE_INSENSITIVE);
 
   public static int countOrConditions(String sql) {
@@ -997,7 +1002,6 @@ public final class SqlParser {
 
     // Remove string literals to avoid counting OR inside string values
     whereBody = replaceStringLiterals(whereBody);
-    whereBody = DOUBLE_QUOTED.matcher(whereBody).replaceAll("?");
     // Remove content inside IN(...)
     whereBody = removeInLists(whereBody);
 
@@ -1037,7 +1041,6 @@ public final class SqlParser {
 
     // Remove string literals to avoid counting OR inside string values
     whereBody = replaceStringLiterals(whereBody);
-    whereBody = DOUBLE_QUOTED.matcher(whereBody).replaceAll("?");
     // Remove content inside IN(...)
     whereBody = removeInLists(whereBody);
 
@@ -1072,7 +1075,6 @@ public final class SqlParser {
     }
 
     whereBody = replaceStringLiterals(whereBody);
-    whereBody = DOUBLE_QUOTED.matcher(whereBody).replaceAll("?");
     whereBody = removeInLists(whereBody);
 
     // Split by OR (top level)
@@ -1089,7 +1091,7 @@ public final class SqlParser {
       if (!m.find()) {
         return false;
       }
-      String column = m.group(2);
+      String column = firstNonNull(m.group(1), m.group(2));
       if (column == null || isKeyword(column)) {
         return false;
       }
@@ -1176,12 +1178,12 @@ public final class SqlParser {
 
   private static final Pattern FROM_TABLE =
       Pattern.compile(
-          "\\bFROM\\s+(?:`(\\w+)`|(\\w+(?:\\.\\w+)?))(?:\\s+(?:AS\\s+)?(?:`?\\w+`?))?",
+          "\\bFROM\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+(?:\\.\\w+)?))(?:\\s+(?:AS\\s+)?(?:[`\"]?\\w+[`\"]?))?",
           Pattern.CASE_INSENSITIVE);
 
   private static final Pattern JOIN_TABLE =
       Pattern.compile(
-          "\\bJOIN\\s+(?:`(\\w+)`|(\\w+(?:\\.\\w+)?))(?:\\s+(?:AS\\s+)?(?:`?\\w+`?))?",
+          "\\bJOIN\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+(?:\\.\\w+)?))(?:\\s+(?:AS\\s+)?(?:[`\"]?\\w+[`\"]?))?",
           Pattern.CASE_INSENSITIVE);
 
   public static List<String> extractTableNames(String sql) {
@@ -1195,7 +1197,7 @@ public final class SqlParser {
 
     Matcher fromMatcher = FROM_TABLE.matcher(sql);
     while (fromMatcher.find()) {
-      String table = fromMatcher.group(1) != null ? fromMatcher.group(1) : fromMatcher.group(2);
+      String table = firstNonNull(fromMatcher.group(1), fromMatcher.group(2), fromMatcher.group(3));
       // For schema-qualified names like "schema.table", take just the table part
       if (table != null && table.contains(".")) {
         table = table.substring(table.lastIndexOf('.') + 1);
@@ -1207,7 +1209,7 @@ public final class SqlParser {
 
     Matcher joinMatcher = JOIN_TABLE.matcher(sql);
     while (joinMatcher.find()) {
-      String table = joinMatcher.group(1) != null ? joinMatcher.group(1) : joinMatcher.group(2);
+      String table = firstNonNull(joinMatcher.group(1), joinMatcher.group(2), joinMatcher.group(3));
       if (table != null && table.contains(".")) {
         table = table.substring(table.lastIndexOf('.') + 1);
       }
@@ -1220,6 +1222,26 @@ public final class SqlParser {
   }
 
   // ── helpers ─────────────────────────────────────────────────────────
+
+  /** Returns the first non-null value among the given strings. */
+  private static String firstNonNull(String... values) {
+    for (String v : values) {
+      if (v != null) return v;
+    }
+    return null;
+  }
+
+  /** Strips surrounding double quotes or backticks from an identifier. */
+  private static String unquoteIdentifier(String identifier) {
+    if (identifier == null) return null;
+    if (identifier.length() >= 2
+        && ((identifier.charAt(0) == '"' && identifier.charAt(identifier.length() - 1) == '"')
+            || (identifier.charAt(0) == '`'
+                && identifier.charAt(identifier.length() - 1) == '`'))) {
+      return identifier.substring(1, identifier.length() - 1);
+    }
+    return identifier;
+  }
 
   /**
    * Remove subqueries (nested SELECT statements) from SQL to avoid parsing their internals. Uses a
@@ -1275,8 +1297,8 @@ public final class SqlParser {
     return sql.replaceAll("(?i)\\bIN\\s*\\([^)]*\\)", "IN (?)");
   }
 
-  private static final java.util.Set<String> SQL_KEYWORDS =
-      java.util.Set.of(
+  private static final Set<String> SQL_KEYWORDS =
+      Set.of(
           "select",
           "from",
           "where",

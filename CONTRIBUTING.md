@@ -7,6 +7,7 @@ Thank you for considering contributing to QueryAudit! Whether it's a bug report,
 ## Table of Contents
 
 - [Code of Conduct](#code-of-conduct)
+- [Issue-First Policy](#issue-first-policy)
 - [How to Report a Bug](#how-to-report-a-bug)
 - [How to Suggest a Feature](#how-to-suggest-a-feature)
 - [Development Setup](#development-setup)
@@ -42,6 +43,19 @@ Please be respectful and constructive in all interactions.
    - **If it's a false positive**: include why the query is correct and should not be flagged.
 
 > **False positive reports are especially valuable.** Reducing false positives is our top priority.
+
+---
+
+## Issue-First Policy
+
+**All contributions require a pre-approved issue.**
+
+1. Open a [GitHub Issue](https://github.com/haroya01/query-audit/issues) describing your proposed change.
+2. Wait for a maintainer to approve the issue (labeled `approved`).
+3. Only then, fork the repository and submit a PR referencing the approved issue.
+
+> **PRs without an approved issue will be automatically closed.**
+> This policy helps us manage contributions effectively and avoid duplicate or unwanted work.
 
 ---
 
@@ -323,6 +337,8 @@ BREAKING CHANGE: DetectionRule.evaluate() now returns Stream<Issue> instead of L
 
 ## Pull Request Process
 
+> **Reminder**: You must have an approved issue before opening a PR. See [Issue-First Policy](#issue-first-policy).
+
 1. **Fork** the repository and create a branch from `main`:
    ```bash
    git checkout -b feat/my-feature
@@ -336,7 +352,7 @@ BREAKING CHANGE: DetectionRule.evaluate() now returns Stream<Issue> instead of L
 
 3. **Open a PR** against `main` with:
    - Clear description of what and why
-   - Link to related issue (if any)
+   - Link to the approved issue (required, e.g., `Closes #123`)
    - How to test the change
 
 4. **CI must pass** — Java 17 and 21 matrix build.
