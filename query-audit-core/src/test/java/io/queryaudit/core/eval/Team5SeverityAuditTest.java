@@ -43,16 +43,14 @@ class Team5SeverityAuditTest {
   }
 
   // -----------------------------------------------------------------------
-  // 1. N_PLUS_ONE (default ERROR) - SQL-level detector emits INFO, LazyLoad emits ERROR
-  // Verdict: CORRECT - IssueType default is ERROR, matching LazyLoad authoritative detection
+  // 1. N_PLUS_ONE (ERROR) - LazyLoad authoritative detection
+  //    N_PLUS_ONE_SUSPECT (INFO) - SQL-level heuristic detection
+  // Verdict: CORRECT - each detector uses its own IssueType with appropriate severity
   // -----------------------------------------------------------------------
   @Test
   void nPlusOne_severityIsError_correct() {
-    // The IssueType default severity is ERROR
     assertThat(IssueType.N_PLUS_ONE.getDefaultSeverity()).isEqualTo(Severity.ERROR);
-    // Note: SQL-level NPlusOneDetector emits INFO (supplementary), but the
-    // authoritative LazyLoadNPlusOneDetector emits ERROR. The IssueType default
-    // is ERROR, which matches the authoritative detector. CORRECT.
+    assertThat(IssueType.N_PLUS_ONE_SUSPECT.getDefaultSeverity()).isEqualTo(Severity.INFO);
   }
 
   // -----------------------------------------------------------------------
@@ -753,7 +751,13 @@ class Team5SeverityAuditTest {
                 "ERROR",
                 "ERROR",
                 "OK",
-                "Authoritative LazyLoad detector correctly uses ERROR"),
+                "Authoritative LazyLoad detector uses ERROR"),
+            new AuditEntry(
+                "N_PLUS_ONE_SUSPECT",
+                "INFO",
+                "INFO",
+                "OK",
+                "SQL-level heuristic detector uses INFO"),
             new AuditEntry(
                 "SELECT_ALL",
                 "INFO",
@@ -1037,6 +1041,6 @@ class Team5SeverityAuditTest {
           .isNotNull();
     }
     // Verify the total count matches what we audited (56 issue types)
-    assertThat(IssueType.values().length).isEqualTo(64);
+    assertThat(IssueType.values().length).isEqualTo(66);
   }
 }

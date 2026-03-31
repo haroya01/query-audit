@@ -226,6 +226,26 @@ class DmlWithoutIndexDetectorTest {
       List<Issue> issues = detector.evaluate(List.of(), indexWithPrimaryKey("orders"));
       assertThat(issues).isEmpty();
     }
+
+    @Test
+    @DisplayName("No NPE when expression-based index has null columnName (GitHub #31)")
+    void noNpeOnExpressionBasedIndexWithNullColumnName() {
+      String sql = "UPDATE orders SET processed = true WHERE status = 'pending'";
+      // Expression-based index returns null for columnName
+      IndexMetadata metadata =
+          new IndexMetadata(
+              Map.of(
+                  "orders",
+                  List.of(
+                      new IndexInfo("orders", "idx_expr", null, 1, true, 500),
+                      new IndexInfo("orders", "PRIMARY", "id", 1, false, 10000))));
+
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
+
+      // Should not throw NPE; status is not indexed so issue is reported
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.DML_WITHOUT_INDEX);
+    }
   }
 
   // ── Mutation-killing tests ──────────────────────────────────────────

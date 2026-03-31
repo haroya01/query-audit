@@ -102,11 +102,12 @@ class CommentAndLiteralHandlingTest {
 
     @Test
     void handlesSqlStandardEscapedDoubleQuotes() {
-      // "She said ""hello""" should be treated as a single string literal
-      String sql = "SELECT id FROM users WHERE name = \"She said \"\"hello\"\"\"";
+      // SQL standard: double quotes = identifiers; escaped quote inside: ""
+      // "She said ""hello""" is an identifier with embedded quotes
+      String sql = "SELECT \"She said \"\"hello\"\"\" FROM users WHERE name = 'test'";
       String normalized = SqlParser.normalize(sql);
-      assertThat(normalized).contains("name = ?");
-      assertThat(normalized).doesNotContain("hello");
+      assertThat(normalized).contains("\"she said \"\"hello\"\"\"");
+      assertThat(normalized).doesNotContain("test");
     }
 
     @Test
@@ -120,10 +121,11 @@ class CommentAndLiteralHandlingTest {
 
     @Test
     void handlesMixedQuoteStyles() {
-      String sql = "SELECT id FROM users WHERE name = 'foo' AND label = \"bar\"";
+      // Single quotes = string literal (replaced with ?), double quotes = identifier (preserved)
+      String sql = "SELECT id FROM users WHERE name = 'foo' AND \"label\" = 'bar'";
       String normalized = SqlParser.normalize(sql);
       assertThat(normalized).contains("name = ?");
-      assertThat(normalized).contains("label = ?");
+      assertThat(normalized).contains("\"label\" = ?");
     }
 
     @Test

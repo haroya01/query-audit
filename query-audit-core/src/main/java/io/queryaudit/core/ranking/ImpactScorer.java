@@ -94,7 +94,7 @@ public final class ImpactScorer {
 
   static int patternScore(IssueType type) {
     return switch (type) {
-      case N_PLUS_ONE -> 50;
+      case N_PLUS_ONE, N_PLUS_ONE_SUSPECT -> 50;
       case MISSING_JOIN_INDEX -> 40;
       case FOR_UPDATE_WITHOUT_INDEX -> 40;
       case MISSING_WHERE_INDEX -> 30;

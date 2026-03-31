@@ -59,7 +59,7 @@ public class NPlusOneDetector implements DetectionRule {
 
       issues.add(
           new Issue(
-              IssueType.N_PLUS_ONE,
+              IssueType.N_PLUS_ONE_SUSPECT,
               Severity.INFO,
               entry.getValue().get(0).sql(),
               table,

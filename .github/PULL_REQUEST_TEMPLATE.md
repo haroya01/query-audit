@@ -1,3 +1,7 @@
+## Approved Issue
+<!-- 승인된 이슈 번호를 링크하세요 (예: #123). 승인된 이슈가 없는 PR은 자동으로 닫힙니다. -->
+Closes #
+
 ## What
 
 - Added `SqlParser.extractOrBranchColumns()`: splits the WHERE clause on OR and returns the lowercase column name from each branch; returns an empty list when the SQL is unparseable or has no WHERE clause.

@@ -1,5 +1,6 @@
 package io.queryaudit.core.config;
 
+import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.model.Severity;
 import java.util.Collections;
 import java.util.HashMap;
@@ -38,6 +39,8 @@ public class QueryAuditConfig {
   private final int writeAmplificationThreshold;
   private final long slowQueryWarningMs;
   private final long slowQueryErrorMs;
+  private final RepositoryReturnTypeResolver repositoryReturnTypeResolver;
+  private final boolean includeSetupQueries;
 
   private QueryAuditConfig(Builder builder) {
     this.enabled = builder.enabled;
@@ -60,6 +63,8 @@ public class QueryAuditConfig {
     this.writeAmplificationThreshold = builder.writeAmplificationThreshold;
     this.slowQueryWarningMs = builder.slowQueryWarningMs;
     this.slowQueryErrorMs = builder.slowQueryErrorMs;
+    this.repositoryReturnTypeResolver = builder.repositoryReturnTypeResolver;
+    this.includeSetupQueries = builder.includeSetupQueries;
   }
 
   public static Builder builder() {
@@ -182,6 +187,25 @@ public class QueryAuditConfig {
     return slowQueryErrorMs;
   }
 
+  /**
+   * Returns the resolver for Spring Data repository return types, or {@code null} if not
+   * configured. When {@code null}, the unbounded-result-set detector falls back to its default
+   * behavior (all flagged queries are WARNING).
+   *
+   * @since 0.3.0
+   */
+  public RepositoryReturnTypeResolver getRepositoryReturnTypeResolver() {
+    return repositoryReturnTypeResolver;
+  }
+
+  /**
+   * Returns whether setup/teardown lifecycle phase queries should be included in analysis.
+   * Default is {@code false} — only TEST-phase queries are analyzed.
+   */
+  public boolean isIncludeSetupQueries() {
+    return includeSetupQueries;
+  }
+
   public boolean isSuppressed(String issueCode, String table, String column) {
     if (suppressPatterns.isEmpty()) {
       return false;
@@ -233,6 +257,39 @@ public class QueryAuditConfig {
     private int writeAmplificationThreshold = 6;
     private long slowQueryWarningMs = 500;
     private long slowQueryErrorMs = 3000;
+    private RepositoryReturnTypeResolver repositoryReturnTypeResolver = null;
+    private boolean includeSetupQueries = false;
+
+    /**
+     * Creates a new builder pre-populated with all values from the given config. Useful for
+     * layering overrides on top of an existing configuration (e.g., annotation overrides on top of
+     * application.yml settings).
+     */
+    public static Builder from(QueryAuditConfig source) {
+      Builder b = new Builder();
+      b.enabled = source.enabled;
+      b.failOnDetection = source.failOnDetection;
+      b.nPlusOneThreshold = source.nPlusOneThreshold;
+      b.offsetPaginationThreshold = source.offsetPaginationThreshold;
+      b.orClauseThreshold = source.orClauseThreshold;
+      b.suppressPatterns = new HashSet<>(source.suppressPatterns);
+      b.suppressQueries = new HashSet<>(source.suppressQueries);
+      b.showInfo = source.showInfo;
+      b.baselinePath = source.baselinePath;
+      b.autoOpenReport = source.autoOpenReport;
+      b.maxQueries = source.maxQueries;
+      b.disabledRules = new HashSet<>(source.disabledRules);
+      b.severityOverrides = new HashMap<>(source.severityOverrides);
+      b.largeInListThreshold = source.largeInListThreshold;
+      b.tooManyJoinsThreshold = source.tooManyJoinsThreshold;
+      b.excessiveColumnThreshold = source.excessiveColumnThreshold;
+      b.repeatedInsertThreshold = source.repeatedInsertThreshold;
+      b.writeAmplificationThreshold = source.writeAmplificationThreshold;
+      b.slowQueryWarningMs = source.slowQueryWarningMs;
+      b.slowQueryErrorMs = source.slowQueryErrorMs;
+      b.repositoryReturnTypeResolver = source.repositoryReturnTypeResolver;
+      return b;
+    }
 
     public Builder enabled(boolean enabled) {
       this.enabled = enabled;
@@ -351,6 +408,16 @@ public class QueryAuditConfig {
 
     public Builder slowQueryErrorMs(long slowQueryErrorMs) {
       this.slowQueryErrorMs = slowQueryErrorMs;
+      return this;
+    }
+
+    public Builder repositoryReturnTypeResolver(RepositoryReturnTypeResolver resolver) {
+      this.repositoryReturnTypeResolver = resolver;
+      return this;
+    }
+
+    public Builder includeSetupQueries(boolean includeSetupQueries) {
+      this.includeSetupQueries = includeSetupQueries;
       return this;
     }
 

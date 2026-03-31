@@ -88,7 +88,7 @@ class QueryAuditJpaIntegrationTest {
 
       // SQL-level N+1 is now INFO (Hibernate-level LazyLoadTracker is authoritative)
       List<Issue> infoNPlusOne =
-          report.getInfoIssues().stream().filter(i -> i.type() == IssueType.N_PLUS_ONE).toList();
+          report.getInfoIssues().stream().filter(i -> i.type() == IssueType.N_PLUS_ONE_SUSPECT).toList();
 
       // The SQL-level N+1 should be detected as INFO
       assertThat(infoNPlusOne).isNotEmpty();
@@ -292,6 +292,87 @@ class QueryAuditJpaIntegrationTest {
       // SELECT * should be acknowledged, not confirmed
       assertThat(report.getAcknowledgedIssues()).anyMatch(i -> i.type() == IssueType.SELECT_ALL);
       assertThat(report.getConfirmedIssues()).noneMatch(i -> i.type() == IssueType.SELECT_ALL);
+    }
+  }
+
+  // ── Unbounded Result Set: derived vs @Query ──────────────────────────
+
+  @Nested
+  @DisplayName("Unbounded Result Set Detection (JPA query types)")
+  class UnboundedResultSetJpaTests {
+
+    @Test
+    @DisplayName("Derived findFirst query has LIMIT — no unbounded-result-set warning")
+    void derivedFindFirstHasLimit() {
+      queryInterceptor.start();
+      memberRepository.findFirstByStatusOrderByNameDesc("ACTIVE");
+      queryInterceptor.stop();
+
+      List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
+      assertThat(queries).isNotEmpty();
+
+      // Spring Data adds LIMIT or FETCH FIRST for findFirst + Optional return type
+      boolean hasBound =
+          queries.stream()
+              .anyMatch(
+                  q -> {
+                    String lower = q.sql().toLowerCase();
+                    return lower.contains("limit") || lower.contains("fetch first");
+                  });
+      assertThat(hasBound)
+          .as("Derived findFirst query should have LIMIT/FETCH FIRST added by Spring Data")
+          .isTrue();
+
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditReport report = analyzer.analyze("unboundedTest", queries, null);
+
+      List<Issue> unboundedIssues =
+          report.getConfirmedIssues().stream()
+              .filter(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET)
+              .toList();
+      assertThat(unboundedIssues)
+          .as("findFirst derived query with LIMIT should not trigger unbounded warning")
+          .isEmpty();
+    }
+
+    @Test
+    @DisplayName("Custom @Query without LIMIT — correctly warns unbounded-result-set")
+    void customQueryWithoutLimitIsWarned() {
+      queryInterceptor.start();
+      // @Query without LIMIT + multiple matching rows → IncorrectResultSizeDataAccessException.
+      // This is exactly the runtime danger that the detector warns about.
+      try {
+        memberRepository.findByStatusCustom("ACTIVE");
+      } catch (Exception ignored) {
+        // Expected: NonUniqueResultException because @Query has no LIMIT
+      }
+      queryInterceptor.stop();
+
+      List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
+      assertThat(queries).isNotEmpty();
+
+      // Custom @Query does NOT add LIMIT or FETCH FIRST
+      boolean hasBound =
+          queries.stream()
+              .anyMatch(
+                  q -> {
+                    String lower = q.sql().toLowerCase();
+                    return lower.contains("limit") || lower.contains("fetch first");
+                  });
+      assertThat(hasBound)
+          .as("Custom @Query should NOT have LIMIT/FETCH FIRST added by Spring Data")
+          .isFalse();
+
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditReport report = analyzer.analyze("unboundedTest", queries, null);
+
+      List<Issue> unboundedIssues =
+          report.getConfirmedIssues().stream()
+              .filter(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET)
+              .toList();
+      assertThat(unboundedIssues)
+          .as("Custom @Query without LIMIT should trigger unbounded warning")
+          .isNotEmpty();
     }
   }
 
