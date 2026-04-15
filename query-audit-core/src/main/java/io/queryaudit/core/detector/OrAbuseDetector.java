@@ -48,6 +48,14 @@ public class OrAbuseDetector implements DetectionRule {
         List<String> tables = SqlParser.extractTableNames(query.sql());
         String table = tables.isEmpty() ? null : tables.get(0);
 
+        if (table != null && indexMetadata != null && indexMetadata.hasTable(table)) {
+          List<String> orColumns = SqlParser.extractOrBranchColumns(query.sql());
+          if (!orColumns.isEmpty()
+              && orColumns.stream().allMatch(col -> indexMetadata.hasIndexOn(table, col))) {
+            continue;
+          }
+        }
+
         issues.add(
             new Issue(
                 IssueType.OR_ABUSE,

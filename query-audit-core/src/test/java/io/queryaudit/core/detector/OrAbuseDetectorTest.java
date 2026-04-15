@@ -2,12 +2,15 @@ package io.queryaudit.core.detector;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class OrAbuseDetectorTest {
@@ -53,6 +56,89 @@ class OrAbuseDetectorTest {
     // If issues found, table should be null since no FROM clause
     for (Issue issue : issues) {
       assertThat(issue.table()).isNull();
+    }
+  }
+
+  @Nested
+  @DisplayName("Index-merge optimisation suppresses OR_ABUSE")
+  class IndexMergeOptimizationTests {
+
+    private static IndexMetadata metadataWithIndexes(String table, String... columns) {
+      List<IndexInfo> infos = new java.util.ArrayList<>();
+      for (String col : columns) {
+        infos.add(new IndexInfo(table, "idx_" + col, col, 1, true, 100));
+      }
+      return new IndexMetadata(Map.of(table, infos));
+    }
+
+    @Test
+    @DisplayName("All OR-branched columns individually indexed → not flagged")
+    void allOrColumnsIndexed_notFlagged() {
+      IndexMetadata meta = metadataWithIndexes("users", "status", "role", "tier", "region");
+      OrAbuseDetector detector = new OrAbuseDetector(3);
+      List<QueryRecord> queries =
+          List.of(
+              record(
+                  "SELECT * FROM users"
+                      + " WHERE status = 'active' OR role = 'admin'"
+                      + " OR tier = 'gold' OR region = 'eu'"));
+
+      List<Issue> issues = detector.evaluate(queries, meta);
+
+      assertThat(issues).isEmpty();
+    }
+
+    @Test
+    @DisplayName("One OR-branched column not indexed → still flagged")
+    void oneOrColumnNotIndexed_stillFlagged() {
+      // 'bio' has no index
+      IndexMetadata meta = metadataWithIndexes("users", "status", "role", "tier");
+      OrAbuseDetector detector = new OrAbuseDetector(3);
+      List<QueryRecord> queries =
+          List.of(
+              record(
+                  "SELECT * FROM users"
+                      + " WHERE status = 'active' OR role = 'admin'"
+                      + " OR tier = 'gold' OR bio = 'engineer'"));
+
+      List<Issue> issues = detector.evaluate(queries, meta);
+
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.OR_ABUSE);
+    }
+
+    @Test
+    @DisplayName("No index metadata for table → conservatively flagged")
+    void emptyIndexMetadata_conservativelyFlagged() {
+      OrAbuseDetector detector = new OrAbuseDetector(3);
+      List<QueryRecord> queries =
+          List.of(
+              record(
+                  "SELECT * FROM users"
+                      + " WHERE status = 'active' OR role = 'admin'"
+                      + " OR tier = 'gold' OR region = 'eu'"));
+
+      List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.OR_ABUSE);
+    }
+
+    @Test
+    @DisplayName("Exactly threshold OR conditions, all columns indexed → not flagged")
+    void exactlyThresholdOrConditions_allIndexed_notFlagged() {
+      // threshold = 3, exactly 3 OR conditions
+      IndexMetadata meta = metadataWithIndexes("orders", "status", "region", "priority");
+      OrAbuseDetector detector = new OrAbuseDetector(3);
+      List<QueryRecord> queries =
+          List.of(
+              record(
+                  "SELECT * FROM orders"
+                      + " WHERE status = 'open' OR region = 'eu' OR priority = 'high'"));
+
+      List<Issue> issues = detector.evaluate(queries, meta);
+
+      assertThat(issues).isEmpty();
     }
   }
 }
