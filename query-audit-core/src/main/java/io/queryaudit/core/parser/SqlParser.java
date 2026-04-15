@@ -1074,7 +1074,6 @@ public final class SqlParser {
     }
 
     whereBody = replaceStringLiterals(whereBody);
-    whereBody = DOUBLE_QUOTED.matcher(whereBody).replaceAll("?");
     whereBody = removeInLists(whereBody);
 
     String[] orParts = OR_PATTERN.split(whereBody);
