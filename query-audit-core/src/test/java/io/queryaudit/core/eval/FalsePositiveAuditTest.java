@@ -113,6 +113,9 @@ class FalsePositiveAuditTest {
 
   @Test
   void likeWildcardDetector_legitimateQueries() {
+    // Audit focus: WARNING-level issues only. Post-#91, parameterized LIKE (`LIKE ?`) emits
+    // an INFO-level suggestive heads-up because the runtime binding could begin with '%';
+    // those are not false positives for this audit.
     List<String> sqls =
         List.of(
             "select u1_0.id,u1_0.name from users u1_0 where u1_0.name like 'John%'",
@@ -126,7 +129,10 @@ class FalsePositiveAuditTest {
             "update users set last_login=? where id=?",
             "select u1_0.id from users u1_0 where u1_0.name like ?");
     List<Issue> issues = evaluate(new LikeWildcardDetector(), sqls);
-    assertThat(issues).as("LikeWildcardDetector false positives").isEmpty();
+    assertThat(issues)
+        .as("LikeWildcardDetector WARNING-level false positives")
+        .filteredOn(i -> i.severity() == io.queryaudit.core.model.Severity.WARNING)
+        .isEmpty();
   }
 
   // ── UnboundedResultSetDetector ───────────────────────────────────────

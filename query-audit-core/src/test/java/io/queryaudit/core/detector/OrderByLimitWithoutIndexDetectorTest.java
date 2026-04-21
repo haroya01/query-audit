@@ -39,6 +39,47 @@ class OrderByLimitWithoutIndexDetectorTest {
     assertThat(issues.get(0).detail()).contains("filesort");
   }
 
+  // Regression for #98: ORDER BY on a non-leading composite column still requires a filesort.
+  // The detector used to consider such a column "indexed" because it appeared in the index at all.
+  @Test
+  void flagsOrderByOnNonLeadingCompositeColumn() {
+    IndexMetadata metadata =
+        new IndexMetadata(
+            Map.of(
+                "orders",
+                List.of(
+                    new IndexInfo("orders", "PRIMARY", "id", 1, false, 10000),
+                    // composite index (status, created_at) — created_at is at seqInIndex=2
+                    new IndexInfo("orders", "idx_status_created", "status", 1, true, 10000),
+                    new IndexInfo("orders", "idx_status_created", "created_at", 2, true, 10000))));
+
+    String sql = "SELECT id FROM orders ORDER BY created_at DESC LIMIT 10";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).column()).isEqualTo("created_at");
+  }
+
+  @Test
+  void noIssueWhenOrderByIsLeadingCompositeColumn() {
+    IndexMetadata metadata =
+        new IndexMetadata(
+            Map.of(
+                "orders",
+                List.of(
+                    new IndexInfo("orders", "PRIMARY", "id", 1, false, 10000),
+                    new IndexInfo("orders", "idx_status_created", "status", 1, true, 10000),
+                    new IndexInfo("orders", "idx_status_created", "created_at", 2, true, 10000))));
+
+    // ORDER BY on the leading column of the composite index — genuinely index-satisfiable.
+    String sql = "SELECT id FROM orders ORDER BY status LIMIT 10";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
+
+    assertThat(issues).isEmpty();
+  }
+
   @Test
   void noIssueWhenOrderByColumnHasIndex() {
     IndexMetadata metadata =

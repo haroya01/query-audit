@@ -52,6 +52,7 @@ public class NonDeterministicPaginationDetector implements DetectionRule {
 
     // Cannot determine uniqueness without index metadata
     if (indexMetadata == null || indexMetadata.isEmpty()) {
+      MetadataSkipLog.warnEmptyMetadataOnce("NonDeterministicPaginationDetector");
       return issues;
     }
 

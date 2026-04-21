@@ -109,6 +109,41 @@ class CollectionManagementDetectorTest {
 
       assertThat(issues).hasSize(1);
     }
+
+    // Regression for #94: composite-key FK DELETE (owner key spans more than one column) used
+    // to be silently skipped because of the `whereColumns.size() != 1` guard.
+    @Test
+    @DisplayName("Detects composite-key FK DELETE + re-INSERT pattern (issue #94)")
+    void detectsCompositeKeyFkDeleteReinsert() {
+      List<QueryRecord> queries =
+          List.of(
+              record("DELETE FROM parent_child WHERE parent_id = 1 AND child_kind = 'A'"),
+              record("INSERT INTO parent_child (parent_id, child_kind, val) VALUES (1, 'A', 10)"),
+              record("INSERT INTO parent_child (parent_id, child_kind, val) VALUES (1, 'A', 20)"));
+
+      List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.COLLECTION_DELETE_REINSERT);
+      assertThat(issues.get(0).table()).isEqualTo("parent_child");
+      assertThat(issues.get(0).detail()).contains("composite owner key");
+      assertThat(issues.get(0).detail()).contains("parent_id");
+      assertThat(issues.get(0).detail()).contains("child_kind");
+    }
+
+    @Test
+    @DisplayName("Detects composite-key FK DELETE + re-INSERT with parameterized values")
+    void detectsCompositeKeyFkDeleteReinsertParameterized() {
+      List<QueryRecord> queries =
+          List.of(
+              record("DELETE FROM parent_child WHERE parent_id = ? AND child_kind = ?"),
+              record("INSERT INTO parent_child (parent_id, child_kind, val) VALUES (?, ?, ?)"),
+              record("INSERT INTO parent_child (parent_id, child_kind, val) VALUES (?, ?, ?)"));
+
+      List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+    }
   }
 
   // ── Negative: No issues ─────────────────────────────────────────────
@@ -118,8 +153,12 @@ class CollectionManagementDetectorTest {
   class NegativeCases {
 
     @Test
-    @DisplayName("No issue when DELETE has multiple WHERE columns (composite key)")
-    void noIssueWithMultipleWhereColumns() {
+    @DisplayName("No issue when composite WHERE values don't carry over to INSERTs (specific-row DELETE)")
+    void noIssueWhenCompositeWhereValuesDontCarryOver() {
+      // WHERE constrains a SPECIFIC row (member_id = 10) that does not appear in any of the
+      // subsequent INSERT value lists. This is a specific-row DELETE followed by unrelated
+      // INSERTs, not a collection DELETE-all. See issue #94 for the composite-key case that
+      // SHOULD be flagged.
       List<QueryRecord> queries =
           List.of(
               record("DELETE FROM team_members WHERE team_id = 1 AND member_id = 10"),
