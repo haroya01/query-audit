@@ -177,4 +177,20 @@ class MergeableQueriesDetectorTest {
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).type()).isEqualTo(IssueType.MERGEABLE_QUERIES);
   }
+
+  // Regression for #97: queries that join the SAME table but with DIFFERENT ON conditions used
+  // to be bucketed together because extractJoinStructure only looked at "JOIN <table>".
+  // Rewriting them with an IN clause is impossible, so they must not be grouped/flagged.
+  @Test
+  void noIssueForSameJoinTableButDifferentOnConditions() {
+    List<QueryRecord> queries =
+        List.of(
+            record("SELECT o.id FROM orders o JOIN users u ON u.id = o.user_id WHERE o.status = 'A'"),
+            record("SELECT o.id FROM orders o JOIN users u ON u.id = o.reviewer_id WHERE o.status = 'B'"),
+            record("SELECT o.id FROM orders o JOIN users u ON u.id = o.approver_id WHERE o.status = 'C'"));
+
+    List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
+
+    assertThat(issues).isEmpty();
+  }
 }
