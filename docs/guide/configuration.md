@@ -223,10 +223,10 @@ See the [Annotations Guide](annotations.md) for detailed usage patterns.
 
     ```java
     @QueryAudit(
-        failOnDetection = true,
+        failOnDetection = BooleanOverride.TRUE,
         nPlusOneThreshold = 2,
         suppress = {"select-all"},
-        autoOpenReport = false
+        autoOpenReport = BooleanOverride.FALSE
     )
     @SpringBootTest
     class OrderServiceTest { }

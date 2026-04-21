@@ -45,8 +45,8 @@ No configuration. No extra beans. No proxy setup. Just the annotation.
 
     ```gradle
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.1.0'
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.1.0'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.0'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.0'
     }
     ```
 
@@ -56,13 +56,13 @@ No configuration. No extra beans. No proxy setup. Just the annotation.
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.1.0</version>
+        <version>0.3.0</version>
         <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-mysql</artifactId>
-        <version>0.1.0</version>
+        <version>0.3.0</version>
         <scope>test</scope>
     </dependency>
     ```
@@ -229,7 +229,7 @@ Once you're comfortable with `@QueryAudit`, explore the 4 annotations:
 | Annotation | Use when... |
 |---|---|
 | `@QueryAudit` | You want full analysis with test failure on issues |
-| `@EnableQueryInspector` | You want report-only mode (same as `@QueryAudit(failOnDetection = false)`) |
+| `@EnableQueryInspector` | You want report-only mode (same as `@QueryAudit(failOnDetection = BooleanOverride.FALSE)`) |
 | `@DetectNPlusOne` | You only care about N+1 patterns |
 | `@ExpectMaxQueryCount(5)` | You want to enforce a query budget |
 
