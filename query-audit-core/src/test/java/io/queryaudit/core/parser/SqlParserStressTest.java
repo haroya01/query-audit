@@ -935,12 +935,9 @@ class SqlParserStressTest {
 
     @Test
     void schemaQualifiedTable() {
-      // FROM schema.table_name - current regex \bFROM\s+(\w+) captures "schema" not "table_name"
       List<String> tables =
           SqlParser.extractTableNames("SELECT * FROM myschema.users WHERE id = 1");
-      // Current impl captures "myschema" since regex stops at word boundary before dot
-      // This is a known limitation - document actual behavior
-      assertThat(tables).isNotEmpty();
+      assertThat(tables).containsExactly("users");
     }
 
     @Test
@@ -1137,7 +1134,13 @@ class SqlParserStressTest {
     void manyJoinsDoNotCauseBacktracking() {
       StringBuilder sb = new StringBuilder("SELECT * FROM t1 ");
       for (int i = 2; i <= 25; i++) {
-        sb.append("JOIN t").append(i).append(" ON t").append(i).append(".a = t").append(i - 1).append(".a ");
+        sb.append("JOIN t")
+            .append(i)
+            .append(" ON t")
+            .append(i)
+            .append(".a = t")
+            .append(i - 1)
+            .append(".a ");
       }
       sb.append("WHERE t1.status = 'active' AND t1.created > '2020-01-01'");
       String sql = sb.toString();
@@ -1206,8 +1209,13 @@ class SqlParserStressTest {
     void manyJoinsWithFunctionsDoNotCauseBacktracking() {
       StringBuilder sb = new StringBuilder("SELECT * FROM t1 ");
       for (int i = 2; i <= 20; i++) {
-        sb.append("LEFT JOIN t").append(i)
-            .append(" ON LOWER(t").append(i).append(".name) = LOWER(t").append(i - 1).append(".name) ");
+        sb.append("LEFT JOIN t")
+            .append(i)
+            .append(" ON LOWER(t")
+            .append(i)
+            .append(".name) = LOWER(t")
+            .append(i - 1)
+            .append(".name) ");
       }
       sb.append("WHERE t1.active = 1");
       String sql = sb.toString();

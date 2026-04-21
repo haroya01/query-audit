@@ -7,8 +7,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Verifies EnhancedSqlParser.extractOrderByColumns / extractGroupByColumns against the
- * issue #102 literal reproducer and common shapes.
+ * Verifies EnhancedSqlParser.extractOrderByColumns / extractGroupByColumns against the issue #102
+ * literal reproducer and common shapes.
  */
 class EnhancedOrderGroupByTest {
 
@@ -20,15 +20,10 @@ class EnhancedOrderGroupByTest {
     List<ColumnReference> regex = SqlParser.extractOrderByColumns(sql);
     List<ColumnReference> enhanced = EnhancedSqlParser.extractOrderByColumns(sql);
 
-    System.out.println("[#102] regex    = " + regex);
-    System.out.println("[#102] enhanced = " + enhanced);
-
-    // Regex buggy baseline: [name, a, b, created_at] — splits the literal at the comma.
-    assertThat(regex).extracting(ColumnReference::columnName)
-        .containsExactly("name", "a", "b", "created_at");
-
-    // Enhanced: literal is opaque → only the two real columns remain.
-    assertThat(enhanced).extracting(ColumnReference::columnName)
+    // Both parsers now treat single-quoted literals as opaque.
+    assertThat(regex).extracting(ColumnReference::columnName).containsExactly("name", "created_at");
+    assertThat(enhanced)
+        .extracting(ColumnReference::columnName)
         .containsExactly("name", "created_at");
   }
 

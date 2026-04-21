@@ -221,7 +221,6 @@ public final class SqlParser {
     return sb.toString();
   }
 
-
   // ── normalize ──────────────────────────────────────────────────────
 
   private static final Pattern NUMBERS =
@@ -382,7 +381,8 @@ public final class SqlParser {
   // ── extractDeleteTable ──────────────────────────────────────────────
 
   private static final Pattern DELETE_TABLE =
-      Pattern.compile("^\\s*DELETE\\s+FROM\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+))", Pattern.CASE_INSENSITIVE);
+      Pattern.compile(
+          "^\\s*DELETE\\s+FROM\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+))", Pattern.CASE_INSENSITIVE);
 
   /** Extracts the target table name from a DELETE statement. */
   public static String extractDeleteTable(String sql) {
@@ -397,7 +397,8 @@ public final class SqlParser {
   // ── extractInsertTable ──────────────────────────────────────────────
 
   private static final Pattern INSERT_TABLE =
-      Pattern.compile("^\\s*INSERT\\s+INTO\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+))", Pattern.CASE_INSENSITIVE);
+      Pattern.compile(
+          "^\\s*INSERT\\s+INTO\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+))", Pattern.CASE_INSENSITIVE);
 
   /** Extracts the target table name from an INSERT statement. */
   public static String extractInsertTable(String sql) {
@@ -710,6 +711,9 @@ public final class SqlParser {
     if (body == null) {
       return result;
     }
+    // Replace single-quoted literals with '?' so a comma inside a literal
+    // (e.g. ORDER BY name, 'a,b', created_at) is not treated as a separator.
+    body = replaceStringLiterals(body);
     // Split by commas that are NOT inside parentheses
     List<String> parts = splitByTopLevelCommas(body);
     for (String part : parts) {
@@ -881,8 +885,7 @@ public final class SqlParser {
    */
   private static final Pattern[] JOIN_ON_TERMINATORS = {
     Pattern.compile(
-        "\\b(?:LEFT|RIGHT|INNER|CROSS|FULL)?\\s*(?:OUTER\\s+)?JOIN\\b",
-        Pattern.CASE_INSENSITIVE),
+        "\\b(?:LEFT|RIGHT|INNER|CROSS|FULL)?\\s*(?:OUTER\\s+)?JOIN\\b", Pattern.CASE_INSENSITIVE),
     Pattern.compile("\\bWHERE\\b", Pattern.CASE_INSENSITIVE),
     Pattern.compile("\\bGROUP\\s+BY\\b", Pattern.CASE_INSENSITIVE),
     Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE),
@@ -1217,14 +1220,23 @@ public final class SqlParser {
 
   // ── extractTableNames ──────────────────────────────────────────────
 
+  // An identifier segment: backtick-quoted, double-quoted, or bare.
+  private static final String IDENT_SEGMENT = "(?:`\\w+`|\"\\w+\"|\\w+)";
+
+  // schema-qualified name: optional schema segment followed by a table segment.
+  // Each segment may independently be quoted (supports "schema"."table", `s`.`t`,
+  // and mixed forms like "schema".table).
+  private static final String QUALIFIED_NAME =
+      "(" + IDENT_SEGMENT + "(?:\\." + IDENT_SEGMENT + ")?)";
+
   private static final Pattern FROM_TABLE =
       Pattern.compile(
-          "\\bFROM\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+(?:\\.\\w+)?))(?:\\s+(?:AS\\s+)?(?:[`\"]?\\w+[`\"]?))?",
+          "\\bFROM\\s+" + QUALIFIED_NAME + "(?:\\s+(?:AS\\s+)?(?:[`\"]?\\w+[`\"]?))?",
           Pattern.CASE_INSENSITIVE);
 
   private static final Pattern JOIN_TABLE =
       Pattern.compile(
-          "\\bJOIN\\s+(?:`(\\w+)`|\"(\\w+)\"|(\\w+(?:\\.\\w+)?))(?:\\s+(?:AS\\s+)?(?:[`\"]?\\w+[`\"]?))?",
+          "\\bJOIN\\s+" + QUALIFIED_NAME + "(?:\\s+(?:AS\\s+)?(?:[`\"]?\\w+[`\"]?))?",
           Pattern.CASE_INSENSITIVE);
 
   public static List<String> extractTableNames(String sql) {
@@ -1238,28 +1250,35 @@ public final class SqlParser {
 
     Matcher fromMatcher = FROM_TABLE.matcher(sql);
     while (fromMatcher.find()) {
-      String table = firstNonNull(fromMatcher.group(1), fromMatcher.group(2), fromMatcher.group(3));
-      // For schema-qualified names like "schema.table", take just the table part
-      if (table != null && table.contains(".")) {
-        table = table.substring(table.lastIndexOf('.') + 1);
-      }
-      if (table != null && !isKeyword(table) && !result.contains(table)) {
-        result.add(table);
-      }
+      addTableFromQualifiedMatch(fromMatcher.group(1), result);
     }
 
     Matcher joinMatcher = JOIN_TABLE.matcher(sql);
     while (joinMatcher.find()) {
-      String table = firstNonNull(joinMatcher.group(1), joinMatcher.group(2), joinMatcher.group(3));
-      if (table != null && table.contains(".")) {
-        table = table.substring(table.lastIndexOf('.') + 1);
-      }
-      if (table != null && !isKeyword(table) && !result.contains(table)) {
-        result.add(table);
-      }
+      addTableFromQualifiedMatch(joinMatcher.group(1), result);
     }
 
     return result;
+  }
+
+  /**
+   * Extracts the table name from a (possibly schema-qualified, possibly quoted) identifier and adds
+   * it to {@code result} if it is a non-keyword not already present. Each segment is unquoted
+   * independently so {@code "schema"."table"}, {@code `schema`.`table`}, and mixed forms all
+   * resolve to the table segment.
+   */
+  private static void addTableFromQualifiedMatch(String qualified, List<String> result) {
+    if (qualified == null) {
+      return;
+    }
+    // A '.' inside a quoted segment would be illegal under our regex (segments are \w+),
+    // so splitting on the last unquoted dot is equivalent to lastIndexOf('.').
+    int dot = qualified.lastIndexOf('.');
+    String tableSegment = dot >= 0 ? qualified.substring(dot + 1) : qualified;
+    String table = unquoteIdentifier(tableSegment);
+    if (table != null && !isKeyword(table) && !result.contains(table)) {
+      result.add(table);
+    }
   }
 
   // ── helpers ─────────────────────────────────────────────────────────
