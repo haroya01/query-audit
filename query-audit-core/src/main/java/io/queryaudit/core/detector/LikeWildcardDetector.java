@@ -11,7 +11,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -23,12 +22,17 @@ import java.util.regex.Pattern;
  */
 public class LikeWildcardDetector implements DetectionRule {
 
-  /**
-   * Matches LIKE followed by a string literal starting with '%'. Covers: LIKE '%...', LIKE '%...%',
-   * etc. Parameterized queries (LIKE ?) are intentionally skipped.
-   */
+  /** Matches LIKE (optionally NOT/I) followed by a string literal starting with '%'. */
   private static final Pattern LIKE_LEADING_WILDCARD =
-      Pattern.compile("\\bLIKE\\s+'%", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("\\b(?:NOT\\s+)?I?LIKE\\s+'%", Pattern.CASE_INSENSITIVE);
+
+  /**
+   * Matches LIKE against a bound parameter (e.g. {@code LIKE ?}). Runtime bindings that start
+   * with {@code %} also cause a full-table scan, but we cannot confirm that statically — this
+   * case is reported at INFO severity as a suggestive heads-up (issue #91).
+   */
+  private static final Pattern LIKE_PARAMETERIZED =
+      Pattern.compile("\\b(?:NOT\\s+)?I?LIKE\\s+\\?", Pattern.CASE_INSENSITIVE);
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
@@ -47,11 +51,17 @@ public class LikeWildcardDetector implements DetectionRule {
         continue;
       }
 
-      Matcher matcher = LIKE_LEADING_WILDCARD.matcher(sql);
-      if (matcher.find()) {
-        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
-        String table = tables.isEmpty() ? null : tables.get(0);
+      boolean hasLeadingWildcard = LIKE_LEADING_WILDCARD.matcher(sql).find();
+      boolean hasParameterizedLike = LIKE_PARAMETERIZED.matcher(sql).find();
 
+      if (!hasLeadingWildcard && !hasParameterizedLike) {
+        continue;
+      }
+
+      List<String> tables = EnhancedSqlParser.extractTableNames(sql);
+      String table = tables.isEmpty() ? null : tables.get(0);
+
+      if (hasLeadingWildcard) {
         issues.add(
             new Issue(
                 IssueType.LIKE_LEADING_WILDCARD,
@@ -64,7 +74,25 @@ public class LikeWildcardDetector implements DetectionRule {
                 "Leading wildcard (LIKE '%...') prevents B-tree index usage and causes a full table scan. "
                     + "Use a fulltext index (MATCH ... AGAINST), or move the search to the application layer.",
                 query.stackTrace()));
+        // If the query also has a parameterized LIKE, we've already warned — don't duplicate.
+        continue;
       }
+
+      // Parameterized LIKE only — runtime value unknown, so INFO severity.
+      issues.add(
+          new Issue(
+              IssueType.LIKE_LEADING_WILDCARD,
+              Severity.INFO,
+              normalized,
+              table,
+              null,
+              "Parameterized LIKE detected"
+                  + (table != null ? " on table '" + table + "'" : "")
+                  + "; if the runtime binding starts with '%' a full table scan occurs",
+              "Parameterized LIKE (LIKE ?) cannot be checked statically for a leading '%'. If the "
+                  + "binding may be prefixed with '%', prefer a fulltext index (MATCH ... AGAINST) "
+                  + "or push the search to the application layer / a dedicated search engine.",
+              query.stackTrace()));
     }
 
     return issues;

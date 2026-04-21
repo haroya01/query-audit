@@ -795,11 +795,14 @@ class EdgeCaseDetectorTest {
     }
 
     // --- Test 45: LIKE ? (parameterized) ---
+    // Post-#91: parameterized LIKE is reported at INFO severity because the runtime binding
+    // may begin with '%'. See LikeWildcardDetectorTest#infoIssueForParameterizedLike.
     @Test
-    void likeParameterized_shouldNotDetect() {
+    void likeParameterized_emitsInfo() {
       List<Issue> issues =
           detector.evaluate(List.of(record("SELECT * FROM users WHERE name LIKE ?")), EMPTY_INDEX);
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).severity()).isEqualTo(io.queryaudit.core.model.Severity.INFO);
     }
 
     // --- Test 46: LIKE '%' ---
