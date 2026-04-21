@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -60,10 +61,10 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
         continue;
       }
 
-      // Use SqlParser.extractWhereBody to properly extract only the WHERE clause,
+      // Use EnhancedSqlParser.extractWhereBody to properly extract only the WHERE clause,
       // excluding ORDER BY, GROUP BY, HAVING, LIMIT, and other trailing clauses
       // that could cause false positives.
-      String whereClause = SqlParser.extractWhereBody(sql);
+      String whereClause = EnhancedSqlParser.extractWhereBody(sql);
       if (whereClause == null) {
         continue;
       }

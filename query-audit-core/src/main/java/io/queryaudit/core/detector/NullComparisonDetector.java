@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -35,7 +36,7 @@ public class NullComparisonDetector implements DetectionRule {
           "(?<!IS\\s)(?<!IS\\sNOT\\s)(\\w+(?:\\.\\w+)?)\\s*([!=<>]+)\\s*NULL\\b",
           Pattern.CASE_INSENSITIVE);
 
-  // WHERE clause extraction delegated to SqlParser.extractWhereBody() to avoid
+  // WHERE clause extraction delegated to EnhancedSqlParser.extractWhereBody() to avoid
   // catastrophic backtracking from (.+?) with DOTALL patterns.
 
   /**
@@ -72,7 +73,7 @@ public class NullComparisonDetector implements DetectionRule {
       // Extract WHERE clause body using safe clause boundary scanning.
       // Strip subqueries first so that conditions inside subqueries do not
       // false-positive on the outer query's WHERE body.
-      String whereBody = SqlParser.extractWhereBody(SqlParser.removeSubqueries(sql));
+      String whereBody = EnhancedSqlParser.extractWhereBody(EnhancedSqlParser.removeSubqueries(sql));
       if (whereBody == null) {
         continue;
       }
@@ -89,7 +90,7 @@ public class NullComparisonDetector implements DetectionRule {
           continue;
         }
 
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
 
         issues.add(
@@ -114,7 +115,7 @@ public class NullComparisonDetector implements DetectionRule {
         while (neqMatcher.find()) {
           String columnExpr = neqMatcher.group(1);
 
-          List<String> tables = SqlParser.extractTableNames(sql);
+          List<String> tables = EnhancedSqlParser.extractTableNames(sql);
           String table = tables.isEmpty() ? null : tables.get(0);
 
           issues.add(

@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(classes = TestApplication.class)
 @EnableQueryInspector
 @Transactional
-class Team4IndexLockIntegrationTest {
+class IndexLockIntegrationTest {
 
   @Autowired TeamRepository teamRepository;
   @Autowired MemberRepository memberRepository;
@@ -64,7 +64,7 @@ class Team4IndexLockIntegrationTest {
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-    return analyzer.analyze("Team4IndexLockIntegrationTest", testName, queries, indexMetadata);
+    return analyzer.analyze("IndexLockIntegrationTest", testName, queries, indexMetadata);
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
@@ -117,7 +117,7 @@ class Team4IndexLockIntegrationTest {
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
       QueryAuditReport report =
           analyzer.analyze(
-              "Team4IndexLockIntegrationTest",
+              "IndexLockIntegrationTest",
               "compositeIndex",
               queryInterceptor.getRecordedQueries(),
               compositeMetadata);
@@ -173,7 +173,7 @@ class Team4IndexLockIntegrationTest {
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
       QueryAuditReport report =
           analyzer.analyze(
-              "Team4IndexLockIntegrationTest",
+              "IndexLockIntegrationTest",
               "redundantIndex",
               queryInterceptor.getRecordedQueries(),
               redundantMetadata);
@@ -214,7 +214,7 @@ class Team4IndexLockIntegrationTest {
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
       QueryAuditReport report =
           analyzer.analyze(
-              "Team4IndexLockIntegrationTest",
+              "IndexLockIntegrationTest",
               "writeAmplification",
               queryInterceptor.getRecordedQueries(),
               heavyIndexMetadata);
@@ -267,7 +267,7 @@ class Team4IndexLockIntegrationTest {
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
       QueryAuditReport report =
           analyzer.analyze(
-              "Team4IndexLockIntegrationTest",
+              "IndexLockIntegrationTest",
               "forUpdateNonUnique",
               queryInterceptor.getRecordedQueries(),
               nonUniqueMetadata);

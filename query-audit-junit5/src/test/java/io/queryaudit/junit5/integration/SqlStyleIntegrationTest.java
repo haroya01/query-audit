@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(classes = TestApplication.class)
 @EnableQueryInspector
 @Transactional
-class Team6SqlStyleIntegrationTest {
+class SqlStyleIntegrationTest {
 
   @Autowired TeamRepository teamRepository;
   @Autowired MemberRepository memberRepository;
@@ -51,7 +51,7 @@ class Team6SqlStyleIntegrationTest {
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-    return analyzer.analyze("Team6SqlStyleIntegrationTest", testName, queries, null);
+    return analyzer.analyze("SqlStyleIntegrationTest", testName, queries, null);
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {

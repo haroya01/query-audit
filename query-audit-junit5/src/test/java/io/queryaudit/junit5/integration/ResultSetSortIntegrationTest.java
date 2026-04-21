@@ -28,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(classes = TestApplication.class)
 @EnableQueryInspector
 @Transactional
-class Team5ResultSetSortIntegrationTest {
+class ResultSetSortIntegrationTest {
 
   @Autowired TeamRepository teamRepository;
   @Autowired MemberRepository memberRepository;
@@ -73,7 +73,7 @@ class Team5ResultSetSortIntegrationTest {
       String testName, List<QueryRecord> queries, IndexMetadata indexMetadata) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
     return analyzer.analyze(
-        "Team5ResultSetSortIntegrationTest", testName, queries, indexMetadata);
+        "ResultSetSortIntegrationTest", testName, queries, indexMetadata);
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {

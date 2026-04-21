@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -44,13 +45,13 @@ public class FindInSetDetector implements DetectionRule {
       // not in SELECT, ORDER BY, or HAVING clauses where it has no index impact.
       boolean found = false;
 
-      String whereBody = SqlParser.extractWhereBody(sql);
+      String whereBody = EnhancedSqlParser.extractWhereBody(sql);
       if (whereBody != null && FIND_IN_SET_PATTERN.matcher(whereBody).find()) {
         found = true;
       }
 
       if (!found) {
-        for (String joinOn : SqlParser.extractJoinOnBodies(sql)) {
+        for (String joinOn : EnhancedSqlParser.extractJoinOnBodies(sql)) {
           if (FIND_IN_SET_PATTERN.matcher(joinOn).find()) {
             found = true;
             break;
@@ -59,7 +60,7 @@ public class FindInSetDetector implements DetectionRule {
       }
 
       if (found) {
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
         issues.add(
             new Issue(

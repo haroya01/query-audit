@@ -8,6 +8,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.ranking.RankedIssue;
 import java.io.BufferedWriter;
@@ -1472,7 +1473,7 @@ public class HtmlReporter implements Reporter {
       List<QueryRecord> queries = report.getAllQueries();
       if (queries == null) continue;
       for (QueryRecord q : queries) {
-        List<String> tables = SqlParser.extractTableNames(q.sql());
+        List<String> tables = EnhancedSqlParser.extractTableNames(q.sql());
         for (String table : tables) {
           tableCounts.merge(table, 1, Integer::sum);
         }

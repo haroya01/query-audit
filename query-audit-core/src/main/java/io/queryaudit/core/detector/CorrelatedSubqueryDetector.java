@@ -181,7 +181,7 @@ public class CorrelatedSubqueryDetector implements DetectionRule {
   /** Check if a subquery references any of the outer aliases in its WHERE clause. */
   private boolean isCorrelated(String subquery, Set<String> outerAliases) {
     // Find WHERE clause body using safe clause boundary scanning
-    String whereBody = SqlParser.extractWhereBody(subquery);
+    String whereBody = EnhancedSqlParser.extractWhereBody(subquery);
     if (whereBody == null) {
       return false;
     }

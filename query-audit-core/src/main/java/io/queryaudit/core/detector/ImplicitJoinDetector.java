@@ -4,6 +4,7 @@ import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -52,7 +53,7 @@ public class ImplicitJoinDetector implements DetectionRule {
         continue;
       }
 
-      String cleaned = SqlParser.removeSubqueries(sql);
+      String cleaned = EnhancedSqlParser.removeSubqueries(sql);
 
       // Skip queries with function calls in FROM clause (e.g., generate_series(1, 10))
       // where the comma is inside function arguments, not between tables
@@ -61,7 +62,7 @@ public class ImplicitJoinDetector implements DetectionRule {
       }
 
       if (IMPLICIT_JOIN.matcher(cleaned).find()) {
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
         issues.add(
             new Issue(

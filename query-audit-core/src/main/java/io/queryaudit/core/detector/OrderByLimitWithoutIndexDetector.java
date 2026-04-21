@@ -7,6 +7,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -66,13 +67,13 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
         continue;
       }
 
-      List<ColumnReference> orderByColumns = SqlParser.extractOrderByColumns(sql);
+      List<ColumnReference> orderByColumns = EnhancedSqlParser.extractOrderByColumns(sql);
       if (orderByColumns.isEmpty()) {
         continue;
       }
 
       Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
-      List<String> tables = SqlParser.extractTableNames(sql);
+      List<String> tables = EnhancedSqlParser.extractTableNames(sql);
       if (tables.isEmpty()) {
         continue;
       }
@@ -94,7 +95,7 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
         }
 
         // Check if WHERE columns exist for composite suggestion
-        List<ColumnReference> whereColumns = SqlParser.extractWhereColumns(sql);
+        List<ColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumns(sql);
         boolean hasWhere = !whereColumns.isEmpty();
 
         String suggestion;

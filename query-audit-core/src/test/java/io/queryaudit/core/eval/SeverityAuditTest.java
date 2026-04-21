@@ -9,7 +9,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * TEAM 5: Severity Audit
+ * Severity Audit
  *
  * <p>Evaluates whether the severity levels (ERROR/WARNING/INFO) assigned to each IssueType are
  * appropriate according to these criteria:
@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
  *
  * <p>Each test documents whether the current severity is CORRECT, TOO_HIGH, or TOO_LOW.
  */
-class Team5SeverityAuditTest {
+class SeverityAuditTest {
 
   private static final IndexMetadata EMPTY_INDEX = new IndexMetadata(Map.of());
 
@@ -735,7 +735,7 @@ class Team5SeverityAuditTest {
   @Test
   void printSeverityAuditReport() {
     System.out.println();
-    System.out.println("=== TEAM 5: SEVERITY AUDIT ===");
+    System.out.println("=== SEVERITY AUDIT ===");
     System.out.printf(
         "%-35s | %-8s | %-11s | %-7s | %s%n",
         "Issue Type", "Current", "Recommended", "Change?", "Reasoning");

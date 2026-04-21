@@ -6,6 +6,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -76,7 +77,7 @@ public class DistinctMisuseDetector implements DetectionRule {
 
       // If DISTINCT only appears inside a subquery, skip — it is often intentional
       // (e.g., WHERE id IN (SELECT DISTINCT category_id FROM ...))
-      String outerSql = SqlParser.removeSubqueries(sql);
+      String outerSql = EnhancedSqlParser.removeSubqueries(sql);
       if (!SELECT_DISTINCT.matcher(outerSql).find()) {
         continue;
       }
@@ -86,7 +87,7 @@ public class DistinctMisuseDetector implements DetectionRule {
 
       // (b) DISTINCT + GROUP BY is almost always redundant
       if (hasGroupBy) {
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
 
         issues.add(
@@ -106,7 +107,7 @@ public class DistinctMisuseDetector implements DetectionRule {
       // (c) DISTINCT on primary key column
       if (indexMetadata != null && !indexMetadata.isEmpty()) {
         List<String> distinctCols = extractDistinctColumnNames(sql);
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
 
         if (table != null && indexMetadata.hasTable(table)) {
@@ -132,7 +133,7 @@ public class DistinctMisuseDetector implements DetectionRule {
 
       // (a) DISTINCT + JOIN may indicate a missing JOIN condition
       if (hasJoin) {
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
 
         issues.add(

@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -107,7 +108,7 @@ public class CountInsteadOfExistsDetector implements DetectionRule {
         continue;
       }
 
-      List<String> tables = SqlParser.extractTableNames(sql);
+      List<String> tables = EnhancedSqlParser.extractTableNames(sql);
       String table = tables.isEmpty() ? null : tables.get(0);
 
       issues.add(

@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -76,7 +77,7 @@ public class HavingMisuseDetector implements DetectionRule {
         continue;
       }
 
-      String havingBody = SqlParser.extractHavingClause(sql);
+      String havingBody = EnhancedSqlParser.extractHavingClause(sql);
       if (havingBody == null || havingBody.isBlank()) {
         continue;
       }
@@ -105,7 +106,7 @@ public class HavingMisuseDetector implements DetectionRule {
           continue;
         }
 
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
 
         // Build a cleaned version of the condition for the suggestion

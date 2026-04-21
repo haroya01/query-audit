@@ -6,6 +6,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -57,10 +58,10 @@ public class ForUpdateWithoutIndexDetector implements DetectionRule {
       }
 
       // Extract WHERE columns and check index coverage
-      List<ColumnReference> whereColumns = SqlParser.extractWhereColumns(sql);
+      List<ColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumns(sql);
       if (whereColumns.isEmpty()) {
         // FOR UPDATE without any WHERE clause at all -- locks entire table
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
 
         issues.add(

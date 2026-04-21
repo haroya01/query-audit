@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -55,7 +56,7 @@ public class OffsetPaginationDetector implements DetectionRule {
       // First, try to extract a literal OFFSET value
       OptionalLong offset = SqlParser.extractOffsetValue(query.sql());
       if (offset.isPresent() && offset.getAsLong() >= threshold) {
-        List<String> tables = SqlParser.extractTableNames(query.sql());
+        List<String> tables = EnhancedSqlParser.extractTableNames(query.sql());
         String table = tables.isEmpty() ? null : tables.get(0);
 
         issues.add(
@@ -74,7 +75,7 @@ public class OffsetPaginationDetector implements DetectionRule {
       // If no literal OFFSET found, check for parameterized OFFSET (JPA uses ? placeholders).
       // We cannot know the actual value, but flag it as INFO since it could be large at runtime.
       if (!offset.isPresent() && SqlParser.hasOffsetClause(query.sql())) {
-        List<String> tables = SqlParser.extractTableNames(query.sql());
+        List<String> tables = EnhancedSqlParser.extractTableNames(query.sql());
         String table = tables.isEmpty() ? null : tables.get(0);
 
         issues.add(

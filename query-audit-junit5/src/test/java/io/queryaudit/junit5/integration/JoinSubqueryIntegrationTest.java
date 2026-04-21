@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(classes = TestApplication.class)
 @EnableQueryInspector
 @Transactional
-class Team3JoinSubqueryIntegrationTest {
+class JoinSubqueryIntegrationTest {
 
   @Autowired TeamRepository teamRepository;
   @Autowired MemberRepository memberRepository;
@@ -53,7 +53,7 @@ class Team3JoinSubqueryIntegrationTest {
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-    return analyzer.analyze("Team3JoinSubqueryIntegrationTest", testName, queries, null);
+    return analyzer.analyze("JoinSubqueryIntegrationTest", testName, queries, null);
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {

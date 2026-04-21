@@ -7,6 +7,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -74,12 +75,12 @@ public class CoveringIndexDetector implements DetectionRule {
         continue;
       }
 
-      List<ColumnReference> whereColumns = SqlParser.extractWhereColumns(sql);
+      List<ColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumns(sql);
       if (whereColumns.isEmpty()) {
         continue;
       }
 
-      List<String> tables = SqlParser.extractTableNames(sql);
+      List<String> tables = EnhancedSqlParser.extractTableNames(sql);
       if (tables.isEmpty()) {
         continue;
       }

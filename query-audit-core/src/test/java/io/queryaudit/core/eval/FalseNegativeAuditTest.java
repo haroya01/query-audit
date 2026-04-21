@@ -17,13 +17,13 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * TEAM 2: FALSE NEGATIVE AUDIT
+ * FALSE NEGATIVE AUDIT
  *
  * <p>Tests subtle variants of known SQL anti-patterns to measure the detection rate. Each test
  * generates anti-pattern SQL that SHOULD be detected but might slip through due to regex
  * limitations, whitespace handling, or edge cases in detection logic.
  */
-class Team2FalseNegativeAuditTest {
+class FalseNegativeAuditTest {
 
   static int totalAntiPatterns = 0;
   static int detected = 0;
@@ -88,7 +88,7 @@ class Team2FalseNegativeAuditTest {
   @AfterAll
   static void printReport() {
     System.out.println();
-    System.out.println("=== TEAM 2: FALSE NEGATIVE AUDIT ===");
+    System.out.println("=== FALSE NEGATIVE AUDIT ===");
     System.out.println("Total anti-patterns tested: " + totalAntiPatterns);
     System.out.println("Correctly detected: " + detected);
     System.out.println("Missed (false negatives): " + missed);
@@ -102,7 +102,7 @@ class Team2FalseNegativeAuditTest {
         System.out.println("  MISS: " + q);
       }
     }
-    System.out.println("=== END TEAM 2 ===");
+    System.out.println("=== END ===");
     System.out.println();
   }
 

@@ -1,6 +1,7 @@
 package io.queryaudit.core.config;
 
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
+import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Severity;
 import java.util.Collections;
 import java.util.HashMap;
@@ -121,7 +122,7 @@ public class QueryAuditConfig {
 
   /**
    * Returns the maximum number of queries to record per test. Default is {@value
-   * io.queryaudit.core.interceptor.QueryInterceptor#DEFAULT_MAX_QUERIES}.
+   * QueryInterceptor#DEFAULT_MAX_QUERIES}.
    */
   public int getMaxQueries() {
     return maxQueries;

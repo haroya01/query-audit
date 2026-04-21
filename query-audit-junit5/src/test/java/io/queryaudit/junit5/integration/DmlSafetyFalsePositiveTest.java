@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(classes = TestApplication.class)
 @EnableQueryInspector
 @Transactional
-class Team1DmlSafetyFalsePositiveTest {
+class DmlSafetyFalsePositiveTest {
 
   @Autowired TeamRepository teamRepository;
   @Autowired MemberRepository memberRepository;

@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -45,7 +46,7 @@ public class OrAbuseDetector implements DetectionRule {
 
       int orCount = SqlParser.countEffectiveOrConditions(query.sql());
       if (orCount >= threshold && !SqlParser.allOrConditionsOnSameColumn(query.sql())) {
-        List<String> tables = SqlParser.extractTableNames(query.sql());
+        List<String> tables = EnhancedSqlParser.extractTableNames(query.sql());
         String table = tables.isEmpty() ? null : tables.get(0);
 
         if (table != null && indexMetadata != null && indexMetadata.hasTable(table)) {

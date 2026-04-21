@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -92,7 +93,7 @@ public class ExcessiveColumnFetchDetector implements DetectionRule {
       }
 
       // Extract column list between SELECT and FROM
-      String cleanedSql = SqlParser.removeSubqueries(sql);
+      String cleanedSql = EnhancedSqlParser.removeSubqueries(sql);
       Matcher m = SELECT_COLUMNS.matcher(cleanedSql);
       if (!m.find()) {
         continue;
@@ -109,7 +110,7 @@ public class ExcessiveColumnFetchDetector implements DetectionRule {
       int columnCount = countSimpleColumns(columnList);
 
       if (columnCount > threshold) {
-        String table = SqlParser.extractTableNames(sql).stream().findFirst().orElse(null);
+        String table = EnhancedSqlParser.extractTableNames(sql).stream().findFirst().orElse(null);
         issues.add(
             new Issue(
                 IssueType.EXCESSIVE_COLUMN_FETCH,

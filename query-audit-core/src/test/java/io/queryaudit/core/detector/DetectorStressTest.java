@@ -875,7 +875,9 @@ class DetectorStressTest {
       long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
       assertThat(report).isNotNull();
-      assertThat(elapsedMs).as("Analysis of 10k queries should finish in < 5s").isLessThan(5000);
+      // 10s budget: JSqlParser path is ~2x the regex baseline; pays for literal / identifier
+      // parser correctness (#54, #102, #103).
+      assertThat(elapsedMs).as("Analysis of 10k queries should finish in < 10s").isLessThan(10_000);
     }
 
     /** 1,000 unique patterns — should not OOM. */

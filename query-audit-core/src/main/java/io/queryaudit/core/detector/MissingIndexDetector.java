@@ -101,7 +101,7 @@ public class MissingIndexDetector implements DetectionRule {
 
       // (a) WHERE columns (with operator info for soft-delete / low-cardinality detection)
       List<WhereColumnReference> whereColumnsWithOp =
-          SqlParser.extractWhereColumnsWithOperators(sql);
+          EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
       List<ColumnReference> whereColumns =
           whereColumnsWithOp.stream().map(WhereColumnReference::toColumnReference).toList();
 
@@ -262,7 +262,7 @@ public class MissingIndexDetector implements DetectionRule {
       }
 
       // (c) ORDER BY columns
-      List<ColumnReference> orderByColumns = SqlParser.extractOrderByColumns(sql);
+      List<ColumnReference> orderByColumns = EnhancedSqlParser.extractOrderByColumns(sql);
       for (ColumnReference col : orderByColumns) {
         String table = resolveTable(col.tableOrAlias(), aliasToTable);
         if (table != null
@@ -307,7 +307,7 @@ public class MissingIndexDetector implements DetectionRule {
       }
 
       // (d) GROUP BY columns
-      List<ColumnReference> groupByColumns = SqlParser.extractGroupByColumns(sql);
+      List<ColumnReference> groupByColumns = EnhancedSqlParser.extractGroupByColumns(sql);
       checkGroupByColumns(
           groupByColumns, aliasToTable, indexMetadata, normalized, stackTrace, issues);
     }
@@ -502,7 +502,7 @@ public class MissingIndexDetector implements DetectionRule {
     // Determine which tables have an indexed WHERE column (narrow result set)
     Map<String, Boolean> tableHasIndexedWhereCol = new HashMap<>();
     List<WhereColumnReference> whereColsWithOp =
-        SqlParser.extractWhereColumnsWithOperators(normalized != null ? normalized : "");
+        EnhancedSqlParser.extractWhereColumnsWithOperators(normalized != null ? normalized : "");
     // Also try extracting from the original SQL (normalized may lose structure)
     // We use the aliasToTable map we already have
     for (WhereColumnReference wcol : whereColsWithOp) {

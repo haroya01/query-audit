@@ -1,6 +1,7 @@
 package io.queryaudit.core.detector;
 
 import io.queryaudit.core.model.IndexInfo;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
@@ -43,7 +44,7 @@ public class IndexRedundancyDetector implements DetectionRule {
     for (QueryRecord query : queries) {
       String sql = query.sql();
       if (sql != null) {
-        tables.addAll(io.queryaudit.core.parser.SqlParser.extractTableNames(sql));
+        tables.addAll(EnhancedSqlParser.extractTableNames(sql));
       }
     }
 
