@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -235,22 +236,55 @@ public class RedundantFilterDetector implements DetectionRule {
   }
 
   /**
-   * Checks whether a given column+operator combination appears in more than one OR branch. If it
-   * does, the duplicates are intentional (e.g., bidirectional queries) and not redundant.
+   * Checks whether a given column+operator combination appears in more than one OR branch with
+   * <b>genuinely different</b> right-hand-side values. Duplicates that span branches but compare
+   * the column to the same literal (e.g. {@code id = 1 OR id = 1}) are tautologies, not a
+   * bidirectional pattern, and must still be reported as redundant (issue #93).
+   *
+   * <p>When the RHS is a parameter placeholder ({@code ?}) we cannot tell apart runtime values,
+   * so we conservatively treat those cases as legitimately different branches to avoid false
+   * positives on parameterized queries.
    */
+  // Captures everything after the operator up to the next boolean keyword or closing paren so
+  // the RHS comparison sees, e.g., "1" rather than "1 AND".
+  private static final Pattern RHS_TERMINATOR =
+      Pattern.compile("\\s+(?:AND|OR)\\b|[)]|$", Pattern.CASE_INSENSITIVE);
+
   private boolean appearsInDifferentOrBranches(
       String column, String operator, List<String> orBranches) {
     Pattern colPattern =
         Pattern.compile(
-            "(?:(?:\\w+)\\.)?\\b" + Pattern.quote(column) + "\\b\\s*" + Pattern.quote(operator),
+            "(?:(?:\\w+)\\.)?\\b"
+                + Pattern.quote(column)
+                + "\\b\\s*"
+                + Pattern.quote(operator)
+                + "\\s*",
             Pattern.CASE_INSENSITIVE);
 
+    Set<String> distinctRhs = new LinkedHashSet<>();
     int branchesWithMatch = 0;
     for (String branch : orBranches) {
-      if (colPattern.matcher(branch).find()) {
+      Matcher m = colPattern.matcher(branch);
+      if (m.find()) {
         branchesWithMatch++;
+        distinctRhs.add(extractRhs(branch, m.end()));
       }
     }
-    return branchesWithMatch > 1;
+    if (branchesWithMatch < 2) {
+      return false;
+    }
+    // Parameter placeholder: runtime values unknown, treat conservatively as different branches.
+    if (distinctRhs.contains("?")) {
+      return true;
+    }
+    // Different literal values → genuinely different conditions; identical literal → tautology.
+    return distinctRhs.size() > 1;
+  }
+
+  private static String extractRhs(String branch, int fromIndex) {
+    String tail = branch.substring(fromIndex);
+    Matcher terminator = RHS_TERMINATOR.matcher(tail);
+    int end = terminator.find() ? terminator.start() : tail.length();
+    return tail.substring(0, end).trim().toLowerCase();
   }
 }

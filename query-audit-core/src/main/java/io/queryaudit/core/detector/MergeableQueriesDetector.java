@@ -148,19 +148,43 @@ public class MergeableQueriesDetector implements DetectionRule {
 
   /**
    * Extracts a normalized representation of the JOIN structure from a SQL query. Queries with
-   * different JOINs (e.g., different tables or JOIN types) should not be considered mergeable.
+   * different JOINs — different tables, different JOIN types, <b>or different ON conditions</b> —
+   * should not be considered mergeable (issue #97).
    */
-  private static final Pattern JOIN_CLAUSE =
+  // Matches the JOIN keyword itself (with optional qualifier). Used only to locate segment
+  // starts; the segment content runs until the next JOIN or terminating clause boundary below.
+  private static final Pattern JOIN_KEYWORD =
       Pattern.compile(
-          "\\b(?:LEFT\\s+(?:OUTER\\s+)?|RIGHT\\s+(?:OUTER\\s+)?|INNER\\s+|FULL\\s+(?:OUTER\\s+)?|CROSS\\s+)?JOIN\\s+\\w+",
+          "\\b(?:LEFT\\s+(?:OUTER\\s+)?|RIGHT\\s+(?:OUTER\\s+)?|INNER\\s+|FULL\\s+(?:OUTER\\s+)?|CROSS\\s+)?JOIN\\b",
           Pattern.CASE_INSENSITIVE);
 
+  private static final Pattern CLAUSE_BOUNDARY =
+      Pattern.compile("\\b(?:WHERE|GROUP|ORDER|LIMIT|HAVING|UNION)\\b", Pattern.CASE_INSENSITIVE);
+
   private String extractJoinStructure(String sql) {
+    List<int[]> joinStarts = new ArrayList<>();
+    Matcher joinMatcher = JOIN_KEYWORD.matcher(sql);
+    while (joinMatcher.find()) {
+      joinStarts.add(new int[] {joinMatcher.start(), joinMatcher.end()});
+    }
+    if (joinStarts.isEmpty()) {
+      return "";
+    }
+
     StringBuilder sb = new StringBuilder();
-    Matcher m = JOIN_CLAUSE.matcher(sql);
-    while (m.find()) {
-      if (sb.length() > 0) sb.append(",");
-      sb.append(m.group().toLowerCase().replaceAll("\\s+", " ").trim());
+    for (int i = 0; i < joinStarts.size(); i++) {
+      int segStart = joinStarts.get(i)[0];
+      int segEnd;
+      if (i + 1 < joinStarts.size()) {
+        segEnd = joinStarts.get(i + 1)[0];
+      } else {
+        Matcher cm = CLAUSE_BOUNDARY.matcher(sql);
+        segEnd = cm.find(joinStarts.get(i)[1]) ? cm.start() : sql.length();
+      }
+      if (sb.length() > 0) {
+        sb.append(",");
+      }
+      sb.append(sql.substring(segStart, segEnd).trim().replaceAll("\\s+", " ").toLowerCase());
     }
     return sb.toString();
   }
