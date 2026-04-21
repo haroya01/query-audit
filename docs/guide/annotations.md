@@ -73,7 +73,7 @@ class OrderServiceTest {
 === "Report only"
 
     ```java
-    @QueryAudit(failOnDetection = false)
+    @QueryAudit(failOnDetection = BooleanOverride.FALSE)
     @SpringBootTest
     class OrderServiceTest {
         // Reports issues but never fails
@@ -125,7 +125,7 @@ class OrderServiceTest {
         // Uses class-level config: threshold=5, failOnDetection=true
     }
 
-    @QueryAudit(failOnDetection = false)  // Method-level: overrides entire class config
+    @QueryAudit(failOnDetection = BooleanOverride.FALSE)  // Method-level: overrides entire class config
     @Test
     void exportAll() {
         // Report only for this specific test.
@@ -153,7 +153,7 @@ class OrderServiceTest {
 
 ## @EnableQueryInspector
 
-Lightweight report-only mode. Equivalent to `@QueryAudit(failOnDetection = false)`.
+Lightweight report-only mode. Equivalent to `@QueryAudit(failOnDetection = BooleanOverride.FALSE)`.
 
 ```java
 @SpringBootTest

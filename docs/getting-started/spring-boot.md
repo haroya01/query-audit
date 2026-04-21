@@ -43,8 +43,8 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
 
     ```kotlin
     dependencies {
-        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.1.0")
-        testImplementation("io.github.haroya01:query-audit-mysql:0.1.0")
+        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.3.0")
+        testImplementation("io.github.haroya01:query-audit-mysql:0.3.0")
     }
     ```
 
@@ -52,8 +52,8 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.1.0'
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.1.0'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.0'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.0'
     }
     ```
 
@@ -63,13 +63,13 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.1.0</version>
+        <version>0.3.0</version>
         <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-mysql</artifactId>
-        <version>0.1.0</version>
+        <version>0.3.0</version>
         <scope>test</scope>
     </dependency>
     ```
@@ -166,7 +166,7 @@ class OrderServiceTest {
         // The test fails if a confirmed issue (ERROR or WARNING) is detected.
     }
 
-    @QueryAudit(failOnDetection = false)  // Override: report only, never fail
+    @QueryAudit(failOnDetection = BooleanOverride.FALSE)  // Override: report only, never fail
     @Test
     void batchExport_reportOnly() {
         orderService.exportAll();
@@ -271,7 +271,9 @@ query-audit:
 Or per-test:
 
 ```java
-@QueryAudit(failOnDetection = false)  // Still reports, but doesn't fail
+@QueryAudit(failOnDetection = BooleanOverride.FALSE)  // Still reports, but doesn't fail
+// Or use the dedicated alias:
+@EnableQueryInspector
 ```
 
 ---
