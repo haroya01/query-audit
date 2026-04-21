@@ -89,6 +89,43 @@ jobs:
     This ensures reports are uploaded even when tests fail, so you can review the
     QueryAudit output in the build artifacts.
 
+### Inline PR annotations + step summary
+
+When running on GitHub Actions (detected via the runner's `GITHUB_ACTIONS=true`
+environment variable) QueryAudit additionally emits
+[workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions)
+alongside the normal console output:
+
+- Each `ERROR` issue becomes an `::error` annotation — shown inline on the PR's
+  "Files changed" tab when the source location is known.
+- `WARNING` → `::warning`, `INFO` → `::notice`.
+- A Markdown table and the top N issues per severity are appended to the job's
+  step summary (the page you land on from the PR check's "Details" link).
+
+No workflow changes are required beyond the standard `./gradlew test` step — the
+reporter auto-activates in CI and stays silent locally. If you want a PR-scoped
+signal on top of the inline annotations, pair it with a comment action that
+reads the JSON report:
+
+```yaml
+      - name: Post QueryAudit summary as PR comment
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'build/reports/query-audit/query-audit.json';
+            if (!fs.existsSync(path)) return;
+            const json = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const body = `**QueryAudit**: ${json.summary.confirmedIssues} confirmed, ${json.summary.infoIssues} info`;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+```
+
 ### With PostgreSQL
 
 ```yaml
