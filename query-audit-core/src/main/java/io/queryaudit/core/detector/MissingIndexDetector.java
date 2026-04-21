@@ -78,6 +78,7 @@ public class MissingIndexDetector implements DetectionRule {
     List<Issue> issues = new ArrayList<>();
 
     if (indexMetadata == null || indexMetadata.isEmpty()) {
+      MetadataSkipLog.warnEmptyMetadataOnce("MissingIndexDetector");
       return issues;
     }
 
@@ -158,10 +159,13 @@ public class MissingIndexDetector implements DetectionRule {
             continue;
           }
 
-          // Improvement 3: Skip LIKE operator columns — LikeWildcardDetector handles
-          // leading-wildcard LIKE, and for non-leading-wildcard LIKE we cannot determine
-          // from normalized SQL whether a B-tree index would help. Avoid misleading advice.
-          if (isLikeOperator(colWithOp.operator())) {
+          // Skip LIKE only when the column is compared against a leading-wildcard literal —
+          // those are handled by LikeWildcardDetector and a B-tree index wouldn't help. For
+          // prefix LIKEs ({@code LIKE 'foo%'}) and parameterized {@code LIKE ?} the column can
+          // still benefit from a B-tree, so fall through to the missing-index check
+          // (issue #92).
+          if (isLikeOperator(colWithOp.operator())
+              && isLeadingWildcardLike(sql, col.columnName())) {
             continue;
           }
 
@@ -376,6 +380,21 @@ public class MissingIndexDetector implements DetectionRule {
     if (operator == null) return false;
     String op = operator.trim().toUpperCase();
     return "LIKE".equals(op) || "NOT LIKE".equals(op) || "ILIKE".equals(op);
+  }
+
+  /**
+   * Returns true when the raw SQL contains a {@code <column> LIKE '%...'} form — i.e. a literal
+   * that starts with a leading wildcard for the given column. The scan is textual and tolerates
+   * an optional table qualifier, {@code NOT} / {@code I} prefix, and intervening whitespace.
+   */
+  private static boolean isLeadingWildcardLike(String sql, String column) {
+    if (sql == null || column == null) return false;
+    java.util.regex.Pattern p =
+        java.util.regex.Pattern.compile(
+            "(?i)(?:\\w+\\.)?\\b"
+                + java.util.regex.Pattern.quote(column)
+                + "\\b\\s+(?:NOT\\s+)?I?LIKE\\s+'%");
+    return p.matcher(sql).find();
   }
 
   /**

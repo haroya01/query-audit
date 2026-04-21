@@ -133,6 +133,28 @@ class RedundantFilterDetectorTest {
     assertThat(issues).isEmpty();
   }
 
+  // Regression for #93: a pure tautology like `id = 1 OR id = 1` used to be suppressed by the
+  // "different OR branches" skip, even though the literal RHS is identical in every branch.
+  @Test
+  void detectsTautologyWithIdenticalLiteralAcrossOrBranches() {
+    String sql = "SELECT * FROM users WHERE (id = 1 OR id = 1) AND status = 'active'";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).column()).isEqualTo("id");
+  }
+
+  @Test
+  void noIssueForDistinctLiteralsAcrossOrBranches() {
+    // Not a tautology — id = 1 OR id = 2 are genuinely different conditions.
+    String sql = "SELECT * FROM users WHERE id = 1 OR id = 2";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+    assertThat(issues).isEmpty();
+  }
+
   @Test
   void stillDetectsRedundantWithinSameOrBranch() {
     // Duplicate within the same AND branch, even though OR exists
@@ -459,10 +481,12 @@ class RedundantFilterDetectorTest {
   @Test
   void mathMutatorOnStartAdvancement() {
     // Kills MathMutator on line 220: start = i + 2 (changed to i + 2 - 1 or i + 2 + 1)
-    // If start were i+1 or i+3, the first char of the next branch would be wrong
-    String sql = "SELECT * FROM t WHERE a = 1 OR a = 1";
+    // If start were i+1 or i+3, the first char of the next branch would be wrong.
+    // Uses distinct literal RHS values so this stays a legitimate different-branches case
+    // even after the #93 tautology fix (identical RHS across branches is now flagged).
+    String sql = "SELECT * FROM t WHERE a = 1 OR a = 2";
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
-    // a appears in both OR branches -> not redundant
+    // a appears in different OR branches with different values -> not redundant
     assertThat(issues).isEmpty();
   }
 
@@ -632,10 +656,12 @@ class RedundantFilterDetectorTest {
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
     assertThat(issues).hasSize(1);
 
-    // Now with actual OR splitting that matters
-    String sql2 = "SELECT * FROM t WHERE a = 1 OR a = 1";
+    // Now with actual OR splitting that matters. Use distinct RHS values so this still
+    // represents a "legitimately different branches" case after the #93 tautology fix
+    // (identical RHS across branches is now reported as redundant).
+    String sql2 = "SELECT * FROM t WHERE a = 1 OR a = 2";
     List<Issue> issues2 = detector.evaluate(List.of(record(sql2)), EMPTY_INDEX);
-    // a appears in different OR branches -> not redundant
+    // a appears in different OR branches with different values -> not redundant
     assertThat(issues2).isEmpty();
   }
 
