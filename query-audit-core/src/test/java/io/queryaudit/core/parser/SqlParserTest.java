@@ -71,10 +71,8 @@ class SqlParserTest {
     @Test
     void preservesDoubleQuotedColumnIdentifiers() {
       String result =
-          SqlParser.normalize(
-              "SELECT \"userId\" FROM \"User\" WHERE \"deletedAt\" IS NULL");
-      assertThat(result)
-          .isEqualTo("select \"userid\" from \"user\" where \"deletedat\" is null");
+          SqlParser.normalize("SELECT \"userId\" FROM \"User\" WHERE \"deletedAt\" IS NULL");
+      assertThat(result).isEqualTo("select \"userid\" from \"user\" where \"deletedat\" is null");
     }
 
     @Test
@@ -97,8 +95,7 @@ class SqlParserTest {
               "SELECT \"userId\" FROM \"User\" WHERE \"deletedAt\" IS NULL AND \"id\" = 42");
       // Verify structure is correct first
       assertThat(q1)
-          .isEqualTo(
-              "select \"userid\" from \"user\" where \"deletedat\" is null and \"id\" = ?");
+          .isEqualTo("select \"userid\" from \"user\" where \"deletedat\" is null and \"id\" = ?");
       // Then verify grouping
       assertThat(q1).isEqualTo(q2);
     }
@@ -115,8 +112,7 @@ class SqlParserTest {
           SqlParser.normalize(
               "SELECT \"userId\" FROM \"User\" WHERE \"name\" = 'John' AND \"age\" > 30");
       assertThat(result)
-          .isEqualTo(
-              "select \"userid\" from \"user\" where \"name\" = ? and \"age\" > ?");
+          .isEqualTo("select \"userid\" from \"user\" where \"name\" = ? and \"age\" > ?");
     }
   }
 
@@ -361,6 +357,26 @@ class SqlParserTest {
     void nullReturnsEmpty() {
       assertThat(SqlParser.extractOrderByColumns(null)).isEmpty();
     }
+
+    // Regression for #102: a comma inside a single-quoted literal used to leak phantom columns.
+    @Test
+    void ignoresCommasInsideStringLiterals() {
+      List<ColumnReference> cols =
+          SqlParser.extractOrderByColumns("SELECT * FROM t ORDER BY name, 'a,b', created_at");
+      assertThat(cols)
+          .extracting(ColumnReference::columnName)
+          .containsExactly("name", "created_at");
+    }
+
+    @Test
+    void ignoresCommasInsideStringLiteralsWithEscapes() {
+      List<ColumnReference> cols =
+          SqlParser.extractOrderByColumns(
+              "SELECT * FROM t ORDER BY name, 'it''s, here', created_at");
+      assertThat(cols)
+          .extracting(ColumnReference::columnName)
+          .containsExactly("name", "created_at");
+    }
   }
 
   // ── extractGroupByColumns ───────────────────────────────────────────
@@ -392,6 +408,15 @@ class SqlParserTest {
     @Test
     void nullReturnsEmpty() {
       assertThat(SqlParser.extractGroupByColumns(null)).isEmpty();
+    }
+
+    // Regression for #102.
+    @Test
+    void ignoresCommasInsideStringLiterals() {
+      List<ColumnReference> cols =
+          SqlParser.extractGroupByColumns(
+              "SELECT status, COUNT(*) FROM t GROUP BY status, 'x,y', role");
+      assertThat(cols).extracting(ColumnReference::columnName).containsExactly("status", "role");
     }
   }
 
@@ -796,6 +821,37 @@ class SqlParserTest {
               "SELECT * FROM \"User\" u JOIN \"UserRole\" ur ON u.\"id\" = ur.\"userId\"");
       assertThat(tables).containsExactlyInAnyOrder("User", "UserRole");
     }
+
+    // Regression for #103: quoted schema-qualified identifiers used to return the schema
+    // name, which made every index-lookup detector silently miss the real table.
+    @Test
+    void doubleQuotedSchemaQualifiedTable() {
+      List<String> tables =
+          SqlParser.extractTableNames("SELECT * FROM \"myschema\".\"mytable\" WHERE id = 1");
+      assertThat(tables).containsExactly("mytable");
+    }
+
+    @Test
+    void backtickQuotedSchemaQualifiedTable() {
+      List<String> tables =
+          SqlParser.extractTableNames("SELECT * FROM `myschema`.`mytable` WHERE id = 1");
+      assertThat(tables).containsExactly("mytable");
+    }
+
+    @Test
+    void mixedQuotedSchemaQualifiedTable() {
+      List<String> tables =
+          SqlParser.extractTableNames("SELECT * FROM \"myschema\".mytable WHERE id = 1");
+      assertThat(tables).containsExactly("mytable");
+    }
+
+    @Test
+    void quotedSchemaQualifiedJoin() {
+      List<String> tables =
+          SqlParser.extractTableNames(
+              "SELECT * FROM \"s\".\"orders\" o JOIN \"s\".\"users\" u ON o.user_id = u.id");
+      assertThat(tables).containsExactlyInAnyOrder("orders", "users");
+    }
   }
 
   // ── PostgreSQL double-quoted identifiers: column extraction (issue #52) ──
@@ -816,8 +872,7 @@ class SqlParserTest {
     @Test
     void extractWhereColumnsWithTableQualifiedDoubleQuote() {
       List<ColumnReference> cols =
-          SqlParser.extractWhereColumns(
-              "SELECT * FROM \"User\" u WHERE u.\"status\" = 'active'");
+          SqlParser.extractWhereColumns("SELECT * FROM \"User\" u WHERE u.\"status\" = 'active'");
       assertThat(cols).extracting(ColumnReference::columnName).containsExactly("status");
     }
 
@@ -836,7 +891,8 @@ class SqlParserTest {
       List<ColumnReference> cols =
           SqlParser.extractOrderByColumns(
               "SELECT * FROM \"User\" ORDER BY \"userName\" ASC, \"createdAt\" DESC");
-      assertThat(cols).extracting(ColumnReference::columnName)
+      assertThat(cols)
+          .extracting(ColumnReference::columnName)
           .containsExactly("userName", "createdAt");
     }
 
