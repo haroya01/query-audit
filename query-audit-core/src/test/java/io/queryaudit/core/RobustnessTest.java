@@ -1084,9 +1084,10 @@ class RobustnessTest {
     }
 
     @Test
-    // 30s budget: 10k distinct queries each pay a JSqlParser parse cost (~0.5-1ms); the cache
-    // helps only when SQL strings repeat, which is not the case here.
-    @Timeout(30)
+    // 90s budget: 10k distinct queries each pay a JSqlParser parse cost (~0.5-1ms); the cache
+    // helps only when SQL strings repeat, which is not the case here. Locally ~15s;
+    // GitHub Actions runners are ~2x slower, so 30s was tight in CI.
+    @Timeout(90)
     void handlesManyDistinctQueryPatterns() {
       List<QueryRecord> queries = new ArrayList<>();
       for (int i = 0; i < 10000; i++) {
