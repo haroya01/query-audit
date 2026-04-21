@@ -54,6 +54,44 @@ class SeverityAuditTest {
   }
 
   // -----------------------------------------------------------------------
+  // Regression for #68: lock the split so the two N+1 detectors can never
+  // re-converge on the same IssueType with divergent severities.
+  // -----------------------------------------------------------------------
+  @Test
+  void nPlusOneDetectors_emitDistinctTypesAtDefaultSeverities() {
+    // SQL-level: N_PLUS_ONE_SUSPECT @ INFO.
+    NPlusOneDetector sqlLevel = new NPlusOneDetector(3);
+    String repeated = "SELECT * FROM orders WHERE user_id = 1";
+    List<Issue> sqlIssues =
+        sqlLevel.evaluate(
+            List.of(record(repeated), record(repeated), record(repeated)), EMPTY_INDEX);
+    assertThat(sqlIssues).hasSize(1);
+    assertThat(sqlIssues.get(0).type()).isEqualTo(IssueType.N_PLUS_ONE_SUSPECT);
+    assertThat(sqlIssues.get(0).severity())
+        .as("NPlusOneDetector must emit at IssueType.N_PLUS_ONE_SUSPECT.getDefaultSeverity()")
+        .isEqualTo(IssueType.N_PLUS_ONE_SUSPECT.getDefaultSeverity())
+        .isEqualTo(Severity.INFO);
+
+    // Hibernate-level: N_PLUS_ONE @ ERROR.
+    LazyLoadNPlusOneDetector hibernateLevel = new LazyLoadNPlusOneDetector(3);
+    List<io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord> lazyRecords =
+        List.of(
+            new io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord(
+                "com.example.Team.members", "com.example.Team", "1", 1L),
+            new io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord(
+                "com.example.Team.members", "com.example.Team", "2", 2L),
+            new io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord(
+                "com.example.Team.members", "com.example.Team", "3", 3L));
+    List<Issue> hibernateIssues = hibernateLevel.evaluate(lazyRecords);
+    assertThat(hibernateIssues).hasSize(1);
+    assertThat(hibernateIssues.get(0).type()).isEqualTo(IssueType.N_PLUS_ONE);
+    assertThat(hibernateIssues.get(0).severity())
+        .as("LazyLoadNPlusOneDetector must emit at IssueType.N_PLUS_ONE.getDefaultSeverity()")
+        .isEqualTo(IssueType.N_PLUS_ONE.getDefaultSeverity())
+        .isEqualTo(Severity.ERROR);
+  }
+
+  // -----------------------------------------------------------------------
   // 2. SELECT_ALL (INFO) - Hibernate entity loading always selects all columns
   // Verdict: CORRECT - Best-practice suggestion, not a significant performance issue.
   // -----------------------------------------------------------------------

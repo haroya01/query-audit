@@ -336,7 +336,7 @@ Of these, 60 are actively emitted by 57 detection rules. The remaining 4 are dis
 
 | Code | Enum | Description |
 |---|---|---|
-| `n-plus-one` | `N_PLUS_ONE` | Repeated structurally identical queries |
+| `n-plus-one` | `N_PLUS_ONE` | Hibernate-level authoritative N+1 (same lazy collection/proxy loaded for many distinct owners) |
 | `where-function` | `WHERE_FUNCTION` | Function on column in WHERE disables index |
 | `missing-where-index` | `MISSING_WHERE_INDEX` | No index on WHERE column |
 | `missing-join-index` | `MISSING_JOIN_INDEX` | No index on JOIN column |
@@ -392,10 +392,11 @@ Of these, 60 are actively emitted by 57 detection rules. The remaining 4 are dis
 | `for-update-no-timeout` | `FOR_UPDATE_WITHOUT_TIMEOUT` | FOR UPDATE without NOWAIT or SKIP LOCKED may block indefinitely |
 | `case-in-where` | `CASE_IN_WHERE` | CASE expression in WHERE clause prevents index usage |
 
-### INFO Severity (11 issue types + 3 reserved)
+### INFO Severity (12 issue types + 3 reserved)
 
 | Code | Enum | Description |
 |---|---|---|
+| `n-plus-one-suspect` | `N_PLUS_ONE_SUSPECT` | SQL-level heuristic: same normalized query repeated above threshold (suggestive; see `n-plus-one` for authoritative Hibernate detection) |
 | `select-all` | `SELECT_ALL` | `SELECT *` usage |
 | `redundant-filter` | `REDUNDANT_FILTER` | Duplicate WHERE condition |
 | `count-instead-of-exists` | `COUNT_INSTEAD_OF_EXISTS` | COUNT where EXISTS is better |

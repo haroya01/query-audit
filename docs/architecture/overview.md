@@ -327,7 +327,8 @@ public class SlackReporter implements Reporter {
 
 | Rule | Issue Type | Severity | What it detects |
 |---|---|---|---|
-| NPlusOneDetector | `N_PLUS_ONE` | ERROR | Repeated query patterns from same call site |
+| NPlusOneDetector | `N_PLUS_ONE_SUSPECT` | INFO | SQL-level heuristic: same normalized query repeated `threshold`+ times. Suggestive only — the Hibernate-level detector below is authoritative. |
+| LazyLoadNPlusOneDetector | `N_PLUS_ONE` | ERROR | Hibernate-level authoritative: same lazy collection/proxy initialized for `threshold`+ distinct owners. |
 | SelectAllDetector | `SELECT_ALL` | INFO | `SELECT *` usage |
 | CountInsteadOfExistsDetector | `COUNT_INSTEAD_OF_EXISTS` | INFO | `COUNT(*)` where `EXISTS` is better |
 | UnboundedResultSetDetector | `UNBOUNDED_RESULT_SET` | WARNING | SELECT without LIMIT |
