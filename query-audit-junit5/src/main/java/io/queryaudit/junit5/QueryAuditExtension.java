@@ -328,6 +328,12 @@ public class QueryAuditExtension
       return;
     }
 
+    // Release the ThreadLocal holder that beforeAll populated when we had to wrap the
+    // DataSource ourselves. Without this, long-lived test worker threads (Gradle reuses them)
+    // retain the QueryInterceptorHolder for their entire lifetime, leaking recorded queries
+    // and potentially serving a stale holder to a subsequent test class (issue #100).
+    QueryAuditDataSourceStore.clear();
+
     writeCountBaselineIfRequested(context);
 
     // Register a ReportFinalizer in the root context store so that
