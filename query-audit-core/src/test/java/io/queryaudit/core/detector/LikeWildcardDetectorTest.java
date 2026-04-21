@@ -80,4 +80,41 @@ class LikeWildcardDetectorTest {
 
     assertThat(issues).isEmpty();
   }
+
+  // Regression for #91: parameterized LIKE used to be silently ignored, so a runtime binding of
+  // '%foo' would full-scan without any detector emitting a warning. Now emitted at INFO because
+  // the actual value cannot be confirmed statically.
+  @Test
+  void infoIssueForParameterizedLike() {
+    String sql = "SELECT * FROM users WHERE name LIKE ?";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.LIKE_LEADING_WILDCARD);
+    assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
+    assertThat(issues.get(0).detail()).contains("Parameterized LIKE");
+  }
+
+  @Test
+  void noDuplicateWhenBothLiteralAndParameterizedLikePresent() {
+    // Literal leading wildcard takes precedence — WARNING only, no additional INFO row.
+    String sql =
+        "SELECT * FROM users WHERE name LIKE '%foo' OR email LIKE ?";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+  }
+
+  @Test
+  void detectsNotLikeLeadingWildcard() {
+    String sql = "SELECT * FROM users WHERE name NOT LIKE '%foo'";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+  }
 }

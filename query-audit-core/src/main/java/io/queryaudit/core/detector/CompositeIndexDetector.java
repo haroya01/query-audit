@@ -35,6 +35,7 @@ public class CompositeIndexDetector implements DetectionRule {
     List<Issue> issues = new ArrayList<>();
 
     if (indexMetadata == null || indexMetadata.isEmpty()) {
+      MetadataSkipLog.warnEmptyMetadataOnce("CompositeIndexDetector");
       return issues;
     }
 

@@ -45,6 +45,7 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
     List<Issue> issues = new ArrayList<>();
 
     if (indexMetadata == null || indexMetadata.isEmpty()) {
+      MetadataSkipLog.warnEmptyMetadataOnce("OrderByLimitWithoutIndexDetector");
       return issues;
     }
 
@@ -143,9 +144,10 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
   }
 
   /**
-   * Checks if a non-primary index exists on the column. Separated from isPrimaryKey to avoid
-   * redundancy: PRIMARY indexes are handled by isPrimaryKey, while this checks only secondary
-   * indexes.
+   * Checks if a non-primary index can satisfy ORDER BY on the column. Only the leading column
+   * (seqInIndex == 1) of a non-primary index is usable for ORDER BY without a filesort — a
+   * non-leading composite column still requires a full sort even though the column appears in
+   * the index.
    */
   private boolean hasNonPrimaryIndexOn(IndexMetadata metadata, String table, String column) {
     List<IndexInfo> indexes = metadata.getIndexesForTable(table);
@@ -153,6 +155,7 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
         .anyMatch(
             idx ->
                 !"PRIMARY".equalsIgnoreCase(idx.indexName())
+                    && idx.seqInIndex() == 1
                     && idx.columnName() != null
                     && idx.columnName().equalsIgnoreCase(column));
   }
@@ -163,6 +166,7 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
         .anyMatch(
             idx ->
                 "PRIMARY".equalsIgnoreCase(idx.indexName())
+                    && idx.seqInIndex() == 1
                     && idx.columnName() != null
                     && idx.columnName().equalsIgnoreCase(column));
   }

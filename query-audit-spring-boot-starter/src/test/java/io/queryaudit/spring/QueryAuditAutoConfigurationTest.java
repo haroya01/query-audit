@@ -125,6 +125,8 @@ class QueryAuditAutoConfigurationTest {
     void registersBeanPostProcessorWhenEnabled() {
       contextRunner.run(
           context -> {
+            assertThat(context).hasBean("queryAuditDataSourcePostProcessor");
+            // Legacy alias kept for one release cycle (issue #104).
             assertThat(context).hasBean("queryGuardDataSourcePostProcessor");
           });
     }
@@ -136,10 +138,36 @@ class QueryAuditAutoConfigurationTest {
           .withPropertyValues("query-audit.enabled=false")
           .run(
               context -> {
+                assertThat(context).doesNotHaveBean("queryAuditDataSourcePostProcessor");
                 assertThat(context).doesNotHaveBean("queryGuardDataSourcePostProcessor");
                 // QueryInterceptor should still be registered
                 assertThat(context).hasSingleBean(QueryInterceptor.class);
               });
+    }
+
+    @Test
+    @DisplayName("registers QueryAuditConfig bean under both new and legacy names (issue #104)")
+    void registersConfigBeanUnderBothNames() {
+      contextRunner.run(
+          context -> {
+            assertThat(context).hasBean("queryAuditConfig");
+            assertThat(context).hasBean("queryGuardConfig");
+            // Same instance — legacy is an alias, not a duplicate.
+            assertThat(context.getBean("queryAuditConfig"))
+                .isSameAs(context.getBean("queryGuardConfig"));
+          });
+    }
+
+    @Test
+    @DisplayName("registers QueryInterceptor bean under both new and legacy names (issue #104)")
+    void registersInterceptorBeanUnderBothNames() {
+      contextRunner.run(
+          context -> {
+            assertThat(context).hasBean("queryAuditInterceptor");
+            assertThat(context).hasBean("queryGuardInterceptor");
+            assertThat(context.getBean("queryAuditInterceptor"))
+                .isSameAs(context.getBean("queryGuardInterceptor"));
+          });
     }
   }
 

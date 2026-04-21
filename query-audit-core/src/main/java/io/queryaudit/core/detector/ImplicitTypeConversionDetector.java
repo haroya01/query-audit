@@ -26,22 +26,50 @@ import java.util.regex.Pattern;
  */
 public class ImplicitTypeConversionDetector implements DetectionRule {
 
-  /** Suffixes/substrings in column names that strongly suggest a string type. */
-  private static final Set<String> STRING_COLUMN_INDICATORS =
+  /**
+   * Tokens (in the snake_case or camelCase-ends-with sense) in column names that strongly suggest
+   * a string type. Matched at three positions:
+   *
+   * <ul>
+   *   <li>as an entire {@code _}-separated segment (e.g. {@code user_name}, {@code email_address})
+   *   <li>as the end of a non-separated identifier (e.g. {@code ucode}, {@code firstname})
+   *   <li>as the beginning of a non-separated identifier (e.g. {@code codebook})
+   * </ul>
+   */
+  private static final Set<String> STRING_COLUMN_TOKENS =
       Set.of(
-          "_name",
-          "_email",
-          "_phone",
-          "_code",
-          "_token",
-          "_key",
-          "_slug",
-          "_handle",
-          "_address",
-          "_title",
-          "_url",
-          "_path",
-          "_type");
+          "name",
+          "email",
+          "phone",
+          "code",
+          "token",
+          "key",
+          "slug",
+          "handle",
+          "address",
+          "title",
+          "url",
+          "path",
+          "type",
+          "description",
+          "desc",
+          "note",
+          "comment",
+          "text",
+          "content",
+          "message",
+          "label",
+          "tag",
+          "remark");
+
+  /**
+   * Tokens that strongly suggest a numeric/identifier column. If a column ends with one of these,
+   * we trust the numeric hint even if another token earlier in the name would otherwise match.
+   * Without this guard, {@code description_id} (FK INT column) would be flagged because it
+   * contains the {@code description} token.
+   */
+  private static final Set<String> NUMERIC_COLUMN_TOKENS =
+      Set.of("id", "count", "num", "no", "seq", "order", "size", "length");
 
   /**
    * Pattern to match: column_name = bare_number in a WHERE context. Captures group(1) = column
@@ -109,13 +137,35 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
   }
 
   /** Check if the column name suggests a string type based on known indicators. */
-  private boolean isStringColumn(String columnName) {
+  // Package-private for testability.
+  boolean isStringColumn(String columnName) {
     String lower = columnName.toLowerCase();
-    for (String indicator : STRING_COLUMN_INDICATORS) {
-      if (lower.contains(indicator)) {
+
+    // If the last snake_case segment is a numeric hint (e.g. *_id, *_count, *_order), bail out
+    // before the string-token check. This prevents false positives on FK-style column names
+    // whose leading segment happens to look string-like (e.g. "description_id").
+    int lastUnderscore = lower.lastIndexOf('_');
+    if (lastUnderscore >= 0) {
+      String lastSegment = lower.substring(lastUnderscore + 1);
+      if (NUMERIC_COLUMN_TOKENS.contains(lastSegment)) {
+        return false;
+      }
+    }
+
+    // Match as any _-separated segment.
+    for (String segment : lower.split("_")) {
+      if (STRING_COLUMN_TOKENS.contains(segment)) {
         return true;
       }
     }
+
+    // Match as end or start of a non-separated identifier (ucode, firstname, codebook).
+    for (String token : STRING_COLUMN_TOKENS) {
+      if (lower.endsWith(token) || lower.startsWith(token)) {
+        return true;
+      }
+    }
+
     return false;
   }
 }

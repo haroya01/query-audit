@@ -1495,11 +1495,17 @@ class AdversarialFalsePositiveTest {
       assertThat(issues).isEmpty();
     }
 
+    // Post-#91: parameterized LIKE now emits an INFO-level suggestive warning because
+    // the runtime binding may begin with '%'. Kept the class's false-positive framing by
+    // asserting nothing WARNING-level slips through.
     @Test
-    void likeWithParameterShouldNotTrigger() {
+    void likeWithParameterEmitsInfoOnly() {
       List<Issue> issues =
           detector.evaluate(List.of(record("SELECT * FROM users WHERE name LIKE ?")), EMPTY_INDEX);
-      assertThat(issues).isEmpty();
+      assertThat(issues).allSatisfy(
+          i ->
+              assertThat(i.severity())
+                  .isEqualTo(io.queryaudit.core.model.Severity.INFO));
     }
 
     @Test
