@@ -14,6 +14,7 @@ import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCountRegressionDetector;
 import io.queryaudit.core.regression.QueryCounts;
 import io.queryaudit.core.reporter.ConsoleReporter;
+import io.queryaudit.core.reporter.GitHubActionsReporter;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import io.queryaudit.core.reporter.JsonReporter;
 import java.awt.Desktop;
@@ -213,6 +214,14 @@ public class QueryAuditExtension
     ConsoleReporter reporter =
         new ConsoleReporter(System.out, ConsoleReporter.detectColorSupport(), baseline);
     reporter.report(report);
+
+    // When running inside GitHub Actions, also emit workflow-command annotations + a step
+    // summary so issues surface as inline PR comments and a job-page overview (issue #85).
+    // Detection is env-driven (GITHUB_ACTIONS is set to "true" by the runner), so no config
+    // change is needed to get the behavior in CI — and it stays silent locally.
+    if ("true".equals(System.getenv("GITHUB_ACTIONS"))) {
+      new GitHubActionsReporter().report(report);
+    }
 
     // Accumulate for HTML report
     HtmlReportAggregator.getInstance().addReport(report);
