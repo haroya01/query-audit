@@ -55,6 +55,8 @@ jobs:
           echo "Published to Maven Central:" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           echo "io.github.haroya01:query-audit-core:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "io.github.haroya01:query-audit-junit5:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "io.github.haroya01:query-audit-mysql:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "io.github.haroya01:query-audit-postgresql:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo "io.github.haroya01:query-audit-spring-boot-starter:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
