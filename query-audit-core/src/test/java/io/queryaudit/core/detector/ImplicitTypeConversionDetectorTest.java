@@ -219,4 +219,58 @@ class ImplicitTypeConversionDetectorTest {
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).column()).isEqualTo("user_name");
   }
+
+  // Regression for #95: the pre-fix detector only matched the `_indicator` form, so columns
+  // whose name fused the indicator to another token (ucode, firstname, codebook) and standalone
+  // string-typed column names (name, email) slipped through.
+
+  @Test
+  void detectsFusedSuffixColumn_ucode() {
+    String sql = "SELECT * FROM users WHERE ucode = 42";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).column()).isEqualTo("ucode");
+  }
+
+  @Test
+  void detectsFusedSuffixColumn_firstname() {
+    String sql = "SELECT * FROM users WHERE firstname = 5";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).column()).isEqualTo("firstname");
+  }
+
+  @Test
+  void detectsStandaloneIndicatorColumn_name() {
+    String sql = "SELECT * FROM users WHERE name = 7";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).column()).isEqualTo("name");
+  }
+
+  @Test
+  void noIssueForFkStyleIntColumn_descriptionId() {
+    // A FK-style numeric column ending in _id should NOT be flagged even though the
+    // leading 'description' token would otherwise match the string indicator set.
+    String sql = "SELECT * FROM items WHERE description_id = 1";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
+
+    assertThat(issues).isEmpty();
+  }
+
+  @Test
+  void noIssueForCountColumn_commentCount() {
+    String sql = "SELECT * FROM posts WHERE comment_count = 5";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
+
+    assertThat(issues).isEmpty();
+  }
 }

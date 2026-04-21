@@ -30,8 +30,8 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(QueryAuditProperties.class)
 public class QueryAuditAutoConfiguration {
 
-  @Bean
-  public QueryAuditConfig queryGuardConfig(QueryAuditProperties properties) {
+  @Bean(name = {"queryAuditConfig", "queryGuardConfig"})
+  public QueryAuditConfig queryAuditConfig(QueryAuditProperties properties) {
     Map<String, Severity> severityOverrides = new HashMap<>();
     for (Map.Entry<String, String> entry : properties.getSeverityOverrides().entrySet()) {
       severityOverrides.put(entry.getKey(), Severity.valueOf(entry.getValue()));
@@ -61,16 +61,16 @@ public class QueryAuditAutoConfiguration {
         .build();
   }
 
-  @Bean
-  public QueryInterceptor queryGuardInterceptor(QueryAuditConfig config) {
+  @Bean(name = {"queryAuditInterceptor", "queryGuardInterceptor"})
+  public QueryInterceptor queryAuditInterceptor(QueryAuditConfig config) {
     QueryInterceptor interceptor = new QueryInterceptor();
     interceptor.setMaxQueries(config.getMaxQueries());
     return interceptor;
   }
 
-  @Bean
+  @Bean(name = {"queryAuditDataSourcePostProcessor", "queryGuardDataSourcePostProcessor"})
   @ConditionalOnProperty(name = "query-audit.enabled", havingValue = "true", matchIfMissing = true)
-  public BeanPostProcessor queryGuardDataSourcePostProcessor(QueryInterceptor interceptor) {
+  public BeanPostProcessor queryAuditDataSourcePostProcessor(QueryInterceptor interceptor) {
     return new BeanPostProcessor() {
       @Override
       public Object postProcessAfterInitialization(Object bean, String beanName)

@@ -566,12 +566,18 @@ class ComprehensiveFalsePositiveTest {
     }
 
     @Test
-    @DisplayName("TN: LIKE ? (parameterized, can't know) should not detect")
-    void tn_parameterizedLike() {
+    @DisplayName("Post-#91: LIKE ? (parameterized) emits an INFO-level suggestive warning")
+    void parameterizedLike_emitsInfo() {
       String sql = "SELECT * FROM users WHERE name LIKE ?";
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issuesOfType(issues, IssueType.LIKE_LEADING_WILDCARD)).isEmpty();
+      // Still LIKE_LEADING_WILDCARD type, but never WARNING for the parameter-only form —
+      // the runtime binding is unknown so the detector speaks at INFO.
+      assertThat(issuesOfType(issues, IssueType.LIKE_LEADING_WILDCARD))
+          .allSatisfy(
+              i ->
+                  assertThat(i.severity())
+                      .isEqualTo(io.queryaudit.core.model.Severity.INFO));
     }
   }
 
