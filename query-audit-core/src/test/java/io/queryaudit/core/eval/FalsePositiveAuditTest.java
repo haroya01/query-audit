@@ -14,13 +14,13 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * TEAM 1: FALSE POSITIVE AUDIT
+ * FALSE POSITIVE AUDIT
  *
  * <p>Tests every detector against realistic, legitimate SQL queries that should NOT be flagged.
  * Uses Hibernate-style generated SQL patterns (aliases like u1_0, qualified columns, etc.). Target:
  * 200+ legitimate queries, zero false positives.
  */
-class Team1FalsePositiveAuditTest {
+class FalsePositiveAuditTest {
 
   static int totalQueries = 0;
   static int falsePositives = 0;
@@ -28,7 +28,7 @@ class Team1FalsePositiveAuditTest {
 
   @AfterAll
   static void printReport() {
-    System.out.println("=== TEAM 1: FALSE POSITIVE AUDIT ===");
+    System.out.println("=== FALSE POSITIVE AUDIT ===");
     System.out.println("Total legitimate queries tested: " + totalQueries);
     System.out.println("False positives found: " + falsePositives);
     System.out.printf("False positive rate: %.2f%%%n", (falsePositives * 100.0 / totalQueries));
@@ -38,7 +38,7 @@ class Team1FalsePositiveAuditTest {
         System.out.println(detail);
       }
     }
-    System.out.println("=== END TEAM 1 REPORT ===");
+    System.out.println("=== END ===");
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ class Team1FalsePositiveAuditTest {
                           "order_items", "idx_items_order_id", "order_id", 1, true, 50000))));
 
   private List<Issue> evaluate(DetectionRule detector, List<String> sqls) {
-    List<QueryRecord> records = sqls.stream().map(Team1FalsePositiveAuditTest::q).toList();
+    List<QueryRecord> records = sqls.stream().map(FalsePositiveAuditTest::q).toList();
     totalQueries += sqls.size();
     List<Issue> issues = detector.evaluate(records, RICH_INDEX);
     if (!issues.isEmpty()) {
@@ -721,7 +721,7 @@ class Team1FalsePositiveAuditTest {
             new RedundantFilterDetector());
 
     List<QueryRecord> records =
-        hibernateQueries.stream().map(Team1FalsePositiveAuditTest::q).toList();
+        hibernateQueries.stream().map(FalsePositiveAuditTest::q).toList();
     totalQueries += hibernateQueries.size() * patternDetectors.size();
 
     for (DetectionRule detector : patternDetectors) {

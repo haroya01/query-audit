@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -55,7 +56,7 @@ public class NPlusOneDetector implements DetectionRule {
       if (entry.getValue().size() < threshold) continue;
       if (!seen.add(entry.getKey())) continue;
 
-      String table = SqlParser.extractTableNames(entry.getKey()).stream().findFirst().orElse(null);
+      String table = EnhancedSqlParser.extractTableNames(entry.getKey()).stream().findFirst().orElse(null);
 
       issues.add(
           new Issue(

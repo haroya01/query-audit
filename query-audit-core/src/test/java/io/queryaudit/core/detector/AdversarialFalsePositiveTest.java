@@ -2,6 +2,8 @@ package io.queryaudit.core.detector;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.interceptor.LazyLoadTracker;
+import io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
@@ -2228,11 +2230,11 @@ class AdversarialFalsePositiveTest {
 
     @Test
     void belowThresholdShouldNotTrigger() {
-      List<io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord> records =
+      List<LazyLoadRecord> records =
           List.of(
-              new io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord(
+              new LazyLoadRecord(
                   "com.example.Order.items", "com.example.Order", "1", System.currentTimeMillis()),
-              new io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord(
+              new LazyLoadRecord(
                   "com.example.Order.items", "com.example.Order", "2", System.currentTimeMillis()));
       List<Issue> issues = detector.evaluate(records);
       assertThat(issues).isEmpty();
@@ -2240,13 +2242,13 @@ class AdversarialFalsePositiveTest {
 
     @Test
     void differentCollectionRolesShouldNotTrigger() {
-      List<io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord> records =
+      List<LazyLoadRecord> records =
           List.of(
-              new io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord(
+              new LazyLoadRecord(
                   "com.example.Order.items", "com.example.Order", "1", System.currentTimeMillis()),
-              new io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord(
+              new LazyLoadRecord(
                   "com.example.User.orders", "com.example.User", "1", System.currentTimeMillis()),
-              new io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord(
+              new LazyLoadRecord(
                   "com.example.Product.reviews",
                   "com.example.Product",
                   "1",

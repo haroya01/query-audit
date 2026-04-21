@@ -6,6 +6,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.FunctionUsage;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -97,6 +98,8 @@ public class WhereFunctionDetector implements DetectionRule {
       }
       seen.add(normalized);
 
+      // Kept on SqlParser: the regex path handles CAST / TRIM / EXTRACT / unknown-function
+      // skips that the AST version does not yet reproduce.
       List<FunctionUsage> functions = SqlParser.detectWhereFunctions(query.sql());
       functions.removeIf(f -> INDEX_SAFE_FUNCTIONS.contains(f.functionName()));
       List<FunctionUsage> joinFunctions = SqlParser.detectJoinFunctions(query.sql());
@@ -106,7 +109,7 @@ public class WhereFunctionDetector implements DetectionRule {
         continue;
       }
 
-      List<String> tables = SqlParser.extractTableNames(query.sql());
+      List<String> tables = EnhancedSqlParser.extractTableNames(query.sql());
       String table = tables.isEmpty() ? null : tables.get(0);
 
       for (FunctionUsage func : functions) {

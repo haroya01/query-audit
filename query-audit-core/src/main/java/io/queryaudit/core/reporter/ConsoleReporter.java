@@ -7,6 +7,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.ranking.ImpactScorer;
 import io.queryaudit.core.ranking.RankedIssue;
@@ -342,7 +343,7 @@ public class ConsoleReporter implements Reporter {
     // Count table references across all queries
     Map<String, Integer> tableCounts = new LinkedHashMap<>();
     for (QueryRecord query : allQueries) {
-      List<String> tables = SqlParser.extractTableNames(query.sql());
+      List<String> tables = EnhancedSqlParser.extractTableNames(query.sql());
       for (String table : tables) {
         tableCounts.merge(table, 1, Integer::sum);
       }

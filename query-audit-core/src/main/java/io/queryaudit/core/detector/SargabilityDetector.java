@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -51,7 +52,7 @@ public class SargabilityDetector implements DetectionRule {
           "([=<>!]+|<=|>=|<>|!=)\\s*[\\d?]+\\s*([+\\-*/])\\s*([a-zA-Z_]\\w*(?:\\.[a-zA-Z_]\\w*)?)\\b",
           Pattern.CASE_INSENSITIVE);
 
-  // WHERE clause extraction delegated to SqlParser.extractWhereBody() to avoid
+  // WHERE clause extraction delegated to EnhancedSqlParser.extractWhereBody() to avoid
   // catastrophic backtracking from (.+?) with DOTALL patterns.
 
   private static final Set<String> SQL_KEYWORDS =
@@ -122,7 +123,7 @@ public class SargabilityDetector implements DetectionRule {
         continue;
       }
 
-      String whereBody = SqlParser.extractWhereBody(SqlParser.removeSubqueries(sql));
+      String whereBody = EnhancedSqlParser.extractWhereBody(EnhancedSqlParser.removeSubqueries(sql));
       if (whereBody == null) {
         continue;
       }
@@ -139,7 +140,7 @@ public class SargabilityDetector implements DetectionRule {
           String arithmeticOp = m1.group(2);
           String inverseOp = invertOp(arithmeticOp);
 
-          List<String> tables = SqlParser.extractTableNames(sql);
+          List<String> tables = EnhancedSqlParser.extractTableNames(sql);
           String table = tables.isEmpty() ? null : tables.get(0);
 
           issues.add(
@@ -176,7 +177,7 @@ public class SargabilityDetector implements DetectionRule {
           String arithmeticOp = m2.group(2);
           String inverseOp = invertOp(arithmeticOp);
 
-          List<String> tables = SqlParser.extractTableNames(sql);
+          List<String> tables = EnhancedSqlParser.extractTableNames(sql);
           String table = tables.isEmpty() ? null : tables.get(0);
 
           issues.add(

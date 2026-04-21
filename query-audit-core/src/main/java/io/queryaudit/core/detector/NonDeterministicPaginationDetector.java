@@ -7,6 +7,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -73,7 +74,7 @@ public class NonDeterministicPaginationDetector implements DetectionRule {
         continue;
       }
 
-      List<ColumnReference> orderByCols = SqlParser.extractOrderByColumns(sql);
+      List<ColumnReference> orderByCols = EnhancedSqlParser.extractOrderByColumns(sql);
       if (orderByCols.isEmpty()) {
         continue;
       }
@@ -96,7 +97,7 @@ public class NonDeterministicPaginationDetector implements DetectionRule {
       }
 
       if (!hasUniqueTiebreaker) {
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String mainTable = tables.isEmpty() ? null : tables.get(0);
 
         String orderByColNames =

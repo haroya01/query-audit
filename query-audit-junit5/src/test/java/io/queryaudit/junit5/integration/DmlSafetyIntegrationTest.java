@@ -27,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(classes = TestApplication.class)
 @EnableQueryInspector
 @Transactional
-class Team1DmlSafetyIntegrationTest {
+class DmlSafetyIntegrationTest {
 
   @Autowired TeamRepository teamRepository;
   @Autowired MemberRepository memberRepository;
@@ -52,7 +52,7 @@ class Team1DmlSafetyIntegrationTest {
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-    return analyzer.analyze("Team1DmlSafetyIntegrationTest", testName, queries, null);
+    return analyzer.analyze("DmlSafetyIntegrationTest", testName, queries, null);
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {

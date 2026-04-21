@@ -27,7 +27,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * TEAM 6: Suggestion Quality Audit
+ * Suggestion Quality Audit
  *
  * <p>Evaluates whether each detector's suggestion text is: - Actionable (contains a specific action
  * the developer can take) - Correct (does not give misleading or impossible advice) - Specific
@@ -37,7 +37,7 @@ import org.junit.jupiter.api.Test;
  * <p>Also checks for BAD suggestions that would break queries, are too vague, reference wrong
  * tables/columns, or suggest impossible actions.
  */
-class Team6SuggestionQualityTest {
+class SuggestionQualityTest {
 
   // ── Scoring infrastructure ──────────────────────────────────────────
 
@@ -67,7 +67,7 @@ class Team6SuggestionQualityTest {
   @AfterAll
   static void printReport() {
     System.out.println();
-    System.out.println("=== TEAM 6: SUGGESTION QUALITY ===");
+    System.out.println("=== SUGGESTION QUALITY ===");
     System.out.printf(
         "%-30s | %-10s | %-11s | %-7s | %-8s | Score%n",
         "Detector", "Has Action", "Has Example", "Correct", "Specific");
@@ -92,7 +92,7 @@ class Team6SuggestionQualityTest {
     System.out.println("-".repeat(90));
     System.out.printf("Average suggestion quality: %.1f/10%n", avg);
     System.out.printf("Suggestions needing improvement: %d%n", needsImprovement);
-    System.out.println("=== END TEAM 6 REPORT ===");
+    System.out.println("=== END ===");
     System.out.println();
   }
 

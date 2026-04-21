@@ -16,10 +16,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * Comprehensive verification tests for all detection improvements. Organized by team (Parser,
- * Detector) and by issue category (false positives, false negatives).
- *
- * <p>Each test documents the specific bug it verifies with a descriptive name.
+ * Verification tests for detection improvements, grouped by area (parser, detector) and by issue
+ * category (false positives, false negatives). Each nested class documents the specific bug it
+ * verifies via its display name.
  */
 @DisplayName("Detection Improvement Verification")
 class ImprovementVerificationTest {

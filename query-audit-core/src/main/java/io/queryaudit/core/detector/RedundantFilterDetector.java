@@ -4,6 +4,7 @@ import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.parser.WhereColumnReference;
 import java.util.ArrayList;
@@ -27,7 +28,7 @@ import java.util.regex.Pattern;
  */
 public class RedundantFilterDetector implements DetectionRule {
 
-  // WHERE clause extraction delegated to SqlParser.extractWhereBody() to avoid
+  // WHERE clause extraction delegated to EnhancedSqlParser.extractWhereBody() to avoid
   // catastrophic backtracking from (.+?) with DOTALL patterns.
 
   @Override
@@ -50,7 +51,7 @@ public class RedundantFilterDetector implements DetectionRule {
       // Build alias-to-table mapping for correct table resolution
       Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
 
-      List<WhereColumnReference> whereColumns = SqlParser.extractWhereColumnsWithOperators(sql);
+      List<WhereColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
       if (whereColumns.size() < 2) {
         continue;
       }
@@ -96,7 +97,7 @@ public class RedundantFilterDetector implements DetectionRule {
           // Use the resolved table from the alias map, not just the first FROM table
           String table = keyToResolvedTable.get(entry.getKey());
           if (table == null) {
-            List<String> tables = SqlParser.extractTableNames(sql);
+            List<String> tables = EnhancedSqlParser.extractTableNames(sql);
             table = tables.isEmpty() ? null : tables.get(0);
           }
 
@@ -152,7 +153,7 @@ public class RedundantFilterDetector implements DetectionRule {
    */
   // Package-private for testability
   List<String> splitByTopLevelOr(String sql) {
-    String whereBody = SqlParser.extractWhereBody(sql);
+    String whereBody = EnhancedSqlParser.extractWhereBody(sql);
     if (whereBody == null) {
       return List.of(sql);
     }

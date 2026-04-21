@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -94,7 +95,7 @@ public class SlowQueryDetector implements DetectionRule {
 
       // Use the first record for table extraction and stack trace
       QueryRecord representative = records.get(0);
-      List<String> tables = SqlParser.extractTableNames(representative.sql());
+      List<String> tables = EnhancedSqlParser.extractTableNames(representative.sql());
       String table = tables.isEmpty() ? null : tables.get(0);
 
       String execCountInfo =

@@ -6,6 +6,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -89,7 +90,7 @@ public class UnusedJoinDetector implements DetectionRule {
 
         if (!referencedAliases.contains(alias.toLowerCase())
             && !referencedAliases.contains(tableName.toLowerCase())) {
-          List<String> tables = SqlParser.extractTableNames(sql);
+          List<String> tables = EnhancedSqlParser.extractTableNames(sql);
           String mainTable = tables.isEmpty() ? null : tables.get(0);
 
           issues.add(
@@ -146,7 +147,7 @@ public class UnusedJoinDetector implements DetectionRule {
     }
 
     // From WHERE columns
-    List<ColumnReference> whereCols = SqlParser.extractWhereColumns(sql);
+    List<ColumnReference> whereCols = EnhancedSqlParser.extractWhereColumns(sql);
     for (ColumnReference col : whereCols) {
       if (col.tableOrAlias() != null) {
         aliases.add(col.tableOrAlias().toLowerCase());
@@ -154,7 +155,7 @@ public class UnusedJoinDetector implements DetectionRule {
     }
 
     // From ORDER BY columns
-    List<ColumnReference> orderByCols = SqlParser.extractOrderByColumns(sql);
+    List<ColumnReference> orderByCols = EnhancedSqlParser.extractOrderByColumns(sql);
     for (ColumnReference col : orderByCols) {
       if (col.tableOrAlias() != null) {
         aliases.add(col.tableOrAlias().toLowerCase());
@@ -162,7 +163,7 @@ public class UnusedJoinDetector implements DetectionRule {
     }
 
     // From GROUP BY columns
-    List<ColumnReference> groupByCols = SqlParser.extractGroupByColumns(sql);
+    List<ColumnReference> groupByCols = EnhancedSqlParser.extractGroupByColumns(sql);
     for (ColumnReference col : groupByCols) {
       if (col.tableOrAlias() != null) {
         aliases.add(col.tableOrAlias().toLowerCase());
@@ -170,7 +171,7 @@ public class UnusedJoinDetector implements DetectionRule {
     }
 
     // From HAVING clause
-    String havingClause = SqlParser.extractHavingClause(sql);
+    String havingClause = EnhancedSqlParser.extractHavingClause(sql);
     if (havingClause != null) {
       collectQualifiedRefs(havingClause, aliases);
     }

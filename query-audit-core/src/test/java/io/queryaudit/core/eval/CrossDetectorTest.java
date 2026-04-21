@@ -23,12 +23,12 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * TEAM 3: Cross-Detector Interaction Tests
+ * Cross-Detector Interaction Tests
  *
  * <p>Verifies that when multiple detectors fire on the same query, the combined results are
  * coherent, non-contradictory, and non-duplicative.
  */
-class Team3CrossDetectorTest {
+class CrossDetectorTest {
 
   private static int contradictions = 0;
   private static int duplicates = 0;
@@ -84,7 +84,7 @@ class Team3CrossDetectorTest {
 
   @AfterAll
   static void printReport() {
-    System.out.println("=== TEAM 3: CROSS-DETECTOR INTERACTION ===");
+    System.out.println("=== CROSS-DETECTOR INTERACTION ===");
     System.out.println("Contradictions found: " + contradictions);
     System.out.println("Duplicate issues found: " + duplicates);
     System.out.println("Coherent multi-detections: " + coherent);

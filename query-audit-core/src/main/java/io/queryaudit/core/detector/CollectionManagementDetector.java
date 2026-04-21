@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.parser.WhereColumnReference;
 import java.util.ArrayList;
@@ -62,7 +63,7 @@ public class CollectionManagementDetector implements DetectionRule {
       }
 
       // Extract WHERE columns from the DELETE
-      List<WhereColumnReference> whereColumns = SqlParser.extractWhereColumnsWithOperators(sql);
+      List<WhereColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
       if (whereColumns.size() != 1) {
         continue;
       }

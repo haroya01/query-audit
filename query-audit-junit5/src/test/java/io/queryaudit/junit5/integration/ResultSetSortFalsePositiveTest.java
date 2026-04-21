@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @SpringBootTest(classes = TestApplication.class)
 @EnableQueryInspector
 @Transactional
-class Team5ResultSetSortFalsePositiveTest {
+class ResultSetSortFalsePositiveTest {
 
   @Autowired TeamRepository teamRepository;
   @Autowired MemberRepository memberRepository;

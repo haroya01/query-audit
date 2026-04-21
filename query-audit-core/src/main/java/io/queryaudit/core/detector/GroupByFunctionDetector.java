@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -92,7 +93,7 @@ public class GroupByFunctionDetector implements DetectionRule {
           continue;
         }
 
-        List<String> tables = SqlParser.extractTableNames(sql);
+        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
 
         issues.add(
@@ -121,7 +122,7 @@ public class GroupByFunctionDetector implements DetectionRule {
     if (sql == null) {
       return null;
     }
-    String cleaned = SqlParser.removeSubqueries(sql);
+    String cleaned = EnhancedSqlParser.removeSubqueries(sql);
     Matcher m = GROUP_BY_START.matcher(cleaned);
     if (!m.find()) {
       return null;

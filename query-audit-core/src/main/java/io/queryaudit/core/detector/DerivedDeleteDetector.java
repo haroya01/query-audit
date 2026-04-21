@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.parser.WhereColumnReference;
 import java.util.ArrayList;
@@ -66,7 +67,7 @@ public class DerivedDeleteDetector implements DetectionRule {
       }
 
       // Extract the main table from the SELECT
-      List<String> selectTables = SqlParser.extractTableNames(sql);
+      List<String> selectTables = EnhancedSqlParser.extractTableNames(sql);
       if (selectTables.isEmpty()) {
         continue;
       }
@@ -85,7 +86,7 @@ public class DerivedDeleteDetector implements DetectionRule {
           if (selectTable.equalsIgnoreCase(deleteTable)) {
             // Check if DELETE has a single PK-style WHERE
             List<WhereColumnReference> whereCols =
-                SqlParser.extractWhereColumnsWithOperators(nextSql);
+                EnhancedSqlParser.extractWhereColumnsWithOperators(nextSql);
             if (whereCols.size() == 1 && "=".equals(whereCols.get(0).operator())) {
               deleteCount++;
             } else {

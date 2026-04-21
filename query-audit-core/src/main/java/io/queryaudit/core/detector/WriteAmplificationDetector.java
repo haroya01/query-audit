@@ -6,6 +6,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -49,7 +50,7 @@ public class WriteAmplificationDetector implements DetectionRule {
     for (QueryRecord query : queries) {
       String sql = query.sql();
       if (sql != null) {
-        tables.addAll(SqlParser.extractTableNames(sql));
+        tables.addAll(EnhancedSqlParser.extractTableNames(sql));
       }
     }
 

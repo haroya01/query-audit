@@ -20,7 +20,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * TEAM 4: Production Workload Evaluation
+ * Production Workload Evaluation
  *
  * <p>Simulates 5 realistic production scenarios with 20-30 queries each. Measures precision,
  * recall, and F1 score for each scenario and overall.
@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
  * anti-pattern - FALSE POSITIVE (FP): detection on a query that has no real issue Additionally,
  * undetected known anti-patterns are counted as FALSE NEGATIVES (FN).
  */
-class Team4ProductionWorkloadTest {
+class ProductionWorkloadTest {
 
   private static QueryAuditAnalyzer analyzer;
 
@@ -1184,7 +1184,7 @@ class Team4ProductionWorkloadTest {
 
     System.out.println();
     System.out.println("=".repeat(100));
-    System.out.println("=== TEAM 4: PRODUCTION WORKLOAD ===");
+    System.out.println("=== PRODUCTION WORKLOAD ===");
     System.out.println("=".repeat(100));
     System.out.printf(
         "%-18s | %7s | %3s | %3s | %3s | %9s | %6s | %6s%n",
