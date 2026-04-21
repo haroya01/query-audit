@@ -78,6 +78,7 @@ public class MissingIndexDetector implements DetectionRule {
     List<Issue> issues = new ArrayList<>();
 
     if (indexMetadata == null || indexMetadata.isEmpty()) {
+      MetadataSkipLog.warnEmptyMetadataOnce("MissingIndexDetector");
       return issues;
     }
 

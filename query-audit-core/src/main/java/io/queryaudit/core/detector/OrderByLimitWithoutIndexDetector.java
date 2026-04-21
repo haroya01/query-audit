@@ -45,6 +45,7 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
     List<Issue> issues = new ArrayList<>();
 
     if (indexMetadata == null || indexMetadata.isEmpty()) {
+      MetadataSkipLog.warnEmptyMetadataOnce("OrderByLimitWithoutIndexDetector");
       return issues;
     }
 
