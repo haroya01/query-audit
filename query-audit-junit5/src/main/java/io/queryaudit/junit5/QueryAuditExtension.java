@@ -98,7 +98,8 @@ public class QueryAuditExtension
         store.put(KEY_RETURN_TYPE_RESOLVER, new SpringDataReturnTypeResolver(appContext));
       }
     } catch (Exception | NoClassDefFoundError e) {
-      System.err.println("[QueryAudit] Failed to initialize return type resolver: " + e.getMessage());
+      System.err.println(
+          "[QueryAudit] Failed to initialize return type resolver: " + e.getMessage());
     }
 
     // Load query count baseline for regression detection
@@ -328,6 +329,14 @@ public class QueryAuditExtension
       return;
     }
 
+    // Release the Hibernate event listener registered in beforeAll. When a SessionFactory is
+    // reused across test classes (shared Spring context), skipping this leaks one tracker per
+    // class onto the EventListenerRegistry and multiplies event dispatch cost (issue #101).
+    LazyLoadTracker tracker = getLazyLoadTracker(context);
+    if (tracker != null) {
+      hibernateIntegration.unregisterTracker(context, tracker);
+    }
+
     writeCountBaselineIfRequested(context);
 
     // Register a ReportFinalizer in the root context store so that
@@ -339,8 +348,7 @@ public class QueryAuditExtension
         (ReportFinalizer)
             root.getStore(NAMESPACE)
                 .getOrComputeIfAbsent(
-                    ReportFinalizer.class.getName(),
-                    key -> new ReportFinalizer(this));
+                    ReportFinalizer.class.getName(), key -> new ReportFinalizer(this));
     if (autoOpen) {
       finalizer.enableAutoOpen();
     }
@@ -348,8 +356,8 @@ public class QueryAuditExtension
 
   /**
    * Registered once in the root {@link ExtensionContext.Store} via {@code getOrComputeIfAbsent}.
-   * JUnit calls {@link #close()} exactly once when the root context is torn down — after all
-   * test classes have completed.
+   * JUnit calls {@link #close()} exactly once when the root context is torn down — after all test
+   * classes have completed.
    */
   static final class ReportFinalizer implements ExtensionContext.Store.CloseableResource {
 
@@ -528,8 +536,7 @@ public class QueryAuditExtension
     }
 
     // Wire return type resolver if available
-    RepositoryReturnTypeResolver resolver =
-        getReturnTypeResolver(context);
+    RepositoryReturnTypeResolver resolver = getReturnTypeResolver(context);
     if (resolver != null) {
       builder.repositoryReturnTypeResolver(resolver);
     }
@@ -550,8 +557,7 @@ public class QueryAuditExtension
           springExtensionClass.getMethod("getApplicationContext", ExtensionContext.class);
       Object appContext = getAppContext.invoke(null, context);
       if (appContext != null) {
-        Method getBean =
-            appContext.getClass().getMethod("getBean", Class.class);
+        Method getBean = appContext.getClass().getMethod("getBean", Class.class);
         Object bean = getBean.invoke(appContext, QueryAuditConfig.class);
         if (bean instanceof QueryAuditConfig config) {
           return config;
@@ -634,8 +640,7 @@ public class QueryAuditExtension
 
   // ── JSON report ───────────────────────────────────────────────────
 
-  private void writeJsonReport(
-      List<QueryAuditReport> reports, Path outputDir) {
+  private void writeJsonReport(List<QueryAuditReport> reports, Path outputDir) {
     try {
       Files.createDirectories(outputDir);
       StringBuilder sb = new StringBuilder();
@@ -781,8 +786,7 @@ public class QueryAuditExtension
 
   // ── Store helpers ──────────────────────────────────────────────────
 
-  private RepositoryReturnTypeResolver getReturnTypeResolver(
-      ExtensionContext context) {
+  private RepositoryReturnTypeResolver getReturnTypeResolver(ExtensionContext context) {
     ExtensionContext.Store store = context.getStore(NAMESPACE);
     Object resolver = store.get(KEY_RETURN_TYPE_RESOLVER);
     if (resolver instanceof RepositoryReturnTypeResolver r) {
