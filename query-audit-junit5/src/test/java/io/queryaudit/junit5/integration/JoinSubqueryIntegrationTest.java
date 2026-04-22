@@ -57,8 +57,7 @@ class JoinSubqueryIntegrationTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -70,14 +69,11 @@ class JoinSubqueryIntegrationTest {
     @DisplayName("Implicit join without WHERE produces Cartesian product")
     void detectsCartesianJoin() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM teams, members")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM teams, members").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("cartesianJoin", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.CARTESIAN_JOIN);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.CARTESIAN_JOIN);
     }
   }
 
@@ -90,14 +86,12 @@ class JoinSubqueryIntegrationTest {
     void detectsImplicitJoin() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM teams t, members m WHERE t.id = m.team_id")
+          .createNativeQuery("SELECT * FROM teams t, members m WHERE t.id = m.team_id")
           .getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("implicitJoin", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.IMPLICIT_JOIN);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.IMPLICIT_JOIN);
     }
   }
 
@@ -110,14 +104,12 @@ class JoinSubqueryIntegrationTest {
     void detectsUnusedJoin() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT m.name FROM members m LEFT JOIN teams t ON t.id = m.team_id")
+          .createNativeQuery("SELECT m.name FROM members m LEFT JOIN teams t ON t.id = m.team_id")
           .getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("unusedJoin", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.UNUSED_JOIN);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.UNUSED_JOIN);
     }
   }
 
@@ -156,8 +148,7 @@ class JoinSubqueryIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("tooManyJoins", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.TOO_MANY_JOINS);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.TOO_MANY_JOINS);
     }
   }
 
@@ -179,8 +170,7 @@ class JoinSubqueryIntegrationTest {
 
       QueryAuditReport report =
           analyze("correlatedSubquery", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.CORRELATED_SUBQUERY);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.CORRELATED_SUBQUERY);
     }
   }
 
@@ -193,15 +183,12 @@ class JoinSubqueryIntegrationTest {
     void detectsNotInSubquery() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM teams WHERE id NOT IN (SELECT team_id FROM members)")
+          .createNativeQuery("SELECT * FROM teams WHERE id NOT IN (SELECT team_id FROM members)")
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("notInSubquery", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.NOT_IN_SUBQUERY);
+      QueryAuditReport report = analyze("notInSubquery", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.NOT_IN_SUBQUERY);
     }
   }
 
@@ -224,10 +211,8 @@ class JoinSubqueryIntegrationTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("mergeableQueries", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.MERGEABLE_QUERIES);
+      QueryAuditReport report = analyze("mergeableQueries", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.MERGEABLE_QUERIES);
     }
   }
 
@@ -239,9 +224,7 @@ class JoinSubqueryIntegrationTest {
     @DisplayName("IN clause with 100+ values is detected")
     void detectsLargeInList() {
       String ids =
-          IntStream.rangeClosed(1, 150)
-              .mapToObj(String::valueOf)
-              .collect(Collectors.joining(","));
+          IntStream.rangeClosed(1, 150).mapToObj(String::valueOf).collect(Collectors.joining(","));
 
       queryInterceptor.start();
       entityManager
@@ -250,8 +233,7 @@ class JoinSubqueryIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("largeInList", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.LARGE_IN_LIST);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.LARGE_IN_LIST);
     }
   }
 }

@@ -55,16 +55,14 @@ class ForUpdateWithoutTimeoutDetectorTest {
   @Test
   void detectsForShareWithoutTimeout() {
     List<Issue> issues =
-        detector.evaluate(
-            List.of(q("SELECT id FROM accounts WHERE id = 1 FOR SHARE")), emptyIndex);
+        detector.evaluate(List.of(q("SELECT id FROM accounts WHERE id = 1 FOR SHARE")), emptyIndex);
     assertThat(issues).hasSize(1);
   }
 
   @Test
   void noIssueWithoutForUpdate() {
     List<Issue> issues =
-        detector.evaluate(
-            List.of(q("SELECT id FROM accounts WHERE id = 1")), emptyIndex);
+        detector.evaluate(List.of(q("SELECT id FROM accounts WHERE id = 1")), emptyIndex);
     assertThat(issues).isEmpty();
   }
 

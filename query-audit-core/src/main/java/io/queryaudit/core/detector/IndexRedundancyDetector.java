@@ -1,12 +1,12 @@
 package io.queryaudit.core.detector;
 
 import io.queryaudit.core.model.IndexInfo;
-import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;

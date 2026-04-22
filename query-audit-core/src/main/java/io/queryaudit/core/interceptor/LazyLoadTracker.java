@@ -141,7 +141,11 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
 
       if (count > 0) sb.append('\n');
       sb.append(cls).append('.').append(frame.getMethodName());
-      sb.append('(').append(frame.getFileName()).append(':').append(frame.getLineNumber()).append(')');
+      sb.append('(')
+          .append(frame.getFileName())
+          .append(':')
+          .append(frame.getLineNumber())
+          .append(')');
       if (++count >= 10) break;
     }
     return sb.toString();

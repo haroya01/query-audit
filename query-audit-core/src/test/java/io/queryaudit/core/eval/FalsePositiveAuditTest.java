@@ -7,6 +7,7 @@ import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.model.Severity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -131,7 +132,7 @@ class FalsePositiveAuditTest {
     List<Issue> issues = evaluate(new LikeWildcardDetector(), sqls);
     assertThat(issues)
         .as("LikeWildcardDetector WARNING-level false positives")
-        .filteredOn(i -> i.severity() == io.queryaudit.core.model.Severity.WARNING)
+        .filteredOn(i -> i.severity() == Severity.WARNING)
         .isEmpty();
   }
 
@@ -726,8 +727,7 @@ class FalsePositiveAuditTest {
             new CorrelatedSubqueryDetector(),
             new RedundantFilterDetector());
 
-    List<QueryRecord> records =
-        hibernateQueries.stream().map(FalsePositiveAuditTest::q).toList();
+    List<QueryRecord> records = hibernateQueries.stream().map(FalsePositiveAuditTest::q).toList();
     totalQueries += hibernateQueries.size() * patternDetectors.size();
 
     for (DetectionRule detector : patternDetectors) {

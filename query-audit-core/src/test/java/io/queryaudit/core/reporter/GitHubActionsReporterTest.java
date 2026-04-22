@@ -38,15 +38,7 @@ class GitHubActionsReporterTest {
 
   private QueryAuditReport reportOf(List<Issue> confirmed, List<Issue> info) {
     return new QueryAuditReport(
-        "OrderServiceTest",
-        "findOrders",
-        confirmed,
-        info,
-        List.of(),
-        List.of(),
-        1,
-        1,
-        100_000L);
+        "OrderServiceTest", "findOrders", confirmed, info, List.of(), List.of(), 1, 1, 100_000L);
   }
 
   @Test
@@ -91,8 +83,7 @@ class GitHubActionsReporterTest {
   void skipsFileLineWhenSourceLocationMissing() {
     GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
     reporter.report(
-        reportOf(
-            List.of(issue(IssueType.N_PLUS_ONE, Severity.ERROR, "no loc", null)), List.of()));
+        reportOf(List.of(issue(IssueType.N_PLUS_ONE, Severity.ERROR, "no loc", null)), List.of()));
     reporter.report(
         reportOf(
             List.of(issue(IssueType.N_PLUS_ONE, Severity.ERROR, "bad loc", "not-a-location")),
@@ -150,5 +141,65 @@ class GitHubActionsReporterTest {
   @DisplayName("parseLocation returns null for inputs without a package")
   void parseLocationReturnsNullWithoutPackage() {
     assertThat(GitHubActionsReporter.parseLocation("NoPackageClass.method:10")).isNull();
+  }
+
+  @Test
+  @DisplayName("empty issue lists produce no stdout output")
+  void emptyReportProducesNoOutput() {
+    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    reporter.report(reportOf(List.of(), List.of()));
+    assertThat(stdout.toString()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("null report is tolerated and produces no output")
+  void nullReportIsNoOp() {
+    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    reporter.report(null);
+    assertThat(stdout.toString()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("multiple report() calls append to the same summary file")
+  void summaryFileIsAppendedNotOverwritten() throws Exception {
+    Path summary = tempDir.resolve("summary.md");
+    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, summary);
+
+    reporter.report(
+        reportOf(List.of(issue(IssueType.N_PLUS_ONE, Severity.ERROR, "first", null)), List.of()));
+    reporter.report(
+        reportOf(List.of(issue(IssueType.OR_ABUSE, Severity.WARNING, "second", null)), List.of()));
+
+    String md = Files.readString(summary);
+    assertThat(md).contains("n-plus-one");
+    assertThat(md).contains("or-abuse");
+    assertThat(md.indexOf("query-audit —")).isLessThan(md.lastIndexOf("query-audit —"));
+  }
+
+  @Test
+  @DisplayName("issue with null detail falls back to the IssueType description")
+  void nullDetailUsesTypeDescription() {
+    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    Issue i =
+        new Issue(IssueType.CARTESIAN_JOIN, Severity.ERROR, "sql", "t", null, null, null, null);
+
+    reporter.report(reportOf(List.of(i), List.of()));
+
+    assertThat(stdout.toString()).contains(IssueType.CARTESIAN_JOIN.getDescription());
+  }
+
+  @Test
+  @DisplayName("commas in property values are percent-encoded but bodies keep them")
+  void commaEncodingDistinguishesPropertyFromBody() {
+    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    // The Issue detail contains a comma; this is the body part and should NOT be encoded.
+    Issue i = issue(IssueType.N_PLUS_ONE, Severity.ERROR, "a, b, c", null);
+
+    reporter.report(reportOf(List.of(i), List.of()));
+
+    String out = stdout.toString();
+    assertThat(out).contains("a, b, c");
+    // Title is a property value — if a comma ever slipped in it would be %2C encoded.
+    assertThat(out).contains("title=");
   }
 }

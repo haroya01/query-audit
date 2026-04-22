@@ -196,7 +196,7 @@ as an additional listener on the existing proxy.
 class QueryAuditTestConfig {
 
     @Bean
-    public QueryInterceptor queryGuardInterceptor() {
+    public QueryInterceptor queryAuditInterceptor() {
         return new QueryInterceptor();
     }
 

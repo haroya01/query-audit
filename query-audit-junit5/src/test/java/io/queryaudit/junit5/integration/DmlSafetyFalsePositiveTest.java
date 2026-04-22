@@ -53,8 +53,7 @@ class DmlSafetyFalsePositiveTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -72,8 +71,7 @@ class DmlSafetyFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("updateWithWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
     }
 
     @Test
@@ -86,8 +84,7 @@ class DmlSafetyFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("deleteWithWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
     }
   }
 
@@ -99,18 +96,13 @@ class DmlSafetyFalsePositiveTest {
     @DisplayName("Only 2 INSERTs should NOT trigger (threshold=3)")
     void belowThreshold() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("INSERT INTO teams (name) VALUES ('T1')")
-          .executeUpdate();
-      entityManager
-          .createNativeQuery("INSERT INTO teams (name) VALUES ('T2')")
-          .executeUpdate();
+      entityManager.createNativeQuery("INSERT INTO teams (name) VALUES ('T1')").executeUpdate();
+      entityManager.createNativeQuery("INSERT INTO teams (name) VALUES ('T2')").executeUpdate();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("belowInsertThreshold", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
     }
 
     @Test
@@ -118,15 +110,12 @@ class DmlSafetyFalsePositiveTest {
     void multiRowInsert() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "INSERT INTO teams (name) VALUES ('A'), ('B'), ('C'), ('D')")
+          .createNativeQuery("INSERT INTO teams (name) VALUES ('A'), ('B'), ('C'), ('D')")
           .executeUpdate();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("multiRowInsert", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
+      QueryAuditReport report = analyze("multiRowInsert", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
     }
   }
 
@@ -143,10 +132,8 @@ class DmlSafetyFalsePositiveTest {
           .executeUpdate();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("noSubqueryInDml", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.SUBQUERY_IN_DML);
+      QueryAuditReport report = analyze("noSubqueryInDml", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.SUBQUERY_IN_DML);
     }
   }
 
@@ -163,10 +150,8 @@ class DmlSafetyFalsePositiveTest {
           .executeUpdate();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("explicitColumns", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.IMPLICIT_COLUMNS_INSERT);
+      QueryAuditReport report = analyze("explicitColumns", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.IMPLICIT_COLUMNS_INSERT);
     }
   }
 
@@ -178,10 +163,7 @@ class DmlSafetyFalsePositiveTest {
     @DisplayName("DELETE + only 1 INSERT should NOT trigger (threshold=2)")
     void belowInsertThreshold() {
       Long teamId =
-          (Long)
-              entityManager
-                  .createNativeQuery("SELECT id FROM teams LIMIT 1")
-                  .getSingleResult();
+          (Long) entityManager.createNativeQuery("SELECT id FROM teams LIMIT 1").getSingleResult();
 
       queryInterceptor.start();
       entityManager
@@ -189,12 +171,13 @@ class DmlSafetyFalsePositiveTest {
           .executeUpdate();
       entityManager
           .createNativeQuery(
-              "INSERT INTO members (name, email, status, team_id) VALUES ('Only', 'only@t.com', 'ACTIVE', " + teamId + ")")
+              "INSERT INTO members (name, email, status, team_id) VALUES ('Only', 'only@t.com', 'ACTIVE', "
+                  + teamId
+                  + ")")
           .executeUpdate();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("singleReinsert", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("singleReinsert", queryInterceptor.getRecordedQueries());
       assertThat(allIssues(report))
           .noneMatch(i -> i.type() == IssueType.COLLECTION_DELETE_REINSERT);
     }

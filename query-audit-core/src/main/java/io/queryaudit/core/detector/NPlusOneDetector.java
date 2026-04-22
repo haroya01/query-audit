@@ -56,7 +56,8 @@ public class NPlusOneDetector implements DetectionRule {
       if (entry.getValue().size() < threshold) continue;
       if (!seen.add(entry.getKey())) continue;
 
-      String table = EnhancedSqlParser.extractTableNames(entry.getKey()).stream().findFirst().orElse(null);
+      String table =
+          EnhancedSqlParser.extractTableNames(entry.getKey()).stream().findFirst().orElse(null);
 
       issues.add(
           new Issue(

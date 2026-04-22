@@ -8,7 +8,6 @@ import java.lang.annotation.Annotation;
 import java.net.URL;
 import java.sql.Connection;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.ServiceLoader;
@@ -21,8 +20,8 @@ import javax.sql.DataSource;
  *
  * <p>When database metadata is successfully collected, it is used exclusively. JPA annotations are
  * not merged in, because they may declare indexes that do not exist in the actual database schema
- * (e.g., when {@code ddl-auto=none} and migrations have not been applied). Merging JPA-only
- * indexes would cause false positives in index-related detectors.
+ * (e.g., when {@code ddl-auto=none} and migrations have not been applied). Merging JPA-only indexes
+ * would cause false positives in index-related detectors.
  *
  * @author haroya
  * @since 0.2.0
@@ -77,8 +76,8 @@ class IndexMetadataCollector {
   }
 
   /**
-   * Discovers JPA entity classes from the classpath. Tries Spring's EntityManagerFactory first, then
-   * falls back to classpath scanning.
+   * Discovers JPA entity classes from the classpath. Tries Spring's EntityManagerFactory first,
+   * then falls back to classpath scanning.
    */
   private List<Class<?>> discoverEntityClasses() {
     List<Class<?>> entities = new ArrayList<>();
@@ -100,8 +99,7 @@ class IndexMetadataCollector {
     for (String name : entityAnnotationNames) {
       try {
         @SuppressWarnings("unchecked")
-        Class<? extends Annotation> cls =
-            (Class<? extends Annotation>) Class.forName(name);
+        Class<? extends Annotation> cls = (Class<? extends Annotation>) Class.forName(name);
         entityAnnotation = cls;
         break;
       } catch (ClassNotFoundException ignored) {
@@ -132,10 +130,7 @@ class IndexMetadataCollector {
   }
 
   private void scanForEntities(
-      File rootDir,
-      File dir,
-      Class<? extends Annotation> entityAnnotation,
-      List<Class<?>> result) {
+      File rootDir, File dir, Class<? extends Annotation> entityAnnotation, List<Class<?>> result) {
     File[] files = dir.listFiles();
     if (files == null) return;
 

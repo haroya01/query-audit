@@ -127,8 +127,7 @@ class JsonReporterTest {
             "Specify columns");
 
     QueryAuditReport report =
-        new QueryAuditReport(
-            "TC", "tm", List.of(), List.of(issue), List.of(), List.of(), 1, 1, 0L);
+        new QueryAuditReport("TC", "tm", List.of(), List.of(issue), List.of(), List.of(), 1, 1, 0L);
 
     String json = generateJson(report);
 
@@ -138,7 +137,8 @@ class JsonReporterTest {
   @Test
   void queryRecordFieldsArePresent() {
     QueryRecord query =
-        new QueryRecord("SELECT id FROM users", 9_876_543L, 0L, "at com.example.Foo.bar(Foo.java:42)");
+        new QueryRecord(
+            "SELECT id FROM users", 9_876_543L, 0L, "at com.example.Foo.bar(Foo.java:42)");
 
     QueryAuditReport report =
         new QueryAuditReport("TC", "tm", List.of(), List.of(), List.of(), List.of(query), 1, 1, 0L);
@@ -191,8 +191,7 @@ class JsonReporterTest {
             suggestionWithNewline);
 
     QueryAuditReport report =
-        new QueryAuditReport(
-            "TC", "tm", List.of(), List.of(issue), List.of(), List.of(), 1, 1, 0L);
+        new QueryAuditReport("TC", "tm", List.of(), List.of(issue), List.of(), List.of(), 1, 1, 0L);
 
     String json = generateJson(report);
 
@@ -231,25 +230,15 @@ class JsonReporterTest {
 
   @Test
   void multipleIssuesAndQueriesProduceValidJson() {
-    Issue issue1 =
-        new Issue(IssueType.N_PLUS_ONE, Severity.ERROR, "sql1", "t1", null, "d1", "s1");
-    Issue issue2 =
-        new Issue(IssueType.OR_ABUSE, Severity.WARNING, "sql2", "t2", "c2", "d2", "s2");
+    Issue issue1 = new Issue(IssueType.N_PLUS_ONE, Severity.ERROR, "sql1", "t1", null, "d1", "s1");
+    Issue issue2 = new Issue(IssueType.OR_ABUSE, Severity.WARNING, "sql2", "t2", "c2", "d2", "s2");
 
     QueryRecord q1 = new QueryRecord("SELECT 1", 100L, 0L, "stack1");
     QueryRecord q2 = new QueryRecord("SELECT 2", 200L, 0L, "stack2");
 
     QueryAuditReport report =
         new QueryAuditReport(
-            "TC",
-            "tm",
-            List.of(issue1, issue2),
-            List.of(),
-            List.of(),
-            List.of(q1, q2),
-            2,
-            2,
-            300L);
+            "TC", "tm", List.of(issue1, issue2), List.of(), List.of(), List.of(q1, q2), 2, 2, 300L);
 
     String json = generateJson(report);
 

@@ -13,6 +13,7 @@ import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -667,7 +668,7 @@ class CrossDetectorTest {
       List<Issue> allIssuesList = allIssues(report);
 
       // For the same IssueType and same query, severity should be consistent
-      Map<String, Set<Severity>> severitiesByKey = new java.util.HashMap<>();
+      Map<String, Set<Severity>> severitiesByKey = new HashMap<>();
       for (Issue issue : allIssuesList) {
         String key = issue.type() + "|" + issue.query();
         severitiesByKey.computeIfAbsent(key, k -> new HashSet<>()).add(issue.severity());

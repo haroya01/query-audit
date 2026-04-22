@@ -99,8 +99,7 @@ class LikeWildcardDetectorTest {
   @Test
   void noDuplicateWhenBothLiteralAndParameterizedLikePresent() {
     // Literal leading wildcard takes precedence — WARNING only, no additional INFO row.
-    String sql =
-        "SELECT * FROM users WHERE name LIKE '%foo' OR email LIKE ?";
+    String sql = "SELECT * FROM users WHERE name LIKE '%foo' OR email LIKE ?";
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
@@ -116,5 +115,26 @@ class LikeWildcardDetectorTest {
 
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+  }
+
+  @Test
+  void detectsIlikeLeadingWildcard() {
+    // PostgreSQL ILIKE is case-insensitive but has the same leading-wildcard full-scan problem.
+    String sql = "SELECT * FROM users WHERE name ILIKE '%foo'";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+  }
+
+  @Test
+  void detectsParameterizedIlike() {
+    String sql = "SELECT * FROM users WHERE name ILIKE ?";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
   }
 }

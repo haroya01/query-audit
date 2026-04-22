@@ -44,8 +44,7 @@ class SpringDataReturnTypeResolverTest {
     @Test
     void returnsNullForNonProxyStack() {
       String stack =
-          "com.example.dao.CustomDao.fetch:30\n"
-              + "com.example.service.SomeService.get:12";
+          "com.example.dao.CustomDao.fetch:30\n" + "com.example.service.SomeService.get:12";
 
       assertThat(SpringDataReturnTypeResolver.extractProxyKey(stack)).isNull();
     }
@@ -172,11 +171,9 @@ class SpringDataReturnTypeResolverTest {
     @Test
     void differentProxiesProduceDifferentKeys() {
       String userRepoStack =
-          "jdk.proxy3.$Proxy100.findByStatus:-1\n"
-              + "com.example.service.UserService.find:10";
+          "jdk.proxy3.$Proxy100.findByStatus:-1\n" + "com.example.service.UserService.find:10";
       String orderRepoStack =
-          "jdk.proxy3.$Proxy200.findByStatus:-1\n"
-              + "com.example.service.OrderService.find:10";
+          "jdk.proxy3.$Proxy200.findByStatus:-1\n" + "com.example.service.OrderService.find:10";
 
       String userKey = SpringDataReturnTypeResolver.extractProxyKey(userRepoStack);
       String orderKey = SpringDataReturnTypeResolver.extractProxyKey(orderRepoStack);
@@ -202,8 +199,7 @@ class SpringDataReturnTypeResolverTest {
           new SpringDataReturnTypeResolver(new FakeEmptyApplicationContext());
 
       String stack =
-          "jdk.proxy3.$Proxy999.findByStatus:-1\n"
-              + "com.example.service.SomeService.call:10";
+          "jdk.proxy3.$Proxy999.findByStatus:-1\n" + "com.example.service.SomeService.call:10";
 
       RepositoryReturnType result = resolver.resolve(stack);
 
@@ -212,8 +208,8 @@ class SpringDataReturnTypeResolverTest {
   }
 
   /**
-   * Minimal fake ApplicationContext that returns an empty bean map.
-   * getBeansOfType(Class) is the only method called by SpringDataReturnTypeResolver.
+   * Minimal fake ApplicationContext that returns an empty bean map. getBeansOfType(Class) is the
+   * only method called by SpringDataReturnTypeResolver.
    */
   @SuppressWarnings("unused")
   static class FakeEmptyApplicationContext {

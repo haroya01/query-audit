@@ -2,6 +2,7 @@ package io.queryaudit.core.parser;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -1084,7 +1085,7 @@ public final class SqlParser {
       return List.of();
     }
 
-    List<String> columns = new java.util.ArrayList<>();
+    List<String> columns = new ArrayList<>();
     for (String part : orParts) {
       Matcher m = OR_BRANCH_COL.matcher(part.trim());
       if (!m.find()) {
@@ -1094,7 +1095,7 @@ public final class SqlParser {
       if (col == null || isKeyword(col)) {
         return List.of();
       }
-      columns.add(col.toLowerCase(java.util.Locale.ROOT));
+      columns.add(col.toLowerCase(Locale.ROOT));
     }
     return columns;
   }

@@ -16,16 +16,16 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Resolves Spring Data repository method return types by inspecting the ApplicationContext.
- * Parses JDK proxy frames from the stack trace to extract the proxy class and method name,
- * then maps the proxy to its repository interface and reflects on the method's return type.
+ * Resolves Spring Data repository method return types by inspecting the ApplicationContext. Parses
+ * JDK proxy frames from the stack trace to extract the proxy class and method name, then maps the
+ * proxy to its repository interface and reflects on the method's return type.
  *
  * <p>Keyed by "proxyClassName.methodName" to avoid method name collisions across different
- * repositories (e.g., {@code UserRepository.findByStatus} returning {@code Optional<User>}
- * vs {@code OrderRepository.findByStatus} returning {@code List<Order>}).
+ * repositories (e.g., {@code UserRepository.findByStatus} returning {@code Optional<User>} vs
+ * {@code OrderRepository.findByStatus} returning {@code List<Order>}).
  *
- * <p>All Spring classes are accessed via reflection to avoid compile-time dependencies on
- * Spring Data in this module.
+ * <p>All Spring classes are accessed via reflection to avoid compile-time dependencies on Spring
+ * Data in this module.
  *
  * @author haroya
  * @since 0.3.0
@@ -33,9 +33,9 @@ import java.util.stream.Stream;
 class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
 
   /**
-   * Matches JDK dynamic proxy frames: {@code jdk.proxy3.$Proxy296.findByRoomId:-1}
-   * Group 1: full proxy class (e.g., {@code jdk.proxy3.$Proxy296})
-   * Group 2: method name (e.g., {@code findByRoomId})
+   * Matches JDK dynamic proxy frames: {@code jdk.proxy3.$Proxy296.findByRoomId:-1} Group 1: full
+   * proxy class (e.g., {@code jdk.proxy3.$Proxy296}) Group 2: method name (e.g., {@code
+   * findByRoomId})
    */
   private static final Pattern PROXY_FRAME_PATTERN =
       Pattern.compile("(jdk\\.proxy\\d+\\.\\$Proxy\\d+)\\.(\\w+):-?\\d+");
@@ -43,8 +43,8 @@ class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
   private final Map<String, RepositoryReturnType> cache = new ConcurrentHashMap<>();
 
   /**
-   * Maps "proxyClassName.methodName" → return type. Built at construction time by scanning
-   * the ApplicationContext for all Spring Data repository beans.
+   * Maps "proxyClassName.methodName" → return type. Built at construction time by scanning the
+   * ApplicationContext for all Spring Data repository beans.
    */
   private final Map<String, RepositoryReturnType> proxyMethodReturnTypes;
 
@@ -68,23 +68,25 @@ class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
       return RepositoryReturnType.UNKNOWN;
     }
 
-    return cache.computeIfAbsent(key, k -> {
-      // Try exact match first (proxyClass.methodName)
-      RepositoryReturnType type = proxyMethodReturnTypes.get(k);
-      if (type != null) {
-        return type;
-      }
-      // No fallback by method name alone — different repositories may have
-      // methods with the same name but different return types. Returning
-      // UNKNOWN keeps the detector's default WARNING, which is safer than
-      // guessing the wrong type and silently suppressing a real issue.
-      return RepositoryReturnType.UNKNOWN;
-    });
+    return cache.computeIfAbsent(
+        key,
+        k -> {
+          // Try exact match first (proxyClass.methodName)
+          RepositoryReturnType type = proxyMethodReturnTypes.get(k);
+          if (type != null) {
+            return type;
+          }
+          // No fallback by method name alone — different repositories may have
+          // methods with the same name but different return types. Returning
+          // UNKNOWN keeps the detector's default WARNING, which is safer than
+          // guessing the wrong type and silently suppressing a real issue.
+          return RepositoryReturnType.UNKNOWN;
+        });
   }
 
   /**
-   * Extracts the proxy key "proxyClassName.methodName" from the stack trace.
-   * Returns null if no proxy frame is found.
+   * Extracts the proxy key "proxyClassName.methodName" from the stack trace. Returns null if no
+   * proxy frame is found.
    */
   static String extractProxyKey(String stackTrace) {
     if (stackTrace == null) {
@@ -97,9 +99,7 @@ class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
     return null;
   }
 
-  /**
-   * Extracts just the method name from the stack trace (for testing/backward compat).
-   */
+  /** Extracts just the method name from the stack trace (for testing/backward compat). */
   static String extractProxyMethodName(String stackTrace) {
     String key = extractProxyKey(stackTrace);
     if (key == null) {
@@ -117,8 +117,7 @@ class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
     Map<String, RepositoryReturnType> result = new ConcurrentHashMap<>();
 
     try {
-      Class<?> repositoryClass =
-          Class.forName("org.springframework.data.repository.Repository");
+      Class<?> repositoryClass = Class.forName("org.springframework.data.repository.Repository");
 
       Method getBeansOfType =
           applicationContext.getClass().getMethod("getBeansOfType", Class.class);
@@ -158,11 +157,10 @@ class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
   }
 
   /**
-   * Collects all methods from the interface hierarchy, excluding methods declared on
-   * Spring Data's own interfaces (CrudRepository, JpaRepository, etc.).
+   * Collects all methods from the interface hierarchy, excluding methods declared on Spring Data's
+   * own interfaces (CrudRepository, JpaRepository, etc.).
    */
-  private List<Method> collectUserMethods(
-      Class<?> iface, Class<?> repositoryMarker) {
+  private List<Method> collectUserMethods(Class<?> iface, Class<?> repositoryMarker) {
     List<Method> methods = new ArrayList<>();
 
     // getMethods() walks the full interface hierarchy
@@ -191,8 +189,7 @@ class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
 
     // Page<T> / Slice<T> — use isAssignableFrom to catch subtypes (e.g., PageImpl)
     try {
-      Class<?> sliceClass =
-          Class.forName("org.springframework.data.domain.Slice");
+      Class<?> sliceClass = Class.forName("org.springframework.data.domain.Slice");
       if (sliceClass.isAssignableFrom(rawType)) {
         return RepositoryReturnType.PAGE_OR_SLICE;
       }

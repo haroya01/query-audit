@@ -1,9 +1,9 @@
 package io.queryaudit.core.parser;
 
 /**
- * Represents a SQL function invocation on a column, such as {@code UPPER(name)} or
- * {@code DATE(created_at)}. Captures the function name, the column it wraps, and an optional
- * table or alias qualifier. Used to detect non-sargable expressions in WHERE clauses.
+ * Represents a SQL function invocation on a column, such as {@code UPPER(name)} or {@code
+ * DATE(created_at)}. Captures the function name, the column it wraps, and an optional table or
+ * alias qualifier. Used to detect non-sargable expressions in WHERE clauses.
  *
  * @author haroya
  * @since 0.2.0

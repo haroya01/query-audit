@@ -50,8 +50,7 @@ class MySqlExplainAnalyzerTest {
     void detectsFullTableScan() throws SQLException {
       mockExplainResult("users", "ALL", null, 10000L, null);
 
-      List<QueryRecord> queries =
-          List.of(new QueryRecord("SELECT * FROM users", 0L, 0L, null));
+      List<QueryRecord> queries = List.of(new QueryRecord("SELECT * FROM users", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
@@ -69,7 +68,8 @@ class MySqlExplainAnalyzerTest {
       mockExplainResult("users", "ref", "idx_email", 5L, null);
 
       List<QueryRecord> queries =
-          List.of(new QueryRecord("SELECT * FROM users WHERE email = 'test@test.com'", 0L, 0L, null));
+          List.of(
+              new QueryRecord("SELECT * FROM users WHERE email = 'test@test.com'", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
@@ -112,14 +112,14 @@ class MySqlExplainAnalyzerTest {
 
       List<QueryRecord> queries =
           List.of(
-              new QueryRecord(
-                  "SELECT status, COUNT(*) FROM orders GROUP BY status", 0L, 0L, null));
+              new QueryRecord("SELECT status, COUNT(*) FROM orders GROUP BY status", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
       // Both FULL_TABLE_SCAN (ALL) + FILESORT + TEMPORARY_TABLE
       assertThat(issues).hasSize(3);
-      assertThat(issues).extracting(Issue::type)
+      assertThat(issues)
+          .extracting(Issue::type)
           .containsExactlyInAnyOrder(
               IssueType.FULL_TABLE_SCAN, IssueType.FILESORT, IssueType.TEMPORARY_TABLE);
     }
@@ -165,7 +165,8 @@ class MySqlExplainAnalyzerTest {
     @Test
     @DisplayName("gracefully handles EXPLAIN failures")
     void handlesExplainFailures() throws SQLException {
-      when(statement.executeQuery(startsWith("EXPLAIN"))).thenThrow(new SQLException("Syntax error"));
+      when(statement.executeQuery(startsWith("EXPLAIN")))
+          .thenThrow(new SQLException("Syntax error"));
 
       List<QueryRecord> queries =
           List.of(new QueryRecord("SELECT * FROM nonexistent_table", 0L, 0L, null));
@@ -191,16 +192,15 @@ class MySqlExplainAnalyzerTest {
     @Test
     @DisplayName("replaces single ? placeholder with dummy value")
     void replacesSinglePlaceholder() {
-      String result = MySqlExplainAnalyzer.prepareForExplain(
-          "SELECT * FROM users WHERE id = ?");
+      String result = MySqlExplainAnalyzer.prepareForExplain("SELECT * FROM users WHERE id = ?");
       assertThat(result).isEqualTo("SELECT * FROM users WHERE id = 1");
     }
 
     @Test
     @DisplayName("replaces multiple ? placeholders")
     void replacesMultiplePlaceholders() {
-      String result = MySqlExplainAnalyzer.prepareForExplain(
-          "SELECT * FROM users WHERE a = ? AND b = ?");
+      String result =
+          MySqlExplainAnalyzer.prepareForExplain("SELECT * FROM users WHERE a = ? AND b = ?");
       assertThat(result).isEqualTo("SELECT * FROM users WHERE a = 1 AND b = 1");
     }
 
@@ -232,13 +232,11 @@ class MySqlExplainAnalyzerTest {
       mockExplainResult("users", "ref", "PRIMARY", 1L, null);
 
       List<QueryRecord> queries =
-          List.of(new QueryRecord(
-              "SELECT * FROM users WHERE a = ? AND b = ?", 0L, 0L, null));
+          List.of(new QueryRecord("SELECT * FROM users WHERE a = ? AND b = ?", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
-      verify(statement).executeQuery(
-          "EXPLAIN SELECT * FROM users WHERE a = 1 AND b = 1");
+      verify(statement).executeQuery("EXPLAIN SELECT * FROM users WHERE a = 1 AND b = 1");
     }
   }
 

@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -18,11 +17,11 @@ import java.util.regex.Pattern;
  * Detects queries that use FORCE INDEX, USE INDEX, or IGNORE INDEX hints.
  *
  * <p>Index hints hard-code the optimizer's index choice into the application code. As the schema
- * evolves (indexes added, dropped, or renamed), these hints become stale and can cause the optimizer
- * to make <em>worse</em> decisions than it would without the hint.
+ * evolves (indexes added, dropped, or renamed), these hints become stale and can cause the
+ * optimizer to make <em>worse</em> decisions than it would without the hint.
  *
- * <p>In most cases, fixing the query or schema is better than forcing an index. Hints should only be
- * used as a last resort with a comment explaining why.
+ * <p>In most cases, fixing the query or schema is better than forcing an index. Hints should only
+ * be used as a last resort with a comment explaining why.
  *
  * @author haroya
  * @since 0.2.0
@@ -36,8 +35,7 @@ public class ForceIndexHintDetector implements DetectionRule {
 
   private static final Pattern INDEX_HINT =
       Pattern.compile(
-          "\\b(FORCE\\s+INDEX|USE\\s+INDEX|IGNORE\\s+INDEX)\\s*\\(",
-          Pattern.CASE_INSENSITIVE);
+          "\\b(FORCE\\s+INDEX|USE\\s+INDEX|IGNORE\\s+INDEX)\\s*\\(", Pattern.CASE_INSENSITIVE);
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
@@ -79,7 +77,8 @@ public class ForceIndexHintDetector implements DetectionRule {
               normalized,
               table,
               null,
-              hintType + " hint detected — this overrides the query optimizer's index choice"
+              hintType
+                  + " hint detected — this overrides the query optimizer's index choice"
                   + (table != null ? " on table '" + table + "'" : ""),
               "Index hints become stale as the schema evolves. Prefer fixing the query or "
                   + "updating statistics (ANALYZE TABLE) instead. If a hint is truly needed, "
@@ -91,9 +90,9 @@ public class ForceIndexHintDetector implements DetectionRule {
   }
 
   /**
-   * Returns true if the stack trace indicates a migration or schema script context.
-   * FORCE INDEX in migrations is acceptable because migrations run once and the
-   * hint is specific to that schema version.
+   * Returns true if the stack trace indicates a migration or schema script context. FORCE INDEX in
+   * migrations is acceptable because migrations run once and the hint is specific to that schema
+   * version.
    */
   private boolean isMigrationContext(String stackTrace) {
     if (stackTrace == null || stackTrace.isEmpty()) {

@@ -570,13 +570,16 @@ query-audit:
 | | |
 |---|---|
 | **Issue code** | `like-leading-wildcard` |
-| **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
+| **Severity** | WARNING for literal leading-wildcard (`LIKE '%foo'`) / INFO for parameterized `LIKE ?` |
+| **Confidence** | Confirmed for literals; suggestive for `LIKE ?` (runtime value is unknown) |
 
 #### Why It Matters
 
 `LIKE '%keyword'` prevents B-tree index usage because the search pattern starts with an unknown
 prefix. MySQL must scan every row.
+
+Parameterized `LIKE ?` cannot be checked statically — the runtime binding may begin with `%` and
+cause the same full scan. The detector emits an INFO-level heads-up for this case.
 
 #### Examples and Fixes
 

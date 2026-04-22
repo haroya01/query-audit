@@ -241,8 +241,7 @@ class UpdateWithoutWhereDetectorTest {
     @Test
     @DisplayName("No false positive for UPDATE with JOIN (has ON filtering)")
     void noFalsePositiveForUpdateWithJoin() {
-      String sql =
-          "UPDATE orders o JOIN users u ON o.user_id = u.id SET o.status = 'active'";
+      String sql = "UPDATE orders o JOIN users u ON o.user_id = u.id SET o.status = 'active'";
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
@@ -261,8 +260,7 @@ class UpdateWithoutWhereDetectorTest {
     @Test
     @DisplayName("No false positive for DELETE with JOIN")
     void noFalsePositiveForDeleteWithJoin() {
-      String sql =
-          "DELETE o FROM orders o JOIN cancelled c ON o.id = c.order_id";
+      String sql = "DELETE o FROM orders o JOIN cancelled c ON o.id = c.order_id";
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
@@ -271,8 +269,7 @@ class UpdateWithoutWhereDetectorTest {
     @Test
     @DisplayName("No false positive for DELETE with USING clause (PostgreSQL)")
     void noFalsePositiveForDeleteWithUsing() {
-      String sql =
-          "DELETE FROM orders USING cancelled WHERE orders.id = cancelled.order_id";
+      String sql = "DELETE FROM orders USING cancelled WHERE orders.id = cancelled.order_id";
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();

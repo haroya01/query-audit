@@ -491,12 +491,12 @@ condition, the result set is guaranteed to be at most 1 row. In that case:
 SELECT * FROM orders WHERE id = 123 AND status = 'pending';
 ```
 
-### 4. LIKE Operator Exclusion
+### 4. Leading-Wildcard LIKE Exclusion
 
-Columns with `LIKE` operators are **skipped** by `MissingIndexDetector`. The `LikeWildcardDetector`
-handles leading-wildcard LIKE patterns separately, and for non-leading-wildcard LIKE, the
-effectiveness of a B-tree index depends on the pattern, which cannot be determined from
-normalized SQL.
+`MissingIndexDetector` skips only columns compared against a leading-wildcard literal
+(`LIKE '%foo'`); those are handled by `LikeWildcardDetector` and a B-tree wouldn't help anyway.
+Prefix LIKEs (`LIKE 'foo%'`) and parameterized `LIKE ?` fall through to the regular
+missing-index check because the column can still benefit from a B-tree index.
 
 ### 5. IS NULL / IS NOT NULL Exclusion
 
@@ -525,7 +525,7 @@ GROUP BY columns are skipped when:
 | Low cardinality (sole filter) | `status = ?` as only WHERE condition | Downgrade to INFO |
 | Low cardinality (with indexed column) | `status = ?` with another indexed WHERE column | Suppress entirely |
 | Unique/PK short-circuit | `id = ?` in WHERE (primary key) | Skip all other missing index warnings for that table |
-| LIKE operator | `name LIKE ?` | Skip (deferred to LikeWildcardDetector) |
+| Leading-wildcard LIKE | `name LIKE '%foo'` | Skip (deferred to LikeWildcardDetector) |
 | IS NULL / IS NOT NULL | `phone IS NULL` | Skip (poor selectivity) |
 | Composite index member | Column in any composite index | Skip (deferred to CompositeIndexDetector) |
 | GROUP BY with PK | All PK columns in GROUP BY | Skip |

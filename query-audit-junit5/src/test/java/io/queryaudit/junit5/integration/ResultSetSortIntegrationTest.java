@@ -72,13 +72,11 @@ class ResultSetSortIntegrationTest {
   private QueryAuditReport analyze(
       String testName, List<QueryRecord> queries, IndexMetadata indexMetadata) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-    return analyzer.analyze(
-        "ResultSetSortIntegrationTest", testName, queries, indexMetadata);
+    return analyzer.analyze("ResultSetSortIntegrationTest", testName, queries, indexMetadata);
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -97,8 +95,7 @@ class ResultSetSortIntegrationTest {
 
       QueryAuditReport report =
           analyze("unboundedResultSet", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
     }
   }
 
@@ -110,15 +107,12 @@ class ResultSetSortIntegrationTest {
     @DisplayName("LIMIT without ORDER BY returns non-deterministic results")
     void detectsLimitWithoutOrderBy() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members LIMIT 10")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members LIMIT 10").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("limitWithoutOrderBy", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.LIMIT_WITHOUT_ORDER_BY);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.LIMIT_WITHOUT_ORDER_BY);
     }
   }
 
@@ -131,15 +125,12 @@ class ResultSetSortIntegrationTest {
     void detectsLargeOffset() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM members ORDER BY id LIMIT 10 OFFSET 1000")
+          .createNativeQuery("SELECT * FROM members ORDER BY id LIMIT 10 OFFSET 1000")
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("largeOffset", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.OFFSET_PAGINATION);
+      QueryAuditReport report = analyze("largeOffset", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.OFFSET_PAGINATION);
     }
   }
 
@@ -160,8 +151,7 @@ class ResultSetSortIntegrationTest {
 
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM members ORDER BY status LIMIT 10")
+          .createNativeQuery("SELECT * FROM members ORDER BY status LIMIT 10")
           .getResultList();
       queryInterceptor.stop();
 
@@ -186,8 +176,7 @@ class ResultSetSortIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("orderByRand", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.ORDER_BY_RAND);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.ORDER_BY_RAND);
     }
   }
 
@@ -200,9 +189,7 @@ class ResultSetSortIntegrationTest {
     void detectsOrderByLimitWithoutIndex() {
       IndexMetadata meta =
           new IndexMetadata(
-              Map.of(
-                  "members",
-                  List.of(new IndexInfo("members", "PRIMARY", "id", 1, false, 100))));
+              Map.of("members", List.of(new IndexInfo("members", "PRIMARY", "id", 1, false, 100))));
 
       queryInterceptor.start();
       entityManager
@@ -230,8 +217,7 @@ class ResultSetSortIntegrationTest {
 
       QueryAuditReport report =
           analyze("countStarWithoutWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.COUNT_STAR_WITHOUT_WHERE);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.COUNT_STAR_WITHOUT_WHERE);
     }
   }
 
@@ -250,8 +236,7 @@ class ResultSetSortIntegrationTest {
 
       QueryAuditReport report =
           analyze("countInsteadOfExists", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.COUNT_INSTEAD_OF_EXISTS);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.COUNT_INSTEAD_OF_EXISTS);
     }
   }
 
@@ -273,8 +258,7 @@ class ResultSetSortIntegrationTest {
 
       QueryAuditReport report =
           analyze("excessiveColumnFetch", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.EXCESSIVE_COLUMN_FETCH);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.EXCESSIVE_COLUMN_FETCH);
     }
   }
 
@@ -287,8 +271,7 @@ class ResultSetSortIntegrationTest {
     void detectsWindowFunctionWithoutPartition() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT name, SUM(id) OVER () AS running_total FROM members")
+          .createNativeQuery("SELECT name, SUM(id) OVER () AS running_total FROM members")
           .getResultList();
       queryInterceptor.stop();
 

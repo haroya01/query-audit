@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.junit5.integration.TestApplication;
 import jakarta.persistence.EntityManagerFactory;
+import java.util.ArrayList;
+import java.util.List;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.event.service.spi.EventListenerGroup;
 import org.hibernate.event.service.spi.EventListenerRegistry;
@@ -86,8 +88,8 @@ class HibernateIntegrationLifecycleTest {
     return listenerGroup(eventType).count();
   }
 
-  private java.util.List<Object> listenerInstances(EventType<?> eventType) {
-    java.util.List<Object> out = new java.util.ArrayList<>();
+  private List<Object> listenerInstances(EventType<?> eventType) {
+    List<Object> out = new ArrayList<>();
     for (Object listener : listenerGroup(eventType).listeners()) {
       out.add(listener);
     }

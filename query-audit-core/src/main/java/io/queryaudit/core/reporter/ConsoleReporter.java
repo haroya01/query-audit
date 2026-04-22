@@ -8,7 +8,6 @@ import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.ranking.ImpactScorer;
 import io.queryaudit.core.ranking.RankedIssue;
 import java.io.PrintStream;

@@ -23,8 +23,8 @@ class CustomDetectionRuleTest {
   }
 
   /**
-   * A simple custom detection rule that flags any query containing the keyword "FORBIDDEN".
-   * Used to verify that custom rules can be passed via the constructor.
+   * A simple custom detection rule that flags any query containing the keyword "FORBIDDEN". Used to
+   * verify that custom rules can be passed via the constructor.
    */
   static class ForbiddenKeywordDetector implements DetectionRule {
 
@@ -70,14 +70,12 @@ class CustomDetectionRuleTest {
         new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of(), additionalRules);
 
     // This query triggers both SELECT * (built-in) and FORBIDDEN (custom)
-    List<QueryRecord> queries =
-        List.of(record("SELECT * FROM FORBIDDEN_TABLE WHERE id = 1"));
+    List<QueryRecord> queries = List.of(record("SELECT * FROM FORBIDDEN_TABLE WHERE id = 1"));
 
     QueryAuditReport report = analyzer.analyze("bothRulesTest", queries, EMPTY_INDEX);
 
     // Built-in SELECT * detector should fire (INFO severity)
-    assertThat(report.getInfoIssues())
-        .anyMatch(i -> i.type() == IssueType.SELECT_ALL);
+    assertThat(report.getInfoIssues()).anyMatch(i -> i.type() == IssueType.SELECT_ALL);
 
     // Custom ForbiddenKeywordDetector should also fire (WARNING severity -> confirmed)
     assertThat(report.getConfirmedIssues())
@@ -101,7 +99,8 @@ class CustomDetectionRuleTest {
   void additionalRulesViaPathConstructor_areEvaluated() {
     List<DetectionRule> additionalRules = List.of(new ForbiddenKeywordDetector());
     QueryAuditAnalyzer analyzer =
-        new QueryAuditAnalyzer(QueryAuditConfig.defaults(), (java.nio.file.Path) null, additionalRules);
+        new QueryAuditAnalyzer(
+            QueryAuditConfig.defaults(), (java.nio.file.Path) null, additionalRules);
 
     List<QueryRecord> queries = List.of(record("SELECT id FROM FORBIDDEN_TABLE WHERE id = 1"));
 
@@ -117,8 +116,7 @@ class CustomDetectionRuleTest {
     // registers TestServiceLoaderDetectionRule, which flags queries containing "SERVICELOADER_TEST"
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
 
-    List<QueryRecord> queries =
-        List.of(record("SELECT id FROM SERVICELOADER_TEST WHERE id = 1"));
+    List<QueryRecord> queries = List.of(record("SELECT id FROM SERVICELOADER_TEST WHERE id = 1"));
 
     QueryAuditReport report = analyzer.analyze("serviceLoaderTest", queries, EMPTY_INDEX);
 

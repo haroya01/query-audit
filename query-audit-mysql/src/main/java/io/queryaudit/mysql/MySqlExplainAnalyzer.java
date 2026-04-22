@@ -77,8 +77,8 @@ public class MySqlExplainAnalyzer implements ExplainAnalyzer {
    * executed as a plain {@code EXPLAIN} statement. datasource-proxy captures SQL with {@code ?}
    * placeholders which are invalid in a non-PreparedStatement context.
    *
-   * <p>Using {@code 1} is safe because EXPLAIN only plans the query without executing it, and
-   * MySQL uses index statistics rather than actual parameter values to choose the plan.
+   * <p>Using {@code 1} is safe because EXPLAIN only plans the query without executing it, and MySQL
+   * uses index statistics rather than actual parameter values to choose the plan.
    */
   static String prepareForExplain(String sql) {
     return sql.replaceAll("\\?", "1");

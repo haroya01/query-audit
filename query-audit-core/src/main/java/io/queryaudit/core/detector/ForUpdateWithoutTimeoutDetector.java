@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -28,8 +27,7 @@ public class ForUpdateWithoutTimeoutDetector implements DetectionRule {
   private static final Pattern FOR_UPDATE =
       Pattern.compile("\\bFOR\\s+(?:UPDATE|SHARE)\\b", Pattern.CASE_INSENSITIVE);
 
-  private static final Pattern NOWAIT =
-      Pattern.compile("\\bNOWAIT\\b", Pattern.CASE_INSENSITIVE);
+  private static final Pattern NOWAIT = Pattern.compile("\\bNOWAIT\\b", Pattern.CASE_INSENSITIVE);
 
   private static final Pattern SKIP_LOCKED =
       Pattern.compile("\\bSKIP\\s+LOCKED\\b", Pattern.CASE_INSENSITIVE);

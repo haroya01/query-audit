@@ -10,9 +10,9 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Aggregates index information for all tables and provides lookup methods to check whether
- * a given column is indexed, uniquely indexed, or part of a composite index. Serves as the
- * central index metadata store consumed by various issue detectors.
+ * Aggregates index information for all tables and provides lookup methods to check whether a given
+ * column is indexed, uniquely indexed, or part of a composite index. Serves as the central index
+ * metadata store consumed by various issue detectors.
  *
  * @author haroya
  * @since 0.2.0
@@ -49,10 +49,10 @@ public class IndexMetadata {
   }
 
   /**
-   * Returns {@code true} if there exists a UNIQUE (or PRIMARY KEY) index on the given table
-   * whose columns are all contained in the provided set of equality columns. Handles both
-   * single-column and composite unique indexes — when all columns of such an index appear as
-   * equality conditions, the query is guaranteed to return at most one row.
+   * Returns {@code true} if there exists a UNIQUE (or PRIMARY KEY) index on the given table whose
+   * columns are all contained in the provided set of equality columns. Handles both single-column
+   * and composite unique indexes — when all columns of such an index appear as equality conditions,
+   * the query is guaranteed to return at most one row.
    */
   public boolean hasUniqueIndexCoveredBy(String table, Set<String> columns) {
     if (table == null || columns == null || columns.isEmpty()) {
@@ -90,7 +90,7 @@ public class IndexMetadata {
    * PRIMARY KEY) index on the given table. This handles both single-column and composite unique
    * indexes. A full cover guarantees at most one row for equality predicates on all those columns.
    */
-  public boolean columnsMatchUniqueIndex(String table, java.util.Set<String> columns) {
+  public boolean columnsMatchUniqueIndex(String table, Set<String> columns) {
     if (table == null || columns == null || columns.isEmpty()) {
       return false;
     }
@@ -100,7 +100,7 @@ public class IndexMetadata {
     }
 
     // Group unique indexes by name
-    java.util.Map<String, List<IndexInfo>> uniqueIndexes =
+    Map<String, List<IndexInfo>> uniqueIndexes =
         indexes.stream()
             .filter(idx -> !idx.nonUnique() && idx.indexName() != null)
             .collect(Collectors.groupingBy(IndexInfo::indexName));
@@ -112,8 +112,7 @@ public class IndexMetadata {
               .allMatch(
                   idx ->
                       idx.columnName() != null
-                          && columns.stream()
-                              .anyMatch(c -> c.equalsIgnoreCase(idx.columnName())));
+                          && columns.stream().anyMatch(c -> c.equalsIgnoreCase(idx.columnName())));
       if (allCovered) {
         return true;
       }

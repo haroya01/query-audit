@@ -14,8 +14,12 @@ class EnhancedWhereColumnsWithOpsTest {
   void comparisonOperators() {
     String sql = "SELECT * FROM t WHERE a = 1 AND b > 2 AND c <= 10 AND d != 5";
     List<WhereColumnReference> cols = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
-    assertThat(cols).extracting(WhereColumnReference::columnName).containsExactly("a", "b", "c", "d");
-    assertThat(cols).extracting(WhereColumnReference::operator).containsExactly("=", ">", "<=", "!=");
+    assertThat(cols)
+        .extracting(WhereColumnReference::columnName)
+        .containsExactly("a", "b", "c", "d");
+    assertThat(cols)
+        .extracting(WhereColumnReference::operator)
+        .containsExactly("=", ">", "<=", "!=");
   }
 
   @Test
@@ -23,7 +27,9 @@ class EnhancedWhereColumnsWithOpsTest {
   void isNull() {
     String sql = "SELECT * FROM t WHERE deleted_at IS NULL AND flagged_at IS NOT NULL";
     List<WhereColumnReference> cols = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
-    assertThat(cols).extracting(WhereColumnReference::columnName).containsExactly("deleted_at", "flagged_at");
+    assertThat(cols)
+        .extracting(WhereColumnReference::columnName)
+        .containsExactly("deleted_at", "flagged_at");
     assertThat(cols).extracting(WhereColumnReference::operator).containsExactly("IS", "IS NOT");
   }
 
@@ -34,9 +40,11 @@ class EnhancedWhereColumnsWithOpsTest {
         "SELECT * FROM t WHERE name LIKE 'a%' AND code NOT LIKE 'x_' "
             + "AND id IN (1,2) AND kind NOT IN (3,4) AND age BETWEEN 18 AND 30";
     List<WhereColumnReference> cols = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
-    assertThat(cols).extracting(WhereColumnReference::columnName)
+    assertThat(cols)
+        .extracting(WhereColumnReference::columnName)
         .containsExactly("name", "code", "id", "kind", "age");
-    assertThat(cols).extracting(WhereColumnReference::operator)
+    assertThat(cols)
+        .extracting(WhereColumnReference::operator)
         .containsExactly("LIKE", "NOT LIKE", "IN", "NOT IN", "BETWEEN");
   }
 
@@ -51,7 +59,8 @@ class EnhancedWhereColumnsWithOpsTest {
   @Test
   @DisplayName("Table-qualified columns preserve alias")
   void qualifiedColumns() {
-    String sql = "SELECT * FROM users u JOIN orders o ON u.id=o.user_id WHERE u.name = 'X' AND o.status IN (1,2)";
+    String sql =
+        "SELECT * FROM users u JOIN orders o ON u.id=o.user_id WHERE u.name = 'X' AND o.status IN (1,2)";
     List<WhereColumnReference> cols = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
     assertThat(cols).extracting(WhereColumnReference::columnName).containsExactly("name", "status");
     assertThat(cols.get(0).tableOrAlias()).isEqualTo("u");
@@ -63,7 +72,9 @@ class EnhancedWhereColumnsWithOpsTest {
   void hibernateAliases() {
     String sql = "select u1_0.id from users u1_0 where u1_0.deleted_at is null and u1_0.id = ?";
     List<WhereColumnReference> cols = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
-    assertThat(cols).extracting(WhereColumnReference::columnName).containsExactly("deleted_at", "id");
+    assertThat(cols)
+        .extracting(WhereColumnReference::columnName)
+        .containsExactly("deleted_at", "id");
     assertThat(cols).extracting(WhereColumnReference::operator).containsExactly("IS", "=");
   }
 

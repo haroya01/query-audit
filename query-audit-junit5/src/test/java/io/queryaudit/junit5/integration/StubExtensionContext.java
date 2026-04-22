@@ -10,12 +10,12 @@ import java.util.function.Function;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExecutableInvoker;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.api.extension.TestInstances;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
- * Minimal stub of {@link ExtensionContext} for unit-testing {@code buildConfig()}.
- * Only implements the methods that buildConfig() actually calls.
+ * Minimal stub of {@link ExtensionContext} for unit-testing {@code buildConfig()}. Only implements
+ * the methods that buildConfig() actually calls.
  */
 class StubExtensionContext implements ExtensionContext {
 
@@ -146,7 +146,8 @@ class StubExtensionContext implements ExtensionContext {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <K, V> V getOrComputeIfAbsent(K key, Function<K, V> defaultCreator, Class<V> requiredType) {
+    public <K, V> V getOrComputeIfAbsent(
+        K key, Function<K, V> defaultCreator, Class<V> requiredType) {
       return (V) map.computeIfAbsent(key, k -> defaultCreator.apply((K) k));
     }
 

@@ -2,7 +2,6 @@ package io.queryaudit.core.reporter;
 
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
-import io.queryaudit.core.model.Severity;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -13,31 +12,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Emits a {@link QueryAuditReport} in GitHub Actions' workflow-command format (issue #85):
- *
- * <ul>
- *   <li>One {@code ::error} / {@code ::warning} / {@code ::notice} line per issue on
- *       {@code System.out}, which the Actions runner parses into inline PR annotations.
- *   <li>A Markdown summary appended to the file pointed at by {@code $GITHUB_STEP_SUMMARY}
- *       when that environment variable is set, so users see a single "N confirmed, M info"
- *       block at the top of the job page.
- * </ul>
- *
- * <p>When {@code Issue.sourceLocation} is populated (format: {@code fqcn.method:line}), this
- * reporter parses the file-and-line hint into the {@code file=...,line=...} portion of the
- * command. Without it the annotation still fires but anchors to the workflow file — slightly
- * less useful, but never silent.
+ * Emits a {@link QueryAuditReport} in GitHub Actions' workflow-command format: one {@code ::error}
+ * / {@code ::warning} / {@code ::notice} line per issue on {@code System.out}, plus a Markdown
+ * summary appended to {@code $GITHUB_STEP_SUMMARY} when set.
  *
  * @author haroya
  * @since 0.3.0
  */
 public class GitHubActionsReporter implements Reporter {
 
-  // Matches stack-frame-style source locations like
-  //   "com.example.OrderService.findOrders:42"
-  // The leading part is the fully-qualified class + method; the trailing ":digits" is the line.
   private static final Pattern SOURCE_LOCATION =
-      Pattern.compile("^(?<fqcn>[A-Za-z_][\\w.$]*?)\\.(?<method>[A-Za-z_$][\\w$]*)" + ":(?<line>\\d+)$");
+      Pattern.compile("^(?<fqcn>[A-Za-z_][\\w.$]*?)\\.(?<method>[A-Za-z_$][\\w$]*):(?<line>\\d+)$");
 
   private final PrintStream out;
   private final Path summaryPath;
@@ -94,7 +79,6 @@ public class GitHubActionsReporter implements Reporter {
 
     StringBuilder sb = new StringBuilder("::");
     sb.append(level);
-    // Per GitHub workflow-command syntax, a space separates the command name from its properties.
     if (props.length() > 0) {
       sb.append(' ').append(props);
     }
@@ -160,8 +144,6 @@ public class GitHubActionsReporter implements Reporter {
       Files.writeString(
           summaryPath, md.toString(), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     } catch (IOException e) {
-      // $GITHUB_STEP_SUMMARY may be unset or unwritable on a non-Actions runner; fall back to
-      // stderr so users still get the data, without failing the analysis.
       System.err.println("[QueryAudit] Could not write GitHub step summary: " + e.getMessage());
     }
   }
@@ -212,17 +194,14 @@ public class GitHubActionsReporter implements Reporter {
     String fqcn = m.group("fqcn");
     int lastDot = fqcn.lastIndexOf('.');
     if (lastDot < 0) {
-      return null; // no package: can't construct a path we trust
+      return null;
     }
     String pkg = fqcn.substring(0, lastDot).replace('.', '/');
     String simpleClass = fqcn.substring(lastDot + 1);
-    // Strip inner/nested class markers for the source-file guess.
     int innerMarker = simpleClass.indexOf('$');
     if (innerMarker >= 0) {
       simpleClass = simpleClass.substring(0, innerMarker);
     }
-    // Default to Maven/Gradle standard main sources. Consumers can still rely on the annotation
-    // firing without a file when this guess doesn't match their layout.
     String file = "src/main/java/" + pkg + "/" + simpleClass + ".java";
     try {
       return new Location(file, Integer.parseInt(m.group("line")));
@@ -231,18 +210,17 @@ public class GitHubActionsReporter implements Reporter {
     }
   }
 
-  /** Package-private for testability. */
   record Location(String file, int line) {}
 
   // ── Escaping (GitHub workflow commands) ───────────────────────────────
 
-  /** Property values must have these three characters percent-encoded. */
   private static String escapeProp(String s) {
     if (s == null) return "";
     return s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A").replace(",", "%2C");
   }
 
-  /** Command bodies use the same encoding but keep commas. */
+  // Property escape without comma encoding — commands separate property list from message with
+  // '::'.
   private static String escapeBody(String s) {
     if (s == null) return "";
     return s.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A");

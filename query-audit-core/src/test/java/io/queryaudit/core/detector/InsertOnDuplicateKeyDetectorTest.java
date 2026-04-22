@@ -122,8 +122,7 @@ class InsertOnDuplicateKeyDetectorTest {
 
   @Test
   void detectsOnDuplicateKeyWithParameterizedValues() {
-    String sql =
-        "INSERT INTO users (id, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = ?";
+    String sql = "INSERT INTO users (id, name) VALUES (?, ?) ON DUPLICATE KEY UPDATE name = ?";
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
 

@@ -3,8 +3,8 @@ package io.queryaudit.core.model;
 /**
  * Represents the JUnit 5 test lifecycle phase during which a query was captured.
  *
- * <p>Used to distinguish test infrastructure queries (fixture setup/teardown)
- * from production code path queries executed during the actual test method.
+ * <p>Used to distinguish test infrastructure queries (fixture setup/teardown) from production code
+ * path queries executed during the actual test method.
  *
  * @author haroya
  * @since 0.2.0

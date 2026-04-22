@@ -54,8 +54,7 @@ class PostgreSqlExplainAnalyzerTest {
           """;
       mockExplainResult(json);
 
-      List<QueryRecord> queries =
-          List.of(new QueryRecord("SELECT * FROM users", 0L, 0L, null));
+      List<QueryRecord> queries = List.of(new QueryRecord("SELECT * FROM users", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
@@ -82,9 +81,7 @@ class PostgreSqlExplainAnalyzerTest {
       mockExplainResult(json);
 
       List<QueryRecord> queries =
-          List.of(
-              new QueryRecord(
-                  "SELECT * FROM orders ORDER BY total", 0L, 0L, null));
+          List.of(new QueryRecord("SELECT * FROM orders ORDER BY total", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
@@ -105,8 +102,7 @@ class PostgreSqlExplainAnalyzerTest {
           """;
       mockExplainResult(json);
 
-      List<QueryRecord> queries =
-          List.of(new QueryRecord("SELECT * FROM orders", 0L, 0L, null));
+      List<QueryRecord> queries = List.of(new QueryRecord("SELECT * FROM orders", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
@@ -122,8 +118,7 @@ class PostgreSqlExplainAnalyzerTest {
           """;
       mockExplainResult(json);
 
-      List<QueryRecord> queries =
-          List.of(new QueryRecord("SELECT * FROM orders", 0L, 0L, null));
+      List<QueryRecord> queries = List.of(new QueryRecord("SELECT * FROM orders", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
@@ -175,16 +170,16 @@ class PostgreSqlExplainAnalyzerTest {
     @Test
     @DisplayName("replaces single ? placeholder with dummy value")
     void replacesSinglePlaceholder() {
-      String result = PostgreSqlExplainAnalyzer.prepareForExplain(
-          "SELECT * FROM users WHERE id = ?");
+      String result =
+          PostgreSqlExplainAnalyzer.prepareForExplain("SELECT * FROM users WHERE id = ?");
       assertThat(result).isEqualTo("SELECT * FROM users WHERE id = 1");
     }
 
     @Test
     @DisplayName("replaces multiple ? placeholders")
     void replacesMultiplePlaceholders() {
-      String result = PostgreSqlExplainAnalyzer.prepareForExplain(
-          "SELECT * FROM users WHERE a = ? AND b = ?");
+      String result =
+          PostgreSqlExplainAnalyzer.prepareForExplain("SELECT * FROM users WHERE a = ? AND b = ?");
       assertThat(result).isEqualTo("SELECT * FROM users WHERE a = 1 AND b = 1");
     }
 
@@ -210,8 +205,7 @@ class PostgreSqlExplainAnalyzerTest {
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
-      verify(statement).executeQuery(
-          "EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE id = 1");
+      verify(statement).executeQuery("EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE id = 1");
     }
 
     @Test
@@ -224,13 +218,12 @@ class PostgreSqlExplainAnalyzerTest {
       mockExplainResult(json);
 
       List<QueryRecord> queries =
-          List.of(new QueryRecord(
-              "SELECT * FROM users WHERE a = ? AND b = ?", 0L, 0L, null));
+          List.of(new QueryRecord("SELECT * FROM users WHERE a = ? AND b = ?", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
-      verify(statement).executeQuery(
-          "EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE a = 1 AND b = 1");
+      verify(statement)
+          .executeQuery("EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE a = 1 AND b = 1");
     }
   }
 

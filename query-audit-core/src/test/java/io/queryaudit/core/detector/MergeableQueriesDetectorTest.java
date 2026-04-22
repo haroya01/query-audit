@@ -140,9 +140,12 @@ class MergeableQueriesDetectorTest {
     // and cannot simply be merged with an IN clause
     List<QueryRecord> queries =
         List.of(
-            record("SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.active = true"),
-            record("SELECT u.name FROM users u JOIN payments p ON u.id = p.user_id WHERE u.active = true"),
-            record("SELECT u.name FROM users u JOIN logins l ON u.id = l.user_id WHERE u.active = true"));
+            record(
+                "SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.active = true"),
+            record(
+                "SELECT u.name FROM users u JOIN payments p ON u.id = p.user_id WHERE u.active = true"),
+            record(
+                "SELECT u.name FROM users u JOIN logins l ON u.id = l.user_id WHERE u.active = true"));
 
     List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
 
@@ -155,8 +158,10 @@ class MergeableQueriesDetectorTest {
     MergeableQueriesDetector customDetector = new MergeableQueriesDetector(2);
     List<QueryRecord> queries =
         List.of(
-            record("SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.status = 'A'"),
-            record("SELECT u.name FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.status = 'B'"));
+            record(
+                "SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.status = 'A'"),
+            record(
+                "SELECT u.name FROM users u LEFT JOIN orders o ON u.id = o.user_id WHERE u.status = 'B'"));
 
     List<Issue> issues = customDetector.evaluate(queries, EMPTY_INDEX);
 
@@ -168,9 +173,12 @@ class MergeableQueriesDetectorTest {
     // Same table, same columns, same JOIN structure — truly mergeable
     List<QueryRecord> queries =
         List.of(
-            record("SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.status = 'ACTIVE'"),
-            record("SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.role = 'ADMIN'"),
-            record("SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.region = 'US'"));
+            record(
+                "SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.status = 'ACTIVE'"),
+            record(
+                "SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.role = 'ADMIN'"),
+            record(
+                "SELECT u.name FROM users u JOIN orders o ON u.id = o.user_id WHERE u.region = 'US'"));
 
     List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
 
@@ -185,9 +193,12 @@ class MergeableQueriesDetectorTest {
   void noIssueForSameJoinTableButDifferentOnConditions() {
     List<QueryRecord> queries =
         List.of(
-            record("SELECT o.id FROM orders o JOIN users u ON u.id = o.user_id WHERE o.status = 'A'"),
-            record("SELECT o.id FROM orders o JOIN users u ON u.id = o.reviewer_id WHERE o.status = 'B'"),
-            record("SELECT o.id FROM orders o JOIN users u ON u.id = o.approver_id WHERE o.status = 'C'"));
+            record(
+                "SELECT o.id FROM orders o JOIN users u ON u.id = o.user_id WHERE o.status = 'A'"),
+            record(
+                "SELECT o.id FROM orders o JOIN users u ON u.id = o.reviewer_id WHERE o.status = 'B'"),
+            record(
+                "SELECT o.id FROM orders o JOIN users u ON u.id = o.approver_id WHERE o.status = 'C'"));
 
     List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
 

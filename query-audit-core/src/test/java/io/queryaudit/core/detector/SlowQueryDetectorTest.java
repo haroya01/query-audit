@@ -279,11 +279,21 @@ class SlowQueryDetectorTest {
     List<Issue> issues =
         detector.evaluate(
             List.of(
-                record("SELECT * FROM products WHERE cat = 'cold1'", TimeUnit.MILLISECONDS.toNanos(50)),
-                record("SELECT * FROM products WHERE cat = 'cold2'", TimeUnit.MILLISECONDS.toNanos(50)),
-                record("SELECT * FROM products WHERE cat = 'cold3'", TimeUnit.MILLISECONDS.toNanos(50)),
-                record("SELECT * FROM products WHERE cat = 'cold4'", TimeUnit.MILLISECONDS.toNanos(50)),
-                record("SELECT * FROM products WHERE cat = 'cold5'", TimeUnit.MILLISECONDS.toNanos(5000))),
+                record(
+                    "SELECT * FROM products WHERE cat = 'cold1'",
+                    TimeUnit.MILLISECONDS.toNanos(50)),
+                record(
+                    "SELECT * FROM products WHERE cat = 'cold2'",
+                    TimeUnit.MILLISECONDS.toNanos(50)),
+                record(
+                    "SELECT * FROM products WHERE cat = 'cold3'",
+                    TimeUnit.MILLISECONDS.toNanos(50)),
+                record(
+                    "SELECT * FROM products WHERE cat = 'cold4'",
+                    TimeUnit.MILLISECONDS.toNanos(50)),
+                record(
+                    "SELECT * FROM products WHERE cat = 'cold5'",
+                    TimeUnit.MILLISECONDS.toNanos(5000))),
             EMPTY_INDEX);
 
     assertThat(issues).isEmpty();

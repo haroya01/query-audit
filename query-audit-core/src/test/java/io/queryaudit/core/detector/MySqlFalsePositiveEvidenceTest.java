@@ -62,10 +62,7 @@ class MySqlFalsePositiveEvidenceTest {
 
       // Known limitation: detector fires even though a functional index could exist
       assertThat(issues)
-          .anyMatch(
-              i ->
-                  i.type() == IssueType.WHERE_FUNCTION
-                      && i.severity() == Severity.ERROR);
+          .anyMatch(i -> i.type() == IssueType.WHERE_FUNCTION && i.severity() == Severity.ERROR);
 
       // Verify the suggestion mentions functional index as a workaround
       assertThat(issues)
@@ -103,8 +100,7 @@ class MySqlFalsePositiveEvidenceTest {
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       // The parser's EXISTS_SELECT_STAR pattern neutralizes SELECT * inside EXISTS
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.SELECT_ALL);
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.SELECT_ALL);
     }
 
     @Test
@@ -115,9 +111,7 @@ class MySqlFalsePositiveEvidenceTest {
       // When the outer query selects specific columns from a derived table,
       // using SELECT * in the inner query is common and valid.
       // MySQL 8.0 derived table merging may optimize this automatically.
-      String sql =
-          "SELECT sub.id, sub.name FROM "
-              + "(SELECT * FROM users WHERE active = 1) sub";
+      String sql = "SELECT sub.id, sub.name FROM " + "(SELECT * FROM users WHERE active = 1) sub";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
@@ -127,8 +121,7 @@ class MySqlFalsePositiveEvidenceTest {
       // This test documents the current behaviour.
       if (!issues.isEmpty()) {
         // Known limitation: detector flags inner SELECT * in derived table
-        assertThat(issues)
-            .allMatch(i -> i.type() == IssueType.SELECT_ALL);
+        assertThat(issues).allMatch(i -> i.type() == IssueType.SELECT_ALL);
       }
     }
   }
@@ -179,8 +172,7 @@ class MySqlFalsePositiveEvidenceTest {
 
       // Known limitation: detector flags this even though MySQL index_merge could optimize it
       // (3 OR keywords >= threshold of 3)
-      assertThat(issues)
-          .anyMatch(i -> i.type() == IssueType.OR_ABUSE);
+      assertThat(issues).anyMatch(i -> i.type() == IssueType.OR_ABUSE);
     }
   }
 
@@ -209,9 +201,7 @@ class MySqlFalsePositiveEvidenceTest {
       // Known limitation: detector flags this because _code is in STRING_COLUMN_INDICATORS
       assertThat(issues)
           .anyMatch(
-              i ->
-                  i.type() == IssueType.IMPLICIT_TYPE_CONVERSION
-                      && "zip_code".equals(i.column()));
+              i -> i.type() == IssueType.IMPLICIT_TYPE_CONVERSION && "zip_code".equals(i.column()));
     }
 
     @Test
@@ -259,10 +249,8 @@ class MySqlFalsePositiveEvidenceTest {
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       // Known limitation: detector flags single-row upserts even though deadlock risk is minimal
-      assertThat(issues)
-          .anyMatch(i -> i.type() == IssueType.INSERT_ON_DUPLICATE_KEY);
-      assertThat(issues)
-          .allMatch(i -> i.severity() == Severity.WARNING);
+      assertThat(issues).anyMatch(i -> i.type() == IssueType.INSERT_ON_DUPLICATE_KEY);
+      assertThat(issues).allMatch(i -> i.severity() == Severity.WARNING);
     }
   }
 
@@ -298,8 +286,7 @@ class MySqlFalsePositiveEvidenceTest {
             + "- Ref: https://dev.mysql.com/doc/refman/8.0/en/join.html")
     void crossJoinWithWhereClause_notFlagged() {
       // CROSS JOIN with a WHERE clause that filters is a valid pattern
-      String sql =
-          "SELECT s.name, c.name FROM sizes s CROSS JOIN colors c WHERE s.active = 1";
+      String sql = "SELECT s.name, c.name FROM sizes s CROSS JOIN colors c WHERE s.active = 1";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
@@ -330,8 +317,7 @@ class MySqlFalsePositiveEvidenceTest {
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       // Detector should flag this correctly
-      assertThat(issues)
-          .anyMatch(i -> i.type() == IssueType.LIKE_LEADING_WILDCARD);
+      assertThat(issues).anyMatch(i -> i.type() == IssueType.LIKE_LEADING_WILDCARD);
 
       // Verify suggestion mentions fulltext as an alternative
       assertThat(issues)
@@ -382,10 +368,8 @@ class MySqlFalsePositiveEvidenceTest {
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       // Known limitation: detector flags NOT IN (SELECT ...) regardless of nullability
-      assertThat(issues)
-          .anyMatch(i -> i.type() == IssueType.NOT_IN_SUBQUERY);
-      assertThat(issues)
-          .allMatch(i -> i.severity() == Severity.ERROR);
+      assertThat(issues).anyMatch(i -> i.type() == IssueType.NOT_IN_SUBQUERY);
+      assertThat(issues).allMatch(i -> i.severity() == Severity.ERROR);
     }
   }
 
@@ -413,10 +397,8 @@ class MySqlFalsePositiveEvidenceTest {
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       // Detector flags it, but severity should be INFO (informational)
-      assertThat(issues)
-          .anyMatch(i -> i.type() == IssueType.COUNT_INSTEAD_OF_EXISTS);
-      assertThat(issues)
-          .allMatch(i -> i.severity() == Severity.INFO);
+      assertThat(issues).anyMatch(i -> i.type() == IssueType.COUNT_INSTEAD_OF_EXISTS);
+      assertThat(issues).allMatch(i -> i.severity() == Severity.INFO);
 
       // Verify the suggestion acknowledges that the count value may be needed
       assertThat(issues)
@@ -452,8 +434,7 @@ class MySqlFalsePositiveEvidenceTest {
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       // CASE-WHEN should not be falsely detected as col +/- arithmetic
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.NON_SARGABLE_EXPRESSION);
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.NON_SARGABLE_EXPRESSION);
     }
 
     @Test
@@ -466,8 +447,7 @@ class MySqlFalsePositiveEvidenceTest {
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues)
-          .anyMatch(i -> i.type() == IssueType.NON_SARGABLE_EXPRESSION);
+      assertThat(issues).anyMatch(i -> i.type() == IssueType.NON_SARGABLE_EXPRESSION);
     }
   }
 
@@ -522,8 +502,7 @@ class MySqlFalsePositiveEvidenceTest {
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues)
-          .anyMatch(i -> i.type() == IssueType.OFFSET_PAGINATION);
+      assertThat(issues).anyMatch(i -> i.type() == IssueType.OFFSET_PAGINATION);
     }
   }
 
@@ -544,15 +523,13 @@ class MySqlFalsePositiveEvidenceTest {
     void singleTableWithInSubquery_notFlagged() {
       // A single-table query with an IN subquery is NOT an implicit join.
       // The subquery creates a nested scope, not a comma-separated FROM clause.
-      String sql =
-          "SELECT * FROM users WHERE id IN (SELECT user_id FROM active_sessions)";
+      String sql = "SELECT * FROM users WHERE id IN (SELECT user_id FROM active_sessions)";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       // The detector uses SqlParser.removeSubqueries() before checking,
       // so the IN (SELECT ...) should be stripped and not cause a false positive
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.IMPLICIT_JOIN);
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.IMPLICIT_JOIN);
     }
 
     @Test
@@ -566,8 +543,7 @@ class MySqlFalsePositiveEvidenceTest {
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.IMPLICIT_JOIN);
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.IMPLICIT_JOIN);
     }
   }
 }

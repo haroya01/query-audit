@@ -53,8 +53,7 @@ class WhereQualityIntegrationTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -72,8 +71,7 @@ class WhereQualityIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("upperInWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.WHERE_FUNCTION);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.WHERE_FUNCTION);
     }
 
     @Test
@@ -86,8 +84,7 @@ class WhereQualityIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("lowerInWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.WHERE_FUNCTION);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.WHERE_FUNCTION);
     }
   }
 
@@ -99,15 +96,12 @@ class WhereQualityIntegrationTest {
     @DisplayName("Arithmetic on column prevents index usage")
     void detectsArithmeticOnColumn() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE id + 1 = 10")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE id + 1 = 10").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("arithmeticOnColumn", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.NON_SARGABLE_EXPRESSION);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.NON_SARGABLE_EXPRESSION);
     }
   }
 
@@ -119,28 +113,22 @@ class WhereQualityIntegrationTest {
     @DisplayName("= NULL comparison is always UNKNOWN")
     void detectsEqualsNull() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE status = NULL")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE status = NULL").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("equalsNull", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.NULL_COMPARISON);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.NULL_COMPARISON);
     }
 
     @Test
     @DisplayName("!= NULL comparison is always UNKNOWN")
     void detectsNotEqualsNull() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE status != NULL")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE status != NULL").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("notEqualsNull", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.NULL_COMPARISON);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.NULL_COMPARISON);
     }
   }
 
@@ -158,8 +146,7 @@ class WhereQualityIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("leadingWildcard", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.LIKE_LEADING_WILDCARD);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.LIKE_LEADING_WILDCARD);
     }
   }
 
@@ -197,13 +184,11 @@ class WhereQualityIntegrationTest {
         // H2 doesn't capture failed queries — verify with manual QueryRecord
         queries =
             List.of(
-                new QueryRecord(
-                    "SELECT * FROM products_ext WHERE product_code = 123", 0, 0, ""));
+                new QueryRecord("SELECT * FROM products_ext WHERE product_code = 123", 0, 0, ""));
       }
 
       QueryAuditReport report = analyze("implicitConversion", queries);
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.IMPLICIT_TYPE_CONVERSION);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.IMPLICIT_TYPE_CONVERSION);
     }
   }
 
@@ -222,8 +207,7 @@ class WhereQualityIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("caseInWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.CASE_IN_WHERE);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.CASE_IN_WHERE);
     }
   }
 
@@ -236,15 +220,13 @@ class WhereQualityIntegrationTest {
     void detectsStringConcatInWhere() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM members WHERE name || email = 'User 0user0@test.com'")
+          .createNativeQuery("SELECT * FROM members WHERE name || email = 'User 0user0@test.com'")
           .getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("stringConcatInWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.STRING_CONCAT_IN_WHERE);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.STRING_CONCAT_IN_WHERE);
     }
   }
 
@@ -257,15 +239,12 @@ class WhereQualityIntegrationTest {
     void detectsRedundantFilter() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM members WHERE status = 'ACTIVE' AND status = 'ACTIVE'")
+          .createNativeQuery("SELECT * FROM members WHERE status = 'ACTIVE' AND status = 'ACTIVE'")
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("redundantFilter", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.REDUNDANT_FILTER);
+      QueryAuditReport report = analyze("redundantFilter", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.REDUNDANT_FILTER);
     }
   }
 }

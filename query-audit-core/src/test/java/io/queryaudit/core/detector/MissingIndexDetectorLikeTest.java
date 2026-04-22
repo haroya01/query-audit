@@ -29,9 +29,7 @@ class MissingIndexDetectorLikeTest {
   // users table with NO index on `email`.
   private final IndexMetadata noEmailIndex =
       new IndexMetadata(
-          Map.of(
-              "users",
-              List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 10000))));
+          Map.of("users", List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 10000))));
 
   @Test
   @DisplayName("flags prefix-only LIKE on an unindexed column")
@@ -40,12 +38,8 @@ class MissingIndexDetectorLikeTest {
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), noEmailIndex);
 
-    assertThat(issues)
-        .extracting(Issue::type)
-        .contains(IssueType.MISSING_WHERE_INDEX);
-    assertThat(issues)
-        .extracting(Issue::column)
-        .contains("email");
+    assertThat(issues).extracting(Issue::type).contains(IssueType.MISSING_WHERE_INDEX);
+    assertThat(issues).extracting(Issue::column).contains("email");
   }
 
   @Test
@@ -55,9 +49,7 @@ class MissingIndexDetectorLikeTest {
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), noEmailIndex);
 
-    assertThat(issues)
-        .extracting(Issue::column)
-        .contains("email");
+    assertThat(issues).extracting(Issue::column).contains("email");
   }
 
   @Test
@@ -67,8 +59,6 @@ class MissingIndexDetectorLikeTest {
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), noEmailIndex);
 
-    assertThat(issues)
-        .filteredOn(i -> i.column() != null && i.column().equals("email"))
-        .isEmpty();
+    assertThat(issues).filteredOn(i -> i.column() != null && i.column().equals("email")).isEmpty();
   }
 }

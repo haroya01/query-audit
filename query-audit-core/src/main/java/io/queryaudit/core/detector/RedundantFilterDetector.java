@@ -5,7 +5,6 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.parser.WhereColumnReference;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,7 +51,8 @@ public class RedundantFilterDetector implements DetectionRule {
       // Build alias-to-table mapping for correct table resolution
       Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
 
-      List<WhereColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
+      List<WhereColumnReference> whereColumns =
+          EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
       if (whereColumns.size() < 2) {
         continue;
       }
@@ -236,17 +236,10 @@ public class RedundantFilterDetector implements DetectionRule {
   }
 
   /**
-   * Checks whether a given column+operator combination appears in more than one OR branch with
-   * <b>genuinely different</b> right-hand-side values. Duplicates that span branches but compare
-   * the column to the same literal (e.g. {@code id = 1 OR id = 1}) are tautologies, not a
-   * bidirectional pattern, and must still be reported as redundant (issue #93).
-   *
-   * <p>When the RHS is a parameter placeholder ({@code ?}) we cannot tell apart runtime values,
-   * so we conservatively treat those cases as legitimately different branches to avoid false
-   * positives on parameterized queries.
+   * True if the column+operator appears in multiple OR branches with <b>different</b> literal RHS
+   * values. Identical RHS (tautology) still counts as a duplicate; {@code ?} is treated
+   * conservatively as different (issue #93).
    */
-  // Captures everything after the operator up to the next boolean keyword or closing paren so
-  // the RHS comparison sees, e.g., "1" rather than "1 AND".
   private static final Pattern RHS_TERMINATOR =
       Pattern.compile("\\s+(?:AND|OR)\\b|[)]|$", Pattern.CASE_INSENSITIVE);
 

@@ -62,8 +62,7 @@ class IndexLockFalsePositiveTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -81,8 +80,7 @@ class IndexLockFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("indexedColumn", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.MISSING_WHERE_INDEX);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.MISSING_WHERE_INDEX);
     }
 
     @Test
@@ -97,8 +95,7 @@ class IndexLockFalsePositiveTest {
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
       QueryAuditReport report =
           analyzer.analyze("Team4FP", "noMetadata", queryInterceptor.getRecordedQueries(), null);
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.MISSING_WHERE_INDEX);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.MISSING_WHERE_INDEX);
     }
   }
 
@@ -115,10 +112,8 @@ class IndexLockFalsePositiveTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("forUpdateIndexed", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.FOR_UPDATE_WITHOUT_INDEX);
+      QueryAuditReport report = analyze("forUpdateIndexed", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.FOR_UPDATE_WITHOUT_INDEX);
     }
   }
 
@@ -135,10 +130,8 @@ class IndexLockFalsePositiveTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("forUpdateUnique", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.FOR_UPDATE_NON_UNIQUE);
+      QueryAuditReport report = analyze("forUpdateUnique", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.FOR_UPDATE_NON_UNIQUE);
     }
   }
 
@@ -150,9 +143,7 @@ class IndexLockFalsePositiveTest {
     @DisplayName("Regular SELECT (no FOR UPDATE) should NOT trigger")
     void noForUpdate() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE id = 1")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE id = 1").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("noForUpdate", queryInterceptor.getRecordedQueries());
@@ -169,14 +160,11 @@ class IndexLockFalsePositiveTest {
     @DisplayName("Table with 3 indexes should NOT trigger (threshold=6)")
     void fewIndexes() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE id = 1")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE id = 1").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("fewIndexes", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.WRITE_AMPLIFICATION);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.WRITE_AMPLIFICATION);
     }
   }
 
@@ -195,8 +183,7 @@ class IndexLockFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("sameColumnOr", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.OR_ABUSE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.OR_ABUSE);
     }
   }
 }

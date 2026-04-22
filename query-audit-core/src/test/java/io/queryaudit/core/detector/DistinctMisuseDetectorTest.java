@@ -355,8 +355,7 @@ class DistinctMisuseDetectorTest {
   @Test
   void noIssueForDistinctInSubquery() {
     // DISTINCT in a subquery is intentional — dedup the subquery result
-    String sql =
-        "SELECT * FROM users WHERE id IN (SELECT DISTINCT user_id FROM orders)";
+    String sql = "SELECT * FROM users WHERE id IN (SELECT DISTINCT user_id FROM orders)";
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
     assertThat(issues).isEmpty();
   }

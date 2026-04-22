@@ -17,8 +17,8 @@ import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
- * Reproduction / verification test for GitHub issue #53:
- * "application.yml settings ignored when @QueryAudit annotation is present"
+ * Reproduction / verification test for GitHub issue #53: "application.yml settings ignored
+ * when @QueryAudit annotation is present"
  *
  * <p>Tests config merge priority: hardcoded defaults -> application.yml -> annotation overrides
  */
@@ -114,46 +114,54 @@ class AnnotationOverridesYmlReproductionTest {
       QueryAuditConfig copy = QueryAuditConfig.Builder.from(source).build();
 
       // Assert every single field matches
-      assertThat(copy.isEnabled())
-          .as("enabled").isEqualTo(source.isEnabled());
+      assertThat(copy.isEnabled()).as("enabled").isEqualTo(source.isEnabled());
       assertThat(copy.isFailOnDetection())
-          .as("failOnDetection").isEqualTo(source.isFailOnDetection());
+          .as("failOnDetection")
+          .isEqualTo(source.isFailOnDetection());
       assertThat(copy.getNPlusOneThreshold())
-          .as("nPlusOneThreshold").isEqualTo(source.getNPlusOneThreshold());
+          .as("nPlusOneThreshold")
+          .isEqualTo(source.getNPlusOneThreshold());
       assertThat(copy.getOffsetPaginationThreshold())
-          .as("offsetPaginationThreshold").isEqualTo(source.getOffsetPaginationThreshold());
+          .as("offsetPaginationThreshold")
+          .isEqualTo(source.getOffsetPaginationThreshold());
       assertThat(copy.getOrClauseThreshold())
-          .as("orClauseThreshold").isEqualTo(source.getOrClauseThreshold());
+          .as("orClauseThreshold")
+          .isEqualTo(source.getOrClauseThreshold());
       assertThat(copy.getSuppressPatterns())
-          .as("suppressPatterns").isEqualTo(source.getSuppressPatterns());
+          .as("suppressPatterns")
+          .isEqualTo(source.getSuppressPatterns());
       assertThat(copy.getSuppressQueries())
-          .as("suppressQueries").isEqualTo(source.getSuppressQueries());
-      assertThat(copy.isShowInfo())
-          .as("showInfo").isEqualTo(source.isShowInfo());
-      assertThat(copy.getBaselinePath())
-          .as("baselinePath").isEqualTo(source.getBaselinePath());
-      assertThat(copy.isAutoOpenReport())
-          .as("autoOpenReport").isEqualTo(source.isAutoOpenReport());
-      assertThat(copy.getMaxQueries())
-          .as("maxQueries").isEqualTo(source.getMaxQueries());
-      assertThat(copy.getDisabledRules())
-          .as("disabledRules").isEqualTo(source.getDisabledRules());
+          .as("suppressQueries")
+          .isEqualTo(source.getSuppressQueries());
+      assertThat(copy.isShowInfo()).as("showInfo").isEqualTo(source.isShowInfo());
+      assertThat(copy.getBaselinePath()).as("baselinePath").isEqualTo(source.getBaselinePath());
+      assertThat(copy.isAutoOpenReport()).as("autoOpenReport").isEqualTo(source.isAutoOpenReport());
+      assertThat(copy.getMaxQueries()).as("maxQueries").isEqualTo(source.getMaxQueries());
+      assertThat(copy.getDisabledRules()).as("disabledRules").isEqualTo(source.getDisabledRules());
       assertThat(copy.getSeverityOverrides())
-          .as("severityOverrides").isEqualTo(source.getSeverityOverrides());
+          .as("severityOverrides")
+          .isEqualTo(source.getSeverityOverrides());
       assertThat(copy.getLargeInListThreshold())
-          .as("largeInListThreshold").isEqualTo(source.getLargeInListThreshold());
+          .as("largeInListThreshold")
+          .isEqualTo(source.getLargeInListThreshold());
       assertThat(copy.getTooManyJoinsThreshold())
-          .as("tooManyJoinsThreshold").isEqualTo(source.getTooManyJoinsThreshold());
+          .as("tooManyJoinsThreshold")
+          .isEqualTo(source.getTooManyJoinsThreshold());
       assertThat(copy.getExcessiveColumnThreshold())
-          .as("excessiveColumnThreshold").isEqualTo(source.getExcessiveColumnThreshold());
+          .as("excessiveColumnThreshold")
+          .isEqualTo(source.getExcessiveColumnThreshold());
       assertThat(copy.getRepeatedInsertThreshold())
-          .as("repeatedInsertThreshold").isEqualTo(source.getRepeatedInsertThreshold());
+          .as("repeatedInsertThreshold")
+          .isEqualTo(source.getRepeatedInsertThreshold());
       assertThat(copy.getWriteAmplificationThreshold())
-          .as("writeAmplificationThreshold").isEqualTo(source.getWriteAmplificationThreshold());
+          .as("writeAmplificationThreshold")
+          .isEqualTo(source.getWriteAmplificationThreshold());
       assertThat(copy.getSlowQueryWarningMs())
-          .as("slowQueryWarningMs").isEqualTo(source.getSlowQueryWarningMs());
+          .as("slowQueryWarningMs")
+          .isEqualTo(source.getSlowQueryWarningMs());
       assertThat(copy.getSlowQueryErrorMs())
-          .as("slowQueryErrorMs").isEqualTo(source.getSlowQueryErrorMs());
+          .as("slowQueryErrorMs")
+          .isEqualTo(source.getSlowQueryErrorMs());
     }
   }
 
@@ -319,10 +327,7 @@ class AnnotationOverridesYmlReproductionTest {
         "failOnDetection=TRUE in annotation overrides Spring config when explicitly specified")
     void failOnDetectionExplicitTrueOverridesSpringConfig() {
       QueryAuditConfig springConfig =
-          QueryAuditConfig.builder()
-              .failOnDetection(false)
-              .nPlusOneThreshold(100)
-              .build();
+          QueryAuditConfig.builder().failOnDetection(false).nPlusOneThreshold(100).build();
 
       // @QueryAudit(failOnDetection = BooleanOverride.TRUE)
       QueryAuditConfig config =
@@ -342,10 +347,7 @@ class AnnotationOverridesYmlReproductionTest {
         "failOnDetection=FALSE in annotation overrides Spring config when explicitly specified")
     void failOnDetectionExplicitFalseOverridesSpringConfig() {
       QueryAuditConfig springConfig =
-          QueryAuditConfig.builder()
-              .failOnDetection(true)
-              .nPlusOneThreshold(100)
-              .build();
+          QueryAuditConfig.builder().failOnDetection(true).nPlusOneThreshold(100).build();
 
       // @QueryAudit(failOnDetection = BooleanOverride.FALSE)
       QueryAuditConfig config =
@@ -355,13 +357,12 @@ class AnnotationOverridesYmlReproductionTest {
           .as("Explicit FALSE annotation should override Spring config true")
           .isFalse();
     }
-
   }
 
   /**
-   * Tests for {@code shouldAutoOpenReport()} which handles autoOpenReport separately from
-   * {@code buildConfig()}. This method has its own priority chain:
-   * sysProp > envVar > explicit annotation > CI detection > Spring config > default(true).
+   * Tests for {@code shouldAutoOpenReport()} which handles autoOpenReport separately from {@code
+   * buildConfig()}. This method has its own priority chain: sysProp > envVar > explicit annotation
+   * > CI detection > Spring config > default(true).
    */
   @Nested
   @DisplayName("shouldAutoOpenReport() priority chain")
@@ -378,9 +379,7 @@ class AnnotationOverridesYmlReproductionTest {
       boolean result = invokeShouldAutoOpenReport(AnnotatedWithDefaults.class);
 
       // No Spring, no CI, INHERIT → default true
-      assertThat(result)
-          .as("INHERIT + no Spring config → should return default true")
-          .isTrue();
+      assertThat(result).as("INHERIT + no Spring config → should return default true").isTrue();
     }
 
     @Test
@@ -388,9 +387,7 @@ class AnnotationOverridesYmlReproductionTest {
     void explicitTrueReturnsTrue() throws Exception {
       boolean result = invokeShouldAutoOpenReport(AnnotatedWithAutoOpenReportTrue.class);
 
-      assertThat(result)
-          .as("Explicit TRUE annotation should return true")
-          .isTrue();
+      assertThat(result).as("Explicit TRUE annotation should return true").isTrue();
     }
 
     @Test
@@ -398,9 +395,7 @@ class AnnotationOverridesYmlReproductionTest {
     void explicitFalseReturnsFalse() throws Exception {
       boolean result = invokeShouldAutoOpenReport(AnnotatedWithAutoOpenReportFalse.class);
 
-      assertThat(result)
-          .as("Explicit FALSE annotation should return false")
-          .isFalse();
+      assertThat(result).as("Explicit FALSE annotation should return false").isFalse();
     }
 
     @Test
@@ -473,8 +468,7 @@ class AnnotationOverridesYmlReproductionTest {
   private static boolean invokeShouldAutoOpenReport(Class<?> testClass) throws Exception {
     QueryAuditExtension extension = new QueryAuditExtension();
     Method method =
-        QueryAuditExtension.class.getDeclaredMethod(
-            "shouldAutoOpenReport", ExtensionContext.class);
+        QueryAuditExtension.class.getDeclaredMethod("shouldAutoOpenReport", ExtensionContext.class);
     method.setAccessible(true);
 
     ExtensionContext context = new StubExtensionContext(testClass);

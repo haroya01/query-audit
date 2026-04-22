@@ -147,8 +147,7 @@ class RegexpInsteadOfLikeDetectorTest {
     @Test
     @DisplayName("Should not flag REGEXP in SELECT clause")
     void shouldNotFlagWhenExpressionInSelectClause() {
-      String sql =
-          "SELECT name REGEXP '^A' AS starts_with_a FROM users WHERE id = 1";
+      String sql = "SELECT name REGEXP '^A' AS starts_with_a FROM users WHERE id = 1";
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
@@ -157,8 +156,7 @@ class RegexpInsteadOfLikeDetectorTest {
     @Test
     @DisplayName("Should not flag REGEXP in ORDER BY clause")
     void shouldNotFlagWhenExpressionInOrderByClause() {
-      String sql =
-          "SELECT * FROM users WHERE status = 'active' ORDER BY name REGEXP '^[A-Z]' DESC";
+      String sql = "SELECT * FROM users WHERE status = 'active' ORDER BY name REGEXP '^[A-Z]' DESC";
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
@@ -176,8 +174,7 @@ class RegexpInsteadOfLikeDetectorTest {
     @Test
     @DisplayName("Should still flag REGEXP in WHERE even when also in SELECT")
     void shouldFlagInWhereEvenWhenAlsoInSelect() {
-      String sql =
-          "SELECT name REGEXP '^A' AS flag FROM users WHERE name REGEXP '^A'";
+      String sql = "SELECT name REGEXP '^A' AS flag FROM users WHERE name REGEXP '^A'";
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       assertThat(issues).hasSize(1);

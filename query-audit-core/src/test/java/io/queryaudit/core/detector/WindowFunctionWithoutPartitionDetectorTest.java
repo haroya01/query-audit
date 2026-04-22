@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
-import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +34,8 @@ class WindowFunctionWithoutPartitionDetectorTest {
     List<Issue> issues =
         detector.evaluate(
             List.of(
-                q("SELECT id, ROW_NUMBER() OVER(PARTITION BY department_id ORDER BY created_at) AS rn FROM users")),
+                q(
+                    "SELECT id, ROW_NUMBER() OVER(PARTITION BY department_id ORDER BY created_at) AS rn FROM users")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -74,16 +74,14 @@ class WindowFunctionWithoutPartitionDetectorTest {
   @Test
   void noIssueWithoutWindowFunction() {
     List<Issue> issues =
-        detector.evaluate(
-            List.of(q("SELECT id, name FROM users WHERE id = 1")), emptyIndex);
+        detector.evaluate(List.of(q("SELECT id, name FROM users WHERE id = 1")), emptyIndex);
     assertThat(issues).isEmpty();
   }
 
   @Test
   void skipsNonSelectQueries() {
     List<Issue> issues =
-        detector.evaluate(
-            List.of(q("INSERT INTO users (name) VALUES ('test')")), emptyIndex);
+        detector.evaluate(List.of(q("INSERT INTO users (name) VALUES ('test')")), emptyIndex);
     assertThat(issues).isEmpty();
   }
 
@@ -94,8 +92,7 @@ class WindowFunctionWithoutPartitionDetectorTest {
     // ROW_NUMBER() OVER(ORDER BY ...) is intentional for pagination/numbering
     List<Issue> issues =
         detector.evaluate(
-            List.of(
-                q("SELECT id, name, ROW_NUMBER() OVER(ORDER BY id) AS rn FROM users")),
+            List.of(q("SELECT id, name, ROW_NUMBER() OVER(ORDER BY id) AS rn FROM users")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -113,8 +110,7 @@ class WindowFunctionWithoutPartitionDetectorTest {
   void noIssueForDenseRankOverOrderByWithoutPartition() {
     List<Issue> issues =
         detector.evaluate(
-            List.of(
-                q("SELECT id, DENSE_RANK() OVER(ORDER BY salary DESC) AS dr FROM employees")),
+            List.of(q("SELECT id, DENSE_RANK() OVER(ORDER BY salary DESC) AS dr FROM employees")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -136,8 +132,7 @@ class WindowFunctionWithoutPartitionDetectorTest {
     // ROW_NUMBER() OVER() with no ORDER BY and no PARTITION BY — truly meaningless
     List<Issue> issues =
         detector.evaluate(
-            List.of(q("SELECT id, ROW_NUMBER() OVER() AS rn FROM users")),
-            emptyIndex);
+            List.of(q("SELECT id, ROW_NUMBER() OVER() AS rn FROM users")), emptyIndex);
     assertThat(issues).hasSize(1);
   }
 }

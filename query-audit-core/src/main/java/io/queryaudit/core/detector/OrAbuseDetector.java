@@ -14,8 +14,8 @@ import java.util.Set;
 
 /**
  * Detects excessive OR conditions on different columns in WHERE clauses. Multiple OR conditions
- * across different columns prevent the optimizer from using indexes effectively, often resulting
- * in full table scans.
+ * across different columns prevent the optimizer from using indexes effectively, often resulting in
+ * full table scans.
  *
  * @author haroya
  * @since 0.2.0

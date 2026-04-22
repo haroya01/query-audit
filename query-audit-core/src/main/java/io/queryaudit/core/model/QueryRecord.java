@@ -3,9 +3,9 @@ package io.queryaudit.core.model;
 import io.queryaudit.core.parser.SqlParser;
 
 /**
- * Records a single SQL query captured during test execution, including the raw and normalized
- * SQL text, execution time, timestamp, stack trace, and a hash of the full call stack used
- * for N+1 detection grouping.
+ * Records a single SQL query captured during test execution, including the raw and normalized SQL
+ * text, execution time, timestamp, stack trace, and a hash of the full call stack used for N+1
+ * detection grouping.
  *
  * @author haroya
  * @since 0.2.0
@@ -32,7 +32,13 @@ public record QueryRecord(
 
   public QueryRecord(
       String sql, long executionTimeNanos, long timestamp, String stackTrace, int fullStackHash) {
-    this(sql, SqlParser.normalize(sql), executionTimeNanos, timestamp, stackTrace, fullStackHash,
+    this(
+        sql,
+        SqlParser.normalize(sql),
+        executionTimeNanos,
+        timestamp,
+        stackTrace,
+        fullStackHash,
         LifecyclePhase.TEST);
   }
 
@@ -44,7 +50,13 @@ public record QueryRecord(
       long timestamp,
       String stackTrace,
       int fullStackHash) {
-    this(sql, normalizedSql, executionTimeNanos, timestamp, stackTrace, fullStackHash,
+    this(
+        sql,
+        normalizedSql,
+        executionTimeNanos,
+        timestamp,
+        stackTrace,
+        fullStackHash,
         LifecyclePhase.TEST);
   }
 

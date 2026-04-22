@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.parser.WhereColumnReference;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -73,7 +72,8 @@ public class RangeLockDetector implements DetectionRule {
       }
 
       // Extract WHERE columns with operators
-      List<WhereColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
+      List<WhereColumnReference> whereColumns =
+          EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
       if (whereColumns.isEmpty()) {
         continue; // No WHERE clause -- ForUpdateWithoutIndexDetector handles this
       }

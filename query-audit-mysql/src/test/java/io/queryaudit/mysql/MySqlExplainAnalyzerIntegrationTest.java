@@ -35,7 +35,8 @@ class MySqlExplainAnalyzerIntegrationTest {
   }
 
   private Connection getConnection() throws SQLException {
-    return DriverManager.getConnection(mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
+    return DriverManager.getConnection(
+        mysql.getJdbcUrl(), mysql.getUsername(), mysql.getPassword());
   }
 
   @Test
@@ -43,9 +44,7 @@ class MySqlExplainAnalyzerIntegrationTest {
   void detectsFullTableScan() throws SQLException {
     try (Connection conn = getConnection()) {
       List<QueryRecord> queries =
-          List.of(
-              new QueryRecord(
-                  "SELECT * FROM orders WHERE total > 100", 0L, 0L, null));
+          List.of(new QueryRecord("SELECT * FROM orders WHERE total > 100", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(conn, queries);
 
@@ -69,8 +68,7 @@ class MySqlExplainAnalyzerIntegrationTest {
 
       List<Issue> issues = analyzer.analyze(conn, queries);
 
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.FULL_TABLE_SCAN);
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.FULL_TABLE_SCAN);
     }
   }
 
@@ -79,14 +77,11 @@ class MySqlExplainAnalyzerIntegrationTest {
   void detectsFilesort() throws SQLException {
     try (Connection conn = getConnection()) {
       List<QueryRecord> queries =
-          List.of(
-              new QueryRecord(
-                  "SELECT * FROM orders ORDER BY total", 0L, 0L, null));
+          List.of(new QueryRecord("SELECT * FROM orders ORDER BY total", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(conn, queries);
 
-      assertThat(issues)
-          .anyMatch(i -> i.type() == IssueType.FILESORT);
+      assertThat(issues).anyMatch(i -> i.type() == IssueType.FILESORT);
     }
   }
 
@@ -98,7 +93,9 @@ class MySqlExplainAnalyzerIntegrationTest {
           List.of(
               new QueryRecord(
                   "INSERT INTO users (username, email, status, created_at) VALUES ('a', 'a@b.com', 'active', NOW())",
-                  0L, 0L, null));
+                  0L,
+                  0L,
+                  null));
 
       List<Issue> issues = analyzer.analyze(conn, queries);
 
@@ -112,16 +109,13 @@ class MySqlExplainAnalyzerIntegrationTest {
     try (Connection conn = getConnection()) {
       // This is the SQL that datasource-proxy captures — with ? placeholders
       List<QueryRecord> queries =
-          List.of(
-              new QueryRecord(
-                  "SELECT * FROM users WHERE id = ?", 0L, 0L, null));
+          List.of(new QueryRecord("SELECT * FROM users WHERE id = ?", 0L, 0L, null));
 
       // Should NOT throw — the ? is replaced with 1 before EXPLAIN
       List<Issue> issues = analyzer.analyze(conn, queries);
 
       // The query uses the primary key, so no full table scan expected
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.FULL_TABLE_SCAN);
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.FULL_TABLE_SCAN);
     }
   }
 

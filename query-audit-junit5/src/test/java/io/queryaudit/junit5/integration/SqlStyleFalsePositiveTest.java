@@ -51,8 +51,7 @@ class SqlStyleFalsePositiveTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -67,10 +66,8 @@ class SqlStyleFalsePositiveTest {
       memberRepository.findByStatus("ACTIVE"); // Hibernate generates explicit column list
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("hibernateColumns", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.SELECT_ALL);
+      QueryAuditReport report = analyze("hibernateColumns", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.SELECT_ALL);
     }
   }
 
@@ -82,15 +79,12 @@ class SqlStyleFalsePositiveTest {
     @DisplayName("DISTINCT without GROUP BY or JOIN should NOT trigger")
     void legitimateDistinct() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT DISTINCT status FROM members")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT DISTINCT status FROM members").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("legitimateDistinct", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.DISTINCT_MISUSE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.DISTINCT_MISUSE);
     }
   }
 
@@ -111,8 +105,7 @@ class SqlStyleFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("unionAll", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UNION_WITHOUT_ALL);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UNION_WITHOUT_ALL);
     }
   }
 
@@ -130,10 +123,8 @@ class SqlStyleFalsePositiveTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("aggregateHaving", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.HAVING_MISUSE);
+      QueryAuditReport report = analyze("aggregateHaving", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.HAVING_MISUSE);
     }
   }
 
@@ -150,10 +141,8 @@ class SqlStyleFalsePositiveTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("plainGroupBy", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.GROUP_BY_FUNCTION);
+      QueryAuditReport report = analyze("plainGroupBy", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.GROUP_BY_FUNCTION);
     }
   }
 
@@ -171,8 +160,7 @@ class SqlStyleFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("singleQuery", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.N_PLUS_ONE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.N_PLUS_ONE);
     }
   }
 }

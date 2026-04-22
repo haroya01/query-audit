@@ -153,7 +153,8 @@ class CollectionManagementDetectorTest {
   class NegativeCases {
 
     @Test
-    @DisplayName("No issue when composite WHERE values don't carry over to INSERTs (specific-row DELETE)")
+    @DisplayName(
+        "No issue when composite WHERE values don't carry over to INSERTs (specific-row DELETE)")
     void noIssueWhenCompositeWhereValuesDontCarryOver() {
       // WHERE constrains a SPECIFIC row (member_id = 10) that does not appear in any of the
       // subsequent INSERT value lists. This is a specific-row DELETE followed by unrelated

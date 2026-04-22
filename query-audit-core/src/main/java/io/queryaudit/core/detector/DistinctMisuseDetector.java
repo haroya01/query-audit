@@ -7,7 +7,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,8 +33,8 @@ public class DistinctMisuseDetector implements DetectionRule {
       Pattern.compile("\\bSELECT\\s+DISTINCT\\b", Pattern.CASE_INSENSITIVE);
 
   /**
-   * Detects DISTINCT usage only inside a subquery context (e.g., IN (SELECT DISTINCT ...),
-   * EXISTS (SELECT DISTINCT ...)). Such usage is typically intentional.
+   * Detects DISTINCT usage only inside a subquery context (e.g., IN (SELECT DISTINCT ...), EXISTS
+   * (SELECT DISTINCT ...)). Such usage is typically intentional.
    */
   private static final Pattern DISTINCT_IN_SUBQUERY =
       Pattern.compile(

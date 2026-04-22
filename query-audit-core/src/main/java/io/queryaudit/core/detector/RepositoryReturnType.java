@@ -1,8 +1,8 @@
 package io.queryaudit.core.detector;
 
 /**
- * Categorizes Spring Data repository method return types for unbounded-result-set
- * false positive reduction.
+ * Categorizes Spring Data repository method return types for unbounded-result-set false positive
+ * reduction.
  *
  * @author haroya
  * @since 0.3.0

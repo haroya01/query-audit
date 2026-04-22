@@ -116,8 +116,7 @@ public class JsonReporter implements Reporter {
     sb.append(indent).append("]");
   }
 
-  private static void appendQueryArray(
-      StringBuilder sb, List<QueryRecord> queries, String indent) {
+  private static void appendQueryArray(StringBuilder sb, List<QueryRecord> queries, String indent) {
     if (queries == null || queries.isEmpty()) {
       sb.append("[]");
       return;
@@ -149,8 +148,7 @@ public class JsonReporter implements Reporter {
   // JSON encoding helpers
   // ---------------------------------------------------------------------------
 
-  private static void appendJsonString(
-      StringBuilder sb, String indent, String key, String value) {
+  private static void appendJsonString(StringBuilder sb, String indent, String key, String value) {
     sb.append(indent).append("\"").append(key).append("\": ");
     if (value == null) {
       sb.append("null");

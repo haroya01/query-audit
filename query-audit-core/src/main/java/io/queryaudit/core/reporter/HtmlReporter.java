@@ -20,7 +20,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -287,9 +286,7 @@ public class HtmlReporter implements Reporter {
       sb.append("  <div class=\"stat error\">").append(totalErrors).append(" errors</div>\n");
     }
     if (totalWarnings > 0) {
-      sb.append("  <div class=\"stat warning\">")
-          .append(totalWarnings)
-          .append(" warnings</div>\n");
+      sb.append("  <div class=\"stat warning\">").append(totalWarnings).append(" warnings</div>\n");
     }
     if (totalInfos > 0) {
       sb.append("  <div class=\"stat info\">").append(totalInfos).append(" info</div>\n");
@@ -297,7 +294,8 @@ public class HtmlReporter implements Reporter {
     if (totalErrors == 0 && totalWarnings == 0) {
       sb.append("  <div class=\"stat ok\">all clean</div>\n");
     }
-    sb.append("  <div class=\"stat ok class-reviewed-status\" style=\"display:none\">all reviewed</div>\n");
+    sb.append(
+        "  <div class=\"stat ok class-reviewed-status\" style=\"display:none\">all reviewed</div>\n");
     sb.append("</div>\n");
     flushSection(sb, writer);
 
@@ -535,8 +533,7 @@ public class HtmlReporter implements Reporter {
   // Class-level cards (for index.html)
   // =========================================================================
 
-  private void appendClassesTable(
-      StringBuilder sb, Map<String, List<QueryAuditReport>> byClass) {
+  private void appendClassesTable(StringBuilder sb, Map<String, List<QueryAuditReport>> byClass) {
     sb.append("<section class=\"section\">\n");
     sb.append("  <h2>Classes</h2>\n");
     sb.append("  <div class=\"table-wrapper\">\n");
@@ -562,8 +559,7 @@ public class HtmlReporter implements Reporter {
       String className = entry.getKey();
       List<QueryAuditReport> classReports = entry.getValue();
       int testCount = classReports.size();
-      int queryCount =
-          classReports.stream().mapToInt(QueryAuditReport::getTotalQueryCount).sum();
+      int queryCount = classReports.stream().mapToInt(QueryAuditReport::getTotalQueryCount).sum();
       long errorCount = classReports.stream().mapToInt(r -> r.getErrors().size()).sum();
       long warningCount = classReports.stream().mapToInt(r -> r.getWarnings().size()).sum();
       long infoCount =
@@ -574,19 +570,19 @@ public class HtmlReporter implements Reporter {
       long issueCount = errorCount + warningCount + infoCount;
       boolean hasIssues = errorCount > 0 || warningCount > 0;
       long durationMs =
-          classReports.stream()
-              .mapToLong(QueryAuditReport::getTotalExecutionTimeNanos)
-              .sum()
+          classReports.stream().mapToLong(QueryAuditReport::getTotalExecutionTimeNanos).sum()
               / 1_000_000L;
       String durationStr =
-          durationMs >= 1000
-              ? String.format("%.1fs", durationMs / 1000.0)
-              : durationMs + "ms";
+          durationMs >= 1000 ? String.format("%.1fs", durationMs / 1000.0) : durationMs + "ms";
 
       String classHash = computeReportHash(classReports);
-      sb.append("    <tr class=\"").append(hasIssues ? "row-fail" : "row-pass")
-          .append("\" data-class=\"").append(esc(className))
-          .append("\" data-hash=\"").append(classHash).append("\">\n");
+      sb.append("    <tr class=\"")
+          .append(hasIssues ? "row-fail" : "row-pass")
+          .append("\" data-class=\"")
+          .append(esc(className))
+          .append("\" data-hash=\"")
+          .append(classHash)
+          .append("\">\n");
       sb.append("      <td><a href=\"")
           .append(esc(classFileName(className)))
           .append("\">")
@@ -1169,16 +1165,22 @@ public class HtmlReporter implements Reporter {
       sb.append(">\n");
       sb.append("  <summary>\n");
       sb.append("    ").append(statusDot).append("\n");
-      sb.append("    <span class=\"name\">")
-          .append(esc(report.getTestName()))
-          .append("</span>\n");
+      sb.append("    <span class=\"name\">").append(esc(report.getTestName())).append("</span>\n");
       long execTimeMs = report.getTotalExecutionTimeNanos() / 1_000_000;
       int uniquePatterns = report.getUniquePatternCount();
       sb.append("    <span class=\"meta\">")
-          .append(queryCount).append(" queries")
-          .append(" (").append(uniquePatterns).append(" unique)")
-          .append(", ").append(issueCount).append(" issue").append(issueCount != 1 ? "s" : "")
-          .append(", ").append(execTimeMs).append("ms")
+          .append(queryCount)
+          .append(" queries")
+          .append(" (")
+          .append(uniquePatterns)
+          .append(" unique)")
+          .append(", ")
+          .append(issueCount)
+          .append(" issue")
+          .append(issueCount != 1 ? "s" : "")
+          .append(", ")
+          .append(execTimeMs)
+          .append("ms")
           .append("</span>\n");
       sb.append("  </summary>\n");
 
@@ -1224,11 +1226,8 @@ public class HtmlReporter implements Reporter {
       }
 
       // No issues message
-      if (!hasIssues
-          && ackIssues.isEmpty()
-          && (infoIssues == null || infoIssues.isEmpty())) {
-        sb.append(
-            "  <p class=\"no-issues\">No issues detected. All queries look good.</p>\n");
+      if (!hasIssues && ackIssues.isEmpty() && (infoIssues == null || infoIssues.isEmpty())) {
+        sb.append("  <p class=\"no-issues\">No issues detected. All queries look good.</p>\n");
       }
 
       sb.append("</details>\n");
@@ -1238,15 +1237,15 @@ public class HtmlReporter implements Reporter {
     }
   }
 
-  /**
-   * Renders a compact issue card for the class detail page method cards.
-   */
+  /** Renders a compact issue card for the class detail page method cards. */
   private void appendCompactIssue(StringBuilder sb, Issue issue) {
     String sevClass = severityCssClass(issue.severity());
     String checkKey = issueCheckKey(issue);
     sb.append("    <div class=\"issue ").append(sevClass).append("\">\n");
-    sb.append("      <label class=\"issue-label\"><input type=\"checkbox\" class=\"issue-check\" data-key=\"")
-        .append(esc(checkKey)).append("\"> ");
+    sb.append(
+            "      <label class=\"issue-label\"><input type=\"checkbox\" class=\"issue-check\" data-key=\"")
+        .append(esc(checkKey))
+        .append("\"> ");
     sb.append("<span class=\"badge ")
         .append(sevClass)
         .append("\">[")
@@ -1260,9 +1259,7 @@ public class HtmlReporter implements Reporter {
     }
 
     if (issue.suggestion() != null && !issue.suggestion().isBlank()) {
-      sb.append("      <p class=\"fix\">Fix: ")
-          .append(esc(issue.suggestion()))
-          .append("</p>\n");
+      sb.append("      <p class=\"fix\">Fix: ").append(esc(issue.suggestion())).append("</p>\n");
     }
 
     if (issue.sourceLocation() != null && !issue.sourceLocation().isBlank()) {
@@ -3110,9 +3107,11 @@ public class HtmlReporter implements Reporter {
   private static String computeReportHash(List<QueryAuditReport> reports) {
     int hash = 0;
     for (QueryAuditReport r : reports) {
-      List<List<Issue>> allIssueLists = List.of(
-          r.getErrors(), r.getWarnings(),
-          r.getInfoIssues() != null ? r.getInfoIssues() : List.of());
+      List<List<Issue>> allIssueLists =
+          List.of(
+              r.getErrors(),
+              r.getWarnings(),
+              r.getInfoIssues() != null ? r.getInfoIssues() : List.of());
       for (List<Issue> issues : allIssueLists) {
         for (Issue issue : issues) {
           hash = 31 * hash + issueCheckKey(issue).hashCode();
@@ -3133,9 +3132,10 @@ public class HtmlReporter implements Reporter {
 
   /**
    * Appends a clickable link for an affected test. The test string may be:
+   *
    * <ul>
-   *   <li>{@code "ClassName#testName"} — renders as a link to {@code ClassName.html#test-testName}</li>
-   *   <li>{@code "testName"} (no #) — renders as plain text</li>
+   *   <li>{@code "ClassName#testName"} — renders as a link to {@code ClassName.html#test-testName}
+   *   <li>{@code "testName"} (no #) — renders as plain text
    * </ul>
    */
   private void appendTestLink(StringBuilder sb, String qualifiedTest, String indent) {
@@ -3159,8 +3159,8 @@ public class HtmlReporter implements Reporter {
   }
 
   /**
-   * Converts a test name into a safe HTML anchor ID by replacing non-alphanumeric characters
-   * with hyphens.
+   * Converts a test name into a safe HTML anchor ID by replacing non-alphanumeric characters with
+   * hyphens.
    */
   private static String sanitizeAnchor(String name) {
     if (name == null) return "unknown";

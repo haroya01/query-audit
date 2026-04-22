@@ -51,8 +51,7 @@ class WhereQualityFalsePositiveTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -65,14 +64,12 @@ class WhereQualityFalsePositiveTest {
     void coalesceIsSafe() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM members WHERE COALESCE(status, 'UNKNOWN') = 'ACTIVE'")
+          .createNativeQuery("SELECT * FROM members WHERE COALESCE(status, 'UNKNOWN') = 'ACTIVE'")
           .getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("coalesce", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.WHERE_FUNCTION);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.WHERE_FUNCTION);
     }
 
     @Test
@@ -85,8 +82,7 @@ class WhereQualityFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("rhsFunction", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.WHERE_FUNCTION);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.WHERE_FUNCTION);
     }
   }
 
@@ -98,14 +94,11 @@ class WhereQualityFalsePositiveTest {
     @DisplayName("IS NULL should NOT trigger (correct syntax)")
     void isNullCorrect() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE status IS NULL")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE status IS NULL").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("isNull", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.NULL_COMPARISON);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.NULL_COMPARISON);
     }
 
     @Test
@@ -118,8 +111,7 @@ class WhereQualityFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("isNotNull", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.NULL_COMPARISON);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.NULL_COMPARISON);
     }
   }
 
@@ -136,10 +128,8 @@ class WhereQualityFalsePositiveTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("trailingWildcard", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.LIKE_LEADING_WILDCARD);
+      QueryAuditReport report = analyze("trailingWildcard", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.LIKE_LEADING_WILDCARD);
     }
   }
 
@@ -158,8 +148,7 @@ class WhereQualityFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("caseOnRHS", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.CASE_IN_WHERE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.CASE_IN_WHERE);
     }
   }
 
@@ -172,15 +161,13 @@ class WhereQualityFalsePositiveTest {
     void differentConditions() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM members WHERE status = 'ACTIVE' AND name = 'User'")
+          .createNativeQuery("SELECT * FROM members WHERE status = 'ACTIVE' AND name = 'User'")
           .getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("differentConditions", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.REDUNDANT_FILTER);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.REDUNDANT_FILTER);
     }
   }
 }

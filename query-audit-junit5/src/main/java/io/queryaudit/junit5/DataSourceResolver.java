@@ -55,9 +55,9 @@ class DataSourceResolver {
   }
 
   /**
-   * Hooks the QueryInterceptor into the DataSource. If the DataSource is already a
-   * ProxyDataSource, adds the interceptor as a listener. Otherwise, wraps with a new
-   * ProxyDataSource and replaces the original where possible.
+   * Hooks the QueryInterceptor into the DataSource. If the DataSource is already a ProxyDataSource,
+   * adds the interceptor as a listener. Otherwise, wraps with a new ProxyDataSource and replaces
+   * the original where possible.
    */
   void hookInterceptor(DataSource dataSource, QueryInterceptor interceptor) {
     // Strategy 1: DataSource is already a ProxyDataSource (e.g., gavlyukovskiy)
@@ -69,9 +69,7 @@ class DataSourceResolver {
 
     // Strategy 2: Wrap with our own proxy via DataSourceProxyFactory
     QueryAuditDataSourceStore.set(
-        dataSource,
-        DataSourceProxyFactory.wrap(dataSource, interceptor),
-        interceptor);
+        dataSource, DataSourceProxyFactory.wrap(dataSource, interceptor), interceptor);
   }
 
   private DataSource resolveFromSpringContext(ExtensionContext context) {

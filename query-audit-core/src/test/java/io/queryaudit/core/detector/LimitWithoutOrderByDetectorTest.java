@@ -22,7 +22,8 @@ class LimitWithoutOrderByDetectorTest {
   @Test
   void detectsLimitWithoutOrderBy() {
     List<Issue> issues =
-        detector.evaluate(List.of(q("SELECT id, name FROM users WHERE status = 'active' LIMIT 10")), emptyIndex);
+        detector.evaluate(
+            List.of(q("SELECT id, name FROM users WHERE status = 'active' LIMIT 10")), emptyIndex);
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).type()).isEqualTo(IssueType.LIMIT_WITHOUT_ORDER_BY);
   }
@@ -63,7 +64,8 @@ class LimitWithoutOrderByDetectorTest {
     List<Issue> issues =
         detector.evaluate(
             List.of(
-                q("SELECT id FROM users WHERE id IN (SELECT user_id FROM orders LIMIT 5) ORDER BY id LIMIT 10")),
+                q(
+                    "SELECT id FROM users WHERE id IN (SELECT user_id FROM orders LIMIT 5) ORDER BY id LIMIT 10")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -71,8 +73,7 @@ class LimitWithoutOrderByDetectorTest {
   @Test
   void skipsNonSelectQueries() {
     List<Issue> issues =
-        detector.evaluate(
-            List.of(q("DELETE FROM users WHERE id = 1 LIMIT 1")), emptyIndex);
+        detector.evaluate(List.of(q("DELETE FROM users WHERE id = 1 LIMIT 1")), emptyIndex);
     assertThat(issues).isEmpty();
   }
 
@@ -95,17 +96,14 @@ class LimitWithoutOrderByDetectorTest {
     // LIMIT 1 without ORDER BY is a common existence check pattern
     List<Issue> issues =
         detector.evaluate(
-            List.of(q("SELECT id FROM users WHERE email = 'test@test.com' LIMIT 1")),
-            emptyIndex);
+            List.of(q("SELECT id FROM users WHERE email = 'test@test.com' LIMIT 1")), emptyIndex);
     assertThat(issues).isEmpty();
   }
 
   @Test
   void noIssueForLimit1WithWhereClause() {
     List<Issue> issues =
-        detector.evaluate(
-            List.of(q("SELECT 1 FROM users WHERE username = ? LIMIT 1")),
-            emptyIndex);
+        detector.evaluate(List.of(q("SELECT 1 FROM users WHERE username = ? LIMIT 1")), emptyIndex);
     assertThat(issues).isEmpty();
   }
 
@@ -124,9 +122,7 @@ class LimitWithoutOrderByDetectorTest {
   @Test
   void noIssueForSelect1WithParameterizedLimit() {
     List<Issue> issues =
-        detector.evaluate(
-            List.of(q("SELECT 1 FROM users WHERE username = ? LIMIT ?")),
-            emptyIndex);
+        detector.evaluate(List.of(q("SELECT 1 FROM users WHERE username = ? LIMIT ?")), emptyIndex);
     assertThat(issues).isEmpty();
   }
 
@@ -135,7 +131,8 @@ class LimitWithoutOrderByDetectorTest {
     // Hibernate generates "fetch first ? rows only" instead of "LIMIT ?"
     List<Issue> issues =
         detector.evaluate(
-            List.of(q("select m1_0.id from members m1_0 where m1_0.email=? fetch first ? rows only")),
+            List.of(
+                q("select m1_0.id from members m1_0 where m1_0.email=? fetch first ? rows only")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -144,12 +141,13 @@ class LimitWithoutOrderByDetectorTest {
   void noIssueForExistsByMethodInStackTrace() {
     // Even with a non-trivial LIMIT, existsBy* in the stack trace should skip
     String stackTrace =
-        "jdk.proxy3.$Proxy122.existsByEmail:-1\n"
-            + "com.example.UserService.checkExists:42";
+        "jdk.proxy3.$Proxy122.existsByEmail:-1\n" + "com.example.UserService.checkExists:42";
     QueryRecord record =
         new QueryRecord(
             "select m1_0.id from members m1_0 where m1_0.email=? fetch first ? rows only",
-            1000L, System.currentTimeMillis(), stackTrace);
+            1000L,
+            System.currentTimeMillis(),
+            stackTrace);
     List<Issue> issues = detector.evaluate(List.of(record), emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -158,12 +156,13 @@ class LimitWithoutOrderByDetectorTest {
   void stillDetectsWhenStackTraceHasNoExistsBy() {
     // Non-existsBy call with LIMIT but no ORDER BY should still be flagged
     String stackTrace =
-        "jdk.proxy3.$Proxy122.findByStatus:-1\n"
-            + "com.example.UserService.getUsers:50";
+        "jdk.proxy3.$Proxy122.findByStatus:-1\n" + "com.example.UserService.getUsers:50";
     QueryRecord record =
         new QueryRecord(
             "SELECT id, name FROM users WHERE status = ? LIMIT 10",
-            1000L, System.currentTimeMillis(), stackTrace);
+            1000L,
+            System.currentTimeMillis(),
+            stackTrace);
     List<Issue> issues = detector.evaluate(List.of(record), emptyIndex);
     assertThat(issues).hasSize(1);
   }
@@ -173,8 +172,7 @@ class LimitWithoutOrderByDetectorTest {
     // LIMIT > 1 without ORDER BY is still non-deterministic
     List<Issue> issues =
         detector.evaluate(
-            List.of(q("SELECT id, name FROM users WHERE status = 'active' LIMIT 10")),
-            emptyIndex);
+            List.of(q("SELECT id, name FROM users WHERE status = 'active' LIMIT 10")), emptyIndex);
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).type()).isEqualTo(IssueType.LIMIT_WITHOUT_ORDER_BY);
   }

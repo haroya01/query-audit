@@ -7,9 +7,9 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.JoinColumnPair;
 import io.queryaudit.core.parser.SqlParser;
-import io.queryaudit.core.parser.EnhancedSqlParser;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -22,8 +22,8 @@ import java.util.stream.Collectors;
 
 /**
  * Detects queries that use a non-leading column of a composite index without including the leading
- * column in the WHERE clause. This violates the leftmost prefix rule of B-tree indexes, causing
- * the database to skip the composite index entirely and potentially fall back to a full table scan.
+ * column in the WHERE clause. This violates the leftmost prefix rule of B-tree indexes, causing the
+ * database to skip the composite index entirely and potentially fall back to a full table scan.
  *
  * @author haroya
  * @since 0.2.0
@@ -222,16 +222,12 @@ public class CompositeIndexDetector implements DetectionRule {
 
         // If left side is constrained, expand right side
         if (leftCols.contains(leftCol) && !rightCols.contains(rightCol)) {
-          whereColumnsByTable
-              .computeIfAbsent(rightTable, k -> new HashSet<>())
-              .add(rightCol);
+          whereColumnsByTable.computeIfAbsent(rightTable, k -> new HashSet<>()).add(rightCol);
           changed = true;
         }
         // If right side is constrained, expand left side
         if (rightCols.contains(rightCol) && !leftCols.contains(leftCol)) {
-          whereColumnsByTable
-              .computeIfAbsent(leftTable, k -> new HashSet<>())
-              .add(leftCol);
+          whereColumnsByTable.computeIfAbsent(leftTable, k -> new HashSet<>()).add(leftCol);
           changed = true;
         }
       }

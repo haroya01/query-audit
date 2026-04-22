@@ -16,9 +16,9 @@ import java.util.regex.Pattern;
 /**
  * Detects SELECT queries with LIMIT but without ORDER BY, which returns non-deterministic results.
  *
- * <p>Without ORDER BY, the database engine is free to return rows in any order. Combined with LIMIT,
- * this means repeated executions may return different result sets, leading to inconsistent pagination
- * and hard-to-reproduce bugs.
+ * <p>Without ORDER BY, the database engine is free to return rows in any order. Combined with
+ * LIMIT, this means repeated executions may return different result sets, leading to inconsistent
+ * pagination and hard-to-reproduce bugs.
  *
  * @author haroya
  * @since 0.2.0
@@ -37,13 +37,12 @@ public class LimitWithoutOrderByDetector implements DetectionRule {
 
   /** Matches aggregate functions that make ordering meaningless. */
   private static final Pattern AGGREGATE_PATTERN =
-      Pattern.compile(
-          "\\b(?:COUNT|SUM|AVG|MIN|MAX)\\s*\\(", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("\\b(?:COUNT|SUM|AVG|MIN|MAX)\\s*\\(", Pattern.CASE_INSENSITIVE);
 
   /**
-   * Matches LIMIT 1 or LIMIT ? — existence checks (e.g., {@code SELECT id FROM t WHERE cond LIMIT 1})
-   * intentionally use LIMIT 1 without ORDER BY to quickly check if any row matches.
-   * JPA existsBy* methods generate parameterized LIMIT (LIMIT ?) which should also be excluded.
+   * Matches LIMIT 1 or LIMIT ? — existence checks (e.g., {@code SELECT id FROM t WHERE cond LIMIT
+   * 1}) intentionally use LIMIT 1 without ORDER BY to quickly check if any row matches. JPA
+   * existsBy* methods generate parameterized LIMIT (LIMIT ?) which should also be excluded.
    */
   private static final Pattern LIMIT_ONE_PATTERN =
       Pattern.compile(
@@ -51,11 +50,10 @@ public class LimitWithoutOrderByDetector implements DetectionRule {
           Pattern.CASE_INSENSITIVE);
 
   /**
-   * Matches JPA existsBy* method names in the captured stack trace.
-   * When a query originates from an existsBy* call, ordering is irrelevant.
+   * Matches JPA existsBy* method names in the captured stack trace. When a query originates from an
+   * existsBy* call, ordering is irrelevant.
    */
-  private static final Pattern EXISTS_BY_METHOD =
-      Pattern.compile("\\.existsBy\\w+:");
+  private static final Pattern EXISTS_BY_METHOD = Pattern.compile("\\.existsBy\\w+:");
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {

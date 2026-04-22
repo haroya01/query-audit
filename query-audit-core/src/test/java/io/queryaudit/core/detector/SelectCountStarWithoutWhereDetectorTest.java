@@ -122,7 +122,8 @@ class SelectCountStarWithoutWhereDetectorTest {
   @Test
   void noIssueForCountStarInSubquery() {
     // COUNT(*) in a subquery should not trigger — the outer query controls the result
-    String sql = "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders GROUP BY user_id HAVING COUNT(*) > 5)";
+    String sql =
+        "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders GROUP BY user_id HAVING COUNT(*) > 5)";
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
 

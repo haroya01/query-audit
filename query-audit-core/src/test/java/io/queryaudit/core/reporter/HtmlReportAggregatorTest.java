@@ -48,12 +48,12 @@ class HtmlReportAggregatorTest {
   class SingletonAccumulation {
 
     /**
-     * The aggregator is a singleton that accumulates reports without resetting.
-     * Calling writeReport() at intermediate points produces incomplete HTML files
-     * because later test classes haven't added their reports yet.
+     * The aggregator is a singleton that accumulates reports without resetting. Calling
+     * writeReport() at intermediate points produces incomplete HTML files because later test
+     * classes haven't added their reports yet.
      *
-     * <p>This is why writeReport should only be called once, after ALL test classes finish.
-     * The fix is in QueryAuditExtension (ReportFinalizer), not in the aggregator itself.
+     * <p>This is why writeReport should only be called once, after ALL test classes finish. The fix
+     * is in QueryAuditExtension (ReportFinalizer), not in the aggregator itself.
      */
     @Test
     @DisplayName("intermediate writes produce incomplete reports — only final write has all data")
@@ -114,9 +114,7 @@ class HtmlReportAggregatorTest {
           .contains("UserServiceTest")
           .contains("PaymentServiceTest");
 
-      assertThat(aggregator.getReports())
-          .as("All 4 reports present in singleton")
-          .hasSize(4);
+      assertThat(aggregator.getReports()).as("All 4 reports present in singleton").hasSize(4);
     }
   }
 }

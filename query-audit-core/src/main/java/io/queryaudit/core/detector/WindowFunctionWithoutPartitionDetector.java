@@ -47,8 +47,8 @@ public class WindowFunctionWithoutPartitionDetector implements DetectionRule {
       Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE);
 
   /**
-   * Window functions that are commonly used intentionally over the entire result set
-   * for row numbering, ranking, or pagination purposes.
+   * Window functions that are commonly used intentionally over the entire result set for row
+   * numbering, ranking, or pagination purposes.
    */
   private static final Set<String> NUMBERING_FUNCTIONS =
       Set.of("ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE");
@@ -84,8 +84,7 @@ public class WindowFunctionWithoutPartitionDetector implements DetectionRule {
         if (!PARTITION_BY.matcher(overContent).find()) {
           // Numbering/ranking functions (ROW_NUMBER, RANK, etc.) with ORDER BY
           // over the entire result set are intentional for pagination/ranking
-          if (NUMBERING_FUNCTIONS.contains(functionName)
-              && ORDER_BY.matcher(overContent).find()) {
+          if (NUMBERING_FUNCTIONS.contains(functionName) && ORDER_BY.matcher(overContent).find()) {
             continue;
           }
 

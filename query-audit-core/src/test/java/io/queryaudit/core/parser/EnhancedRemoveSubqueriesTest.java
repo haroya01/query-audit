@@ -23,8 +23,7 @@ class EnhancedRemoveSubqueriesTest {
   @Test
   @DisplayName("#54: '(SELECT' inside literal does NOT drop trailing WHERE")
   void issue54_worstCase() {
-    String sql =
-        "SELECT * FROM logs WHERE note = '(SELECT ' AND status = 'ok)' AND y = 1";
+    String sql = "SELECT * FROM logs WHERE note = '(SELECT ' AND status = 'ok)' AND y = 1";
     String enhanced = EnhancedSqlParser.removeSubqueries(sql);
     String regex = SqlParser.removeSubqueries(sql);
     System.out.println("[#54] enhanced = " + enhanced);
@@ -63,7 +62,8 @@ class EnhancedRemoveSubqueriesTest {
   @Test
   @DisplayName("EXISTS (SELECT ...) — replaced with EXISTS (?)")
   void existsSubquery() {
-    String sql = "SELECT * FROM orders o WHERE EXISTS (SELECT 1 FROM items i WHERE i.order_id = o.id)";
+    String sql =
+        "SELECT * FROM orders o WHERE EXISTS (SELECT 1 FROM items i WHERE i.order_id = o.id)";
     String enhanced = EnhancedSqlParser.removeSubqueries(sql);
     System.out.println("[EXISTS] enhanced = " + enhanced);
     assertThat(enhanced).doesNotContainIgnoringCase("items");

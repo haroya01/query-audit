@@ -54,8 +54,7 @@ class FalsePositiveReductionTest {
     void ifnullInWhere_notFlagged() {
       List<Issue> issues =
           detector.evaluate(
-              List.of(record("SELECT * FROM users WHERE IFNULL(email, '') != ''")),
-              EMPTY_INDEX);
+              List.of(record("SELECT * FROM users WHERE IFNULL(email, '') != ''")), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
     }
@@ -89,8 +88,7 @@ class FalsePositiveReductionTest {
     void lowerInWhere_stillFlagged() {
       List<Issue> issues =
           detector.evaluate(
-              List.of(record("SELECT * FROM users WHERE LOWER(name) = 'john'")),
-              EMPTY_INDEX);
+              List.of(record("SELECT * FROM users WHERE LOWER(name) = 'john'")), EMPTY_INDEX);
 
       assertThat(issues).hasSize(1);
       assertThat(issues.get(0).column()).isEqualTo("name");

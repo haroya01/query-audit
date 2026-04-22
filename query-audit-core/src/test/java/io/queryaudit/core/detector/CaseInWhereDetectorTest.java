@@ -23,8 +23,7 @@ class CaseInWhereDetectorTest {
   void detectsCaseInWhere() {
     List<Issue> issues =
         detector.evaluate(
-            List.of(
-                q("SELECT id FROM users WHERE CASE WHEN status = 'A' THEN 1 ELSE 0 END = 1")),
+            List.of(q("SELECT id FROM users WHERE CASE WHEN status = 'A' THEN 1 ELSE 0 END = 1")),
             emptyIndex);
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);
@@ -33,8 +32,7 @@ class CaseInWhereDetectorTest {
   @Test
   void noIssueWithoutCaseInWhere() {
     List<Issue> issues =
-        detector.evaluate(
-            List.of(q("SELECT id FROM users WHERE status = 'active'")), emptyIndex);
+        detector.evaluate(List.of(q("SELECT id FROM users WHERE status = 'active'")), emptyIndex);
     assertThat(issues).isEmpty();
   }
 
@@ -43,7 +41,8 @@ class CaseInWhereDetectorTest {
     List<Issue> issues =
         detector.evaluate(
             List.of(
-                q("SELECT CASE WHEN status = 'A' THEN 'Active' ELSE 'Inactive' END AS label FROM users WHERE id = 1")),
+                q(
+                    "SELECT CASE WHEN status = 'A' THEN 'Active' ELSE 'Inactive' END AS label FROM users WHERE id = 1")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -54,7 +53,8 @@ class CaseInWhereDetectorTest {
     List<Issue> issues =
         detector.evaluate(
             List.of(
-                q("SELECT id FROM orders WHERE amount > CASE WHEN type = 'premium' THEN 100 ELSE 50 END")),
+                q(
+                    "SELECT id FROM orders WHERE amount > CASE WHEN type = 'premium' THEN 100 ELSE 50 END")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -75,7 +75,8 @@ class CaseInWhereDetectorTest {
     List<Issue> issues =
         detector.evaluate(
             List.of(
-                q("SELECT id FROM users WHERE status = (CASE WHEN role = 'admin' THEN 'active' ELSE 'inactive' END)")),
+                q(
+                    "SELECT id FROM users WHERE status = (CASE WHEN role = 'admin' THEN 'active' ELSE 'inactive' END)")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -86,7 +87,8 @@ class CaseInWhereDetectorTest {
     List<Issue> issues =
         detector.evaluate(
             List.of(
-                q("SELECT id FROM users WHERE status IN (CASE WHEN flag = 1 THEN 'active' ELSE 'inactive' END)")),
+                q(
+                    "SELECT id FROM users WHERE status IN (CASE WHEN flag = 1 THEN 'active' ELSE 'inactive' END)")),
             emptyIndex);
     assertThat(issues).isEmpty();
   }
@@ -97,7 +99,8 @@ class CaseInWhereDetectorTest {
     List<Issue> issues =
         detector.evaluate(
             List.of(
-                q("SELECT id FROM users WHERE CASE WHEN status = 'A' THEN 1 WHEN status = 'B' THEN 2 END = 1")),
+                q(
+                    "SELECT id FROM users WHERE CASE WHEN status = 'A' THEN 1 WHEN status = 'B' THEN 2 END = 1")),
             emptyIndex);
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);

@@ -143,12 +143,7 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
     return issues;
   }
 
-  /**
-   * Checks if a non-primary index can satisfy ORDER BY on the column. Only the leading column
-   * (seqInIndex == 1) of a non-primary index is usable for ORDER BY without a filesort — a
-   * non-leading composite column still requires a full sort even though the column appears in
-   * the index.
-   */
+  /** True if a non-primary index has the column as its leading segment (seqInIndex == 1). */
   private boolean hasNonPrimaryIndexOn(IndexMetadata metadata, String table, String column) {
     List<IndexInfo> indexes = metadata.getIndexesForTable(table);
     return indexes.stream()

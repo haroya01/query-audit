@@ -317,12 +317,12 @@ These can be passed via `-D` flags on the command line:
 
 | Property | Description |
 |---|---|
-| `-DqueryGuard.updateBaseline=true` | Update the query count baseline file after test run |
-| `-DqueryGuard.countBaselinePath=path` | Override the query count baseline file path |
+| `-DqueryAudit.updateBaseline=true` | Update the query count baseline file after test run |
+| `-DqueryAudit.countBaselinePath=path` | Override the query count baseline file path |
 | `-Dqueryaudit.autoOpenReport=true` | Force open HTML report in browser |
 
 ```bash
-./gradlew test -DqueryGuard.updateBaseline=true
+./gradlew test -DqueryAudit.updateBaseline=true
 ```
 
 ---

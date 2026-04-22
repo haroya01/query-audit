@@ -10,10 +10,10 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Immutable configuration for QueryAudit analysis. Controls which rules are enabled, their
- * severity overrides, detection thresholds (e.g., N+1, offset pagination, OR clause limits),
- * suppression patterns, baseline file path, and other behavioral settings. Instances are
- * created via the {@link Builder}.
+ * Immutable configuration for QueryAudit analysis. Controls which rules are enabled, their severity
+ * overrides, detection thresholds (e.g., N+1, offset pagination, OR clause limits), suppression
+ * patterns, baseline file path, and other behavioral settings. Instances are created via the {@link
+ * Builder}.
  *
  * @author haroya
  * @since 0.2.0
@@ -153,8 +153,8 @@ public class QueryAuditConfig {
   }
 
   /**
-   * Returns the effective severity for the given issue type code. If an override exists, returns the
-   * override; otherwise returns the provided default.
+   * Returns the effective severity for the given issue type code. If an override exists, returns
+   * the override; otherwise returns the provided default.
    */
   public Severity getEffectiveSeverity(String issueCode, Severity defaultSeverity) {
     return severityOverrides.getOrDefault(issueCode, defaultSeverity);
@@ -200,8 +200,8 @@ public class QueryAuditConfig {
   }
 
   /**
-   * Returns whether setup/teardown lifecycle phase queries should be included in analysis.
-   * Default is {@code false} — only TEST-phase queries are analyzed.
+   * Returns whether setup/teardown lifecycle phase queries should be included in analysis. Default
+   * is {@code false} — only TEST-phase queries are analyzed.
    */
   public boolean isIncludeSetupQueries() {
     return includeSetupQueries;

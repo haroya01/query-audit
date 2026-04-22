@@ -9,7 +9,6 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
-import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +31,8 @@ class FindByIdForAssociationDetectorTest {
     return new LazyLoadRecord(role, ownerEntity, ownerId, timestamp);
   }
 
-  private static LazyLoadRecord lazyProxyRecord(String entityFqcn, String entityId, long timestamp) {
+  private static LazyLoadRecord lazyProxyRecord(
+      String entityFqcn, String entityId, long timestamp) {
     return new LazyLoadRecord(
         LazyLoadTracker.PROXY_ROLE_PREFIX + entityFqcn, entityFqcn, entityId, timestamp);
   }
@@ -51,8 +51,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_followedByInsertWithFk_shouldDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (id, user_id, amount) VALUES (?, ?, ?)", 2000));
@@ -94,14 +93,11 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_withLazyCollectionAccess_shouldNotDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     // Lazy collection init on the same entity → data was used beyond FK
     List<LazyLoadRecord> lazyRecords =
-        List.of(
-            lazyCollectionRecord(
-                "com.example.User.orders", "com.example.User", "42", 1500));
+        List.of(lazyCollectionRecord("com.example.User.orders", "com.example.User", "42", 1500));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO audit_log (user_id, action) VALUES (?, ?)", 2000));
@@ -117,12 +113,10 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_withLazyProxyResolution_shouldNotDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     // Proxy resolution for the same entity → its fields were accessed
-    List<LazyLoadRecord> lazyRecords =
-        List.of(lazyProxyRecord("com.example.User", "42", 1500));
+    List<LazyLoadRecord> lazyRecords = List.of(lazyProxyRecord("com.example.User", "42", 1500));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (user_id) VALUES (?)", 2000));
@@ -138,8 +132,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_noSubsequentDml_shouldNotDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     // Only SELECT queries, no INSERT/UPDATE
     List<QueryRecord> queries =
@@ -156,8 +149,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_dmlBeforeLoad_shouldNotDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 2000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 2000));
 
     // INSERT happened before the findById load
     List<QueryRecord> queries =
@@ -197,13 +189,10 @@ class FindByIdForAssociationDetectorTest {
 
     // User has lazy access (used beyond FK), Category does not
     List<LazyLoadRecord> lazyRecords =
-        List.of(
-            lazyCollectionRecord(
-                "com.example.User.orders", "com.example.User", "1", 1500));
+        List.of(lazyCollectionRecord("com.example.User.orders", "com.example.User", "1", 1500));
 
     List<QueryRecord> queries =
-        List.of(
-            insertQuery("INSERT INTO products (user_id, category_id) VALUES (?, ?)", 2000));
+        List.of(insertQuery("INSERT INTO products (user_id, category_id) VALUES (?, ?)", 2000));
 
     List<Issue> issues = detector.evaluate(explicitLoads, lazyRecords, queries);
 
@@ -217,8 +206,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_camelCaseFkColumn_shouldDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (id, userId, amount) VALUES (?, ?, ?)", 2000));
@@ -238,9 +226,7 @@ class FindByIdForAssociationDetectorTest {
         List.of(explicitLoad("com.example.UserProfile", "10", 1000));
 
     List<QueryRecord> queries =
-        List.of(
-            updateQuery(
-                "UPDATE accounts SET user_profile_id = ? WHERE id = ?", 2000));
+        List.of(updateQuery("UPDATE accounts SET user_profile_id = ? WHERE id = ?", 2000));
 
     List<Issue> issues = detector.evaluate(explicitLoads, List.of(), queries);
 
@@ -254,14 +240,11 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void lazyInitOnDifferentEntity_shouldStillDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     // Lazy init on a different entity type
     List<LazyLoadRecord> lazyRecords =
-        List.of(
-            lazyCollectionRecord(
-                "com.example.Order.items", "com.example.Order", "99", 1500));
+        List.of(lazyCollectionRecord("com.example.Order.items", "com.example.Order", "99", 1500));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (user_id) VALUES (?)", 2000));
@@ -278,12 +261,10 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void lazyInitSameTypeDifferentId_shouldStillDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     // Lazy init on same entity type but different ID
-    List<LazyLoadRecord> lazyRecords =
-        List.of(lazyProxyRecord("com.example.User", "99", 1500));
+    List<LazyLoadRecord> lazyRecords = List.of(lazyProxyRecord("com.example.User", "99", 1500));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (user_id) VALUES (?)", 2000));
@@ -301,7 +282,10 @@ class FindByIdForAssociationDetectorTest {
   void issue_containsSourceLocation() {
     ExplicitLoadRecord load =
         new ExplicitLoadRecord(
-            "com.example.User", "42", 1000, "com.example.OrderService.createOrder(OrderService.java:45)");
+            "com.example.User",
+            "42",
+            1000,
+            "com.example.OrderService.createOrder(OrderService.java:45)");
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (user_id) VALUES (?)", 2000));
@@ -318,8 +302,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void issue_queryField_containsEntityInfo() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (user_id) VALUES (?)", 2000));
@@ -336,8 +319,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void dmlAtSameTimestampAsLoad_shouldNotDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     // INSERT at same timestamp — not "after" the load
     List<QueryRecord> queries =
@@ -373,8 +355,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void substringFkColumn_shouldNotFalsePositive() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     // "abuser_id" contains "user_id" as substring but is a different column
     List<QueryRecord> queries =
@@ -391,8 +372,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_quotedFkColumn_shouldDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (`user_id`, `amount`) VALUES (?, ?)", 2000));
@@ -408,8 +388,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_fkAsFirstColumnInParens_shouldDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     List<QueryRecord> queries =
         List.of(insertQuery("INSERT INTO orders (user_id) VALUES (?)", 2000));
@@ -425,8 +404,7 @@ class FindByIdForAssociationDetectorTest {
 
   @Test
   void findById_updateSetFk_shouldDetect() {
-    List<ExplicitLoadRecord> explicitLoads =
-        List.of(explicitLoad("com.example.User", "42", 1000));
+    List<ExplicitLoadRecord> explicitLoads = List.of(explicitLoad("com.example.User", "42", 1000));
 
     List<QueryRecord> queries =
         List.of(updateQuery("UPDATE orders SET user_id = ? WHERE id = ?", 2000));

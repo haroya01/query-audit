@@ -91,21 +91,15 @@ jobs:
 
 ### Inline PR annotations + step summary
 
-When running on GitHub Actions (detected via the runner's `GITHUB_ACTIONS=true`
-environment variable) QueryAudit additionally emits
+When `GITHUB_ACTIONS=true` (set by the runner), QueryAudit emits
 [workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions)
-alongside the normal console output:
+in addition to the console report:
 
-- Each `ERROR` issue becomes an `::error` annotation — shown inline on the PR's
-  "Files changed" tab when the source location is known.
-- `WARNING` → `::warning`, `INFO` → `::notice`.
-- A Markdown table and the top N issues per severity are appended to the job's
-  step summary (the page you land on from the PR check's "Details" link).
+- `ERROR` → `::error`, `WARNING` → `::warning`, `INFO` → `::notice`
+- Markdown summary appended to `$GITHUB_STEP_SUMMARY`
 
-No workflow changes are required beyond the standard `./gradlew test` step — the
-reporter auto-activates in CI and stays silent locally. If you want a PR-scoped
-signal on top of the inline annotations, pair it with a comment action that
-reads the JSON report:
+Activation is automatic; no workflow changes needed. For a PR comment, pair
+the JSON report with a `github-script` step:
 
 ```yaml
       - name: Post QueryAudit summary as PR comment
@@ -189,7 +183,7 @@ update it explicitly when query counts change intentionally.
       - name: Update baseline (main only)
         if: github.ref == 'refs/heads/main' && success()
         run: |
-          ./gradlew test -DqueryGuard.updateBaseline=true
+          ./gradlew test -DqueryAudit.updateBaseline=true
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .query-audit-counts
@@ -326,7 +320,7 @@ update-baseline:
     SPRING_DATASOURCE_USERNAME: root
     SPRING_DATASOURCE_PASSWORD: test
   script:
-    - ./gradlew test -DqueryGuard.updateBaseline=true
+    - ./gradlew test -DqueryAudit.updateBaseline=true
     - git config user.name "GitLab CI"
     - git config user.email "ci@example.com"
     - git add .query-audit-counts
@@ -461,7 +455,7 @@ Establish a baseline of existing issues, then only fail on new regressions:
 
 ```bash
 # First run: create the baseline
-./gradlew test -DqueryGuard.updateBaseline=true
+./gradlew test -DqueryAudit.updateBaseline=true
 
 # Subsequent runs: detect regressions against baseline
 ./gradlew test

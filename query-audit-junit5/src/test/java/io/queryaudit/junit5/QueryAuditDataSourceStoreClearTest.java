@@ -1,6 +1,8 @@
 package io.queryaudit.junit5;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -12,9 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
- * Regression for issue #100 — {@link QueryAuditDataSourceStore#clear()} must be invoked in
- * {@link QueryAuditExtension#afterAll(ExtensionContext)} so the ThreadLocal holder is released
- * instead of living for the lifetime of the Gradle test worker thread.
+ * Regression for issue #100 — {@link QueryAuditDataSourceStore#clear()} must be invoked in {@link
+ * QueryAuditExtension#afterAll(ExtensionContext)} so the ThreadLocal holder is released instead of
+ * living for the lifetime of the Gradle test worker thread.
  */
 @DisplayName("QueryAuditDataSourceStore.clear() is called on afterAll (issue #100)")
 class QueryAuditDataSourceStoreClearTest {
@@ -57,13 +59,9 @@ class QueryAuditDataSourceStoreClearTest {
     when(ctx.getRoot()).thenReturn(root);
     when(ctx.getTestMethod()).thenReturn(Optional.empty());
     ExtensionContext.Store store = mock(ExtensionContext.Store.class);
-    when(ctx.getStore(org.mockito.ArgumentMatchers.any(ExtensionContext.Namespace.class)))
-        .thenReturn(store);
-    when(root.getStore(org.mockito.ArgumentMatchers.any(ExtensionContext.Namespace.class)))
-        .thenReturn(store);
-    when(store.getOrComputeIfAbsent(
-            org.mockito.ArgumentMatchers.anyString(),
-            org.mockito.ArgumentMatchers.any()))
+    when(ctx.getStore(any(ExtensionContext.Namespace.class))).thenReturn(store);
+    when(root.getStore(any(ExtensionContext.Namespace.class))).thenReturn(store);
+    when(store.getOrComputeIfAbsent(anyString(), any()))
         .thenAnswer(inv -> mock(QueryAuditExtension.ReportFinalizer.class));
     return ctx;
   }
