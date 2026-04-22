@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -73,7 +72,8 @@ public class NullComparisonDetector implements DetectionRule {
       // Extract WHERE clause body using safe clause boundary scanning.
       // Strip subqueries first so that conditions inside subqueries do not
       // false-positive on the outer query's WHERE body.
-      String whereBody = EnhancedSqlParser.extractWhereBody(EnhancedSqlParser.removeSubqueries(sql));
+      String whereBody =
+          EnhancedSqlParser.extractWhereBody(EnhancedSqlParser.removeSubqueries(sql));
       if (whereBody == null) {
         continue;
       }

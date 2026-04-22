@@ -179,12 +179,12 @@ class QueryAuditAutoConfigurationTest {
     @DisplayName("suppressQueries property binds to QueryAuditConfig")
     void suppressQueriesPropertyBinding() {
       contextRunner
-          .withPropertyValues(
-              "query-audit.suppress-queries=SELECT 1,SELECT 2")
+          .withPropertyValues("query-audit.suppress-queries=SELECT 1,SELECT 2")
           .run(
               context -> {
                 QueryAuditConfig config = context.getBean(QueryAuditConfig.class);
-                assertThat(config.getSuppressQueries()).containsExactlyInAnyOrder("SELECT 1", "SELECT 2");
+                assertThat(config.getSuppressQueries())
+                    .containsExactlyInAnyOrder("SELECT 1", "SELECT 2");
               });
     }
 

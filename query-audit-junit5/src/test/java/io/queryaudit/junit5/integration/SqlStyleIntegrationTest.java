@@ -55,8 +55,7 @@ class SqlStyleIntegrationTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -68,14 +67,11 @@ class SqlStyleIntegrationTest {
     @DisplayName("SELECT * in native query is detected")
     void detectsSelectAll() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE id = 1")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE id = 1").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("selectAll", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.SELECT_ALL);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.SELECT_ALL);
     }
   }
 
@@ -88,15 +84,13 @@ class SqlStyleIntegrationTest {
     void detectsDistinctWithGroupBy() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT DISTINCT status, COUNT(*) FROM members GROUP BY status")
+          .createNativeQuery("SELECT DISTINCT status, COUNT(*) FROM members GROUP BY status")
           .getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("distinctWithGroupBy", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.DISTINCT_MISUSE);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.DISTINCT_MISUSE);
     }
 
     @Test
@@ -109,10 +103,8 @@ class SqlStyleIntegrationTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("distinctWithJoin", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.DISTINCT_MISUSE);
+      QueryAuditReport report = analyze("distinctWithJoin", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.DISTINCT_MISUSE);
     }
   }
 
@@ -132,10 +124,8 @@ class SqlStyleIntegrationTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("unionWithoutAll", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.UNION_WITHOUT_ALL);
+      QueryAuditReport report = analyze("unionWithoutAll", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.UNION_WITHOUT_ALL);
     }
   }
 
@@ -154,8 +144,7 @@ class SqlStyleIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("havingMisuse", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.HAVING_MISUSE);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.HAVING_MISUSE);
     }
   }
 
@@ -168,15 +157,12 @@ class SqlStyleIntegrationTest {
     void detectsGroupByFunction() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT UPPER(status), COUNT(*) FROM members GROUP BY UPPER(status)")
+          .createNativeQuery("SELECT UPPER(status), COUNT(*) FROM members GROUP BY UPPER(status)")
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("groupByFunction", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.GROUP_BY_FUNCTION);
+      QueryAuditReport report = analyze("groupByFunction", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.GROUP_BY_FUNCTION);
     }
   }
 
@@ -197,7 +183,8 @@ class SqlStyleIntegrationTest {
 
       QueryAuditReport report = analyze("nPlusOne", queryInterceptor.getRecordedQueries());
       assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.N_PLUS_ONE || i.type() == IssueType.N_PLUS_ONE_SUSPECT);
+          .anyMatch(
+              i -> i.type() == IssueType.N_PLUS_ONE || i.type() == IssueType.N_PLUS_ONE_SUSPECT);
     }
   }
 
@@ -222,7 +209,8 @@ class SqlStyleIntegrationTest {
       QueryAuditReport report = analyze("lazyLoadNPlusOne", queries);
       // SQL-level N+1 detected as INFO
       assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.N_PLUS_ONE || i.type() == IssueType.N_PLUS_ONE_SUSPECT);
+          .anyMatch(
+              i -> i.type() == IssueType.N_PLUS_ONE || i.type() == IssueType.N_PLUS_ONE_SUSPECT);
     }
   }
 }

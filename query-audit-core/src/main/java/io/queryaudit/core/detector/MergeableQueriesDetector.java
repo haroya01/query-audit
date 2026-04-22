@@ -146,13 +146,7 @@ public class MergeableQueriesDetector implements DetectionRule {
     return cols;
   }
 
-  /**
-   * Extracts a normalized representation of the JOIN structure from a SQL query. Queries with
-   * different JOINs — different tables, different JOIN types, <b>or different ON conditions</b> —
-   * should not be considered mergeable (issue #97).
-   */
-  // Matches the JOIN keyword itself (with optional qualifier). Used only to locate segment
-  // starts; the segment content runs until the next JOIN or terminating clause boundary below.
+  /** Normalized JOIN structure including ON condition, used as part of the merge group key. */
   private static final Pattern JOIN_KEYWORD =
       Pattern.compile(
           "\\b(?:LEFT\\s+(?:OUTER\\s+)?|RIGHT\\s+(?:OUTER\\s+)?|INNER\\s+|FULL\\s+(?:OUTER\\s+)?|CROSS\\s+)?JOIN\\b",

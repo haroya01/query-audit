@@ -51,8 +51,7 @@ class JoinSubqueryFalsePositiveTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -64,14 +63,11 @@ class JoinSubqueryFalsePositiveTest {
     @DisplayName("CROSS JOIN is intentional and should NOT trigger")
     void crossJoinIntentional() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM teams t CROSS JOIN members m")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM teams t CROSS JOIN members m").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("crossJoin", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.CARTESIAN_JOIN);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.CARTESIAN_JOIN);
     }
 
     @Test
@@ -79,15 +75,12 @@ class JoinSubqueryFalsePositiveTest {
     void implicitJoinWithWhere() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM teams t, members m WHERE t.id = m.team_id")
+          .createNativeQuery("SELECT * FROM teams t, members m WHERE t.id = m.team_id")
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("implicitWithWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.CARTESIAN_JOIN);
+      QueryAuditReport report = analyze("implicitWithWhere", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.CARTESIAN_JOIN);
     }
   }
 
@@ -106,8 +99,7 @@ class JoinSubqueryFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("joinUsed", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UNUSED_JOIN);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UNUSED_JOIN);
     }
 
     @Test
@@ -120,10 +112,8 @@ class JoinSubqueryFalsePositiveTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("joinUsedInWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UNUSED_JOIN);
+      QueryAuditReport report = analyze("joinUsedInWhere", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UNUSED_JOIN);
     }
   }
 
@@ -145,8 +135,7 @@ class JoinSubqueryFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("fewJoins", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.TOO_MANY_JOINS);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.TOO_MANY_JOINS);
     }
   }
 
@@ -164,8 +153,7 @@ class JoinSubqueryFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("smallInList", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.LARGE_IN_LIST);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.LARGE_IN_LIST);
     }
   }
 
@@ -185,10 +173,8 @@ class JoinSubqueryFalsePositiveTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("twoQueries", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.MERGEABLE_QUERIES);
+      QueryAuditReport report = analyze("twoQueries", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.MERGEABLE_QUERIES);
     }
   }
 
@@ -205,8 +191,7 @@ class JoinSubqueryFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("twoFinds", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.N_PLUS_ONE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.N_PLUS_ONE);
     }
   }
 }

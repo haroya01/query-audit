@@ -162,7 +162,8 @@ public class PostgreSqlExplainAnalyzer implements ExplainAnalyzer {
     }
     start += pattern.length();
     int end = start;
-    while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '.')) {
+    while (end < json.length()
+        && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '.')) {
       end++;
     }
     if (end == start) {

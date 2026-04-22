@@ -11,6 +11,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1171,7 +1172,7 @@ class ProductionWorkloadTest {
 
   /** Shared storage across test methods - order matters for the final report. */
   private static final Map<String, ScenarioResult> scenarioResults =
-      java.util.Collections.synchronizedMap(new LinkedHashMap<>());
+      Collections.synchronizedMap(new LinkedHashMap<>());
 
   @Test
   void printFinalReport() {

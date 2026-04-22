@@ -26,32 +26,20 @@ class HibernateIntegration {
   private static final String POST_LOAD_LISTENER_CLASS =
       "org.hibernate.event.spi.PostLoadEventListener";
 
-  /**
-   * Registers a LazyLoadTracker as a Hibernate event listener. Returns the tracker if successful,
-   * or null if Hibernate is not on the classpath or registration fails.
-   */
+  /** Registers a LazyLoadTracker as a Hibernate event listener, or returns null if unavailable. */
   LazyLoadTracker registerTracker(ExtensionContext context, ExtensionContext.Namespace namespace) {
     Object emf = resolveEntityManagerFactory(context);
     if (emf == null) return null;
     return registerTrackerForEmf(emf);
   }
 
-  /**
-   * Removes the tracker from the Hibernate event listener registry. Without this, every test class
-   * accumulates a fresh listener on a shared {@link
-   * org.hibernate.event.service.spi.EventListenerRegistry}, leaking memory and fanning out events
-   * to dead trackers (issue #101).
-   */
+  /** Removes the tracker from the Hibernate event listener registry (issue #101). */
   void unregisterTracker(ExtensionContext context, LazyLoadTracker tracker) {
     if (tracker == null) return;
     Object emf = resolveEntityManagerFactory(context);
     if (emf == null) return;
     unregisterTrackerForEmf(emf, tracker);
   }
-
-  // Package-private entry points that operate directly on an EntityManagerFactory. Kept separate
-  // from the ExtensionContext-based API so that listener lifecycle can be exercised without a
-  // JUnit ExtensionContext stub, which would need to impersonate SpringExtension internals.
 
   LazyLoadTracker registerTrackerForEmf(Object emf) {
     try {
@@ -145,9 +133,7 @@ class HibernateIntegration {
       throws Exception {
     Object eventType = eventTypeClass.getField(eventTypeFieldName).get(null);
 
-    // Resolve methods from the public SPI interfaces — the concrete impls
-    // (EventListenerGroupImpl) are in internal packages and reflective calls against them
-    // fail with IllegalAccessException on the module boundary.
+    // Resolve via public SPI interfaces; internal impls block reflective access on JPMS.
     Class<?> registryClass = Class.forName("org.hibernate.event.service.spi.EventListenerRegistry");
     Class<?> groupClass = Class.forName("org.hibernate.event.service.spi.EventListenerGroup");
 

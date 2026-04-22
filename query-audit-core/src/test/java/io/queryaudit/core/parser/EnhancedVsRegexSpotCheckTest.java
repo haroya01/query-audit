@@ -7,9 +7,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * Compares EnhancedSqlParser (JSqlParser-backed) to the regex SqlParser on the exact bugs
- * currently filed as open issues (#102, #103, #54). If Enhanced covers them, migrating the
- * remaining detectors to EnhancedSqlParser resolves those issues without new parser work.
+ * Compares EnhancedSqlParser (JSqlParser-backed) to the regex SqlParser on the exact bugs currently
+ * filed as open issues (#102, #103, #54). If Enhanced covers them, migrating the remaining
+ * detectors to EnhancedSqlParser resolves those issues without new parser work.
  */
 class EnhancedVsRegexSpotCheckTest {
 
@@ -49,8 +49,7 @@ class EnhancedVsRegexSpotCheckTest {
   @Test
   @DisplayName("#54 coverage gap: EnhancedSqlParser has no removeSubqueries")
   void issue54GapCheck() {
-    String sql =
-        "SELECT * FROM logs WHERE note = '(SELECT ' AND status = 'ok)' AND y = 1";
+    String sql = "SELECT * FROM logs WHERE note = '(SELECT ' AND status = 'ok)' AND y = 1";
     String regex = SqlParser.removeSubqueries(sql);
     System.out.println("[#54] regex = " + regex);
     // Pin: removeSubqueries has no Enhanced replacement. Migration target: add it.

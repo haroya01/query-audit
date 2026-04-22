@@ -194,8 +194,7 @@ class FindInSetDetectorTest {
     @Test
     @DisplayName("Should flag FIND_IN_SET in JOIN ON condition")
     void shouldFlagInJoinOnCondition() {
-      String sql =
-          "SELECT * FROM users u JOIN roles r ON FIND_IN_SET(r.name, u.role_list) > 0";
+      String sql = "SELECT * FROM users u JOIN roles r ON FIND_IN_SET(r.name, u.role_list) > 0";
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
       assertThat(issues).hasSize(1);

@@ -10,7 +10,10 @@ import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -27,8 +30,6 @@ class QueryAuditExtensionAfterAllTest {
   void setUp() {
     HtmlReportAggregator.getInstance().reset();
   }
-
-
 
   // ── Helpers ──────────────────────────────────────────────────────
 
@@ -47,8 +48,8 @@ class QueryAuditExtensionAfterAllTest {
   }
 
   /**
-   * Creates a mock ExtensionContext for a top-level test class.
-   * Uses a real Class object to avoid Mockito's inability to mock Class.
+   * Creates a mock ExtensionContext for a top-level test class. Uses a real Class object to avoid
+   * Mockito's inability to mock Class.
    */
   @SuppressWarnings("unchecked")
   private static ExtensionContext mockContext(
@@ -67,11 +68,11 @@ class QueryAuditExtensionAfterAllTest {
   }
 
   /**
-   * Creates a store backed by a real ConcurrentHashMap so that
-   * getOrComputeIfAbsent behaves correctly across multiple calls.
+   * Creates a store backed by a real ConcurrentHashMap so that getOrComputeIfAbsent behaves
+   * correctly across multiple calls.
    */
   private static ExtensionContext.Store createRootStore() {
-    java.util.Map<Object, Object> backingMap = new java.util.concurrent.ConcurrentHashMap<>();
+    Map<Object, Object> backingMap = new ConcurrentHashMap<>();
 
     ExtensionContext.Store store = mock(ExtensionContext.Store.class);
 
@@ -79,7 +80,7 @@ class QueryAuditExtensionAfterAllTest {
         .thenAnswer(
             invocation -> {
               String key = invocation.getArgument(0);
-              java.util.function.Function<Object, Object> factory = invocation.getArgument(1);
+              Function<Object, Object> factory = invocation.getArgument(1);
               return backingMap.computeIfAbsent(key, factory);
             });
 

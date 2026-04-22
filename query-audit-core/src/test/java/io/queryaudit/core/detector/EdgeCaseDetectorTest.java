@@ -802,7 +802,7 @@ class EdgeCaseDetectorTest {
       List<Issue> issues =
           detector.evaluate(List.of(record("SELECT * FROM users WHERE name LIKE ?")), EMPTY_INDEX);
       assertThat(issues).hasSize(1);
-      assertThat(issues.get(0).severity()).isEqualTo(io.queryaudit.core.model.Severity.INFO);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
     }
 
     // --- Test 46: LIKE '%' ---

@@ -40,8 +40,7 @@ class DmlSafetyIntegrationTest {
       Team team = new Team("Team " + i);
       teamRepository.save(team);
       for (int j = 0; j < 3; j++) {
-        Member member =
-            new Member("Member " + i + "-" + j, "m" + i + j + "@test.com", "ACTIVE");
+        Member member = new Member("Member " + i + "-" + j, "m" + i + j + "@test.com", "ACTIVE");
         member.setTeam(team);
         memberRepository.save(member);
       }
@@ -56,8 +55,7 @@ class DmlSafetyIntegrationTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -69,14 +67,12 @@ class DmlSafetyIntegrationTest {
     @DisplayName("UPDATE without WHERE is detected")
     void detectsUpdateWithoutWhere() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("UPDATE members SET status = 'INACTIVE'")
-          .executeUpdate();
+      entityManager.createNativeQuery("UPDATE members SET status = 'INACTIVE'").executeUpdate();
       queryInterceptor.stop();
 
-      QueryAuditReport report = analyze("updateWithoutWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
+      QueryAuditReport report =
+          analyze("updateWithoutWhere", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
     }
 
     @Test
@@ -86,9 +82,9 @@ class DmlSafetyIntegrationTest {
       entityManager.createNativeQuery("DELETE FROM orders").executeUpdate();
       queryInterceptor.stop();
 
-      QueryAuditReport report = analyze("deleteWithoutWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
+      QueryAuditReport report =
+          analyze("deleteWithoutWhere", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
     }
   }
 
@@ -108,8 +104,7 @@ class DmlSafetyIntegrationTest {
 
       QueryAuditReport report =
           analyze("deleteWithSubquery", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.SUBQUERY_IN_DML);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.SUBQUERY_IN_DML);
     }
 
     @Test
@@ -124,8 +119,7 @@ class DmlSafetyIntegrationTest {
 
       QueryAuditReport report =
           analyze("updateWithSubquery", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.SUBQUERY_IN_DML);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.SUBQUERY_IN_DML);
     }
   }
 
@@ -137,8 +131,7 @@ class DmlSafetyIntegrationTest {
     @DisplayName("INSERT ... SELECT * is detected")
     void detectsInsertSelectAll() {
       entityManager
-          .createNativeQuery(
-              "CREATE TABLE members_archive AS SELECT * FROM members WHERE 1=0")
+          .createNativeQuery("CREATE TABLE members_archive AS SELECT * FROM members WHERE 1=0")
           .executeUpdate();
       entityManager.flush();
 
@@ -149,8 +142,7 @@ class DmlSafetyIntegrationTest {
           .executeUpdate();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("insertSelectAll", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("insertSelectAll", queryInterceptor.getRecordedQueries());
       assertThat(allIssues(report))
           .anyMatch(
               i ->
@@ -168,15 +160,13 @@ class DmlSafetyIntegrationTest {
     void detectsImplicitColumnsInsert() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "INSERT INTO teams VALUES (100, 'Implicit Team')")
+          .createNativeQuery("INSERT INTO teams VALUES (100, 'Implicit Team')")
           .executeUpdate();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("implicitColumnsInsert", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.IMPLICIT_COLUMNS_INSERT);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.IMPLICIT_COLUMNS_INSERT);
     }
   }
 
@@ -190,16 +180,13 @@ class DmlSafetyIntegrationTest {
       queryInterceptor.start();
       for (int i = 0; i < 5; i++) {
         entityManager
-            .createNativeQuery(
-                "INSERT INTO teams (name) VALUES ('Batch " + i + "')")
+            .createNativeQuery("INSERT INTO teams (name) VALUES ('Batch " + i + "')")
             .executeUpdate();
       }
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("repeatedInsert", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
+      QueryAuditReport report = analyze("repeatedInsert", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
     }
   }
 
@@ -215,14 +202,11 @@ class DmlSafetyIntegrationTest {
           .createNativeQuery("SELECT * FROM members WHERE status = 'ACTIVE'")
           .getResultList();
       for (int i = 1; i <= 5; i++) {
-        entityManager
-            .createNativeQuery("DELETE FROM members WHERE id = " + i)
-            .executeUpdate();
+        entityManager.createNativeQuery("DELETE FROM members WHERE id = " + i).executeUpdate();
       }
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("derivedDelete", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("derivedDelete", queryInterceptor.getRecordedQueries());
       assertThat(allIssues(report))
           .anyMatch(i -> i.type() == IssueType.DERIVED_DELETE_LOADS_ENTITIES);
     }
@@ -237,10 +221,7 @@ class DmlSafetyIntegrationTest {
     void detectsCollectionManagementPattern() {
       // Get an actual team ID from setUp data
       Long teamId =
-          (Long)
-              entityManager
-                  .createNativeQuery("SELECT id FROM teams LIMIT 1")
-                  .getSingleResult();
+          (Long) entityManager.createNativeQuery("SELECT id FROM teams LIMIT 1").getSingleResult();
 
       queryInterceptor.start();
       entityManager
@@ -248,22 +229,27 @@ class DmlSafetyIntegrationTest {
           .executeUpdate();
       entityManager
           .createNativeQuery(
-              "INSERT INTO members (name, email, status, team_id) VALUES ('A', 'col_a@t.com', 'ACTIVE', " + teamId + ")")
+              "INSERT INTO members (name, email, status, team_id) VALUES ('A', 'col_a@t.com', 'ACTIVE', "
+                  + teamId
+                  + ")")
           .executeUpdate();
       entityManager
           .createNativeQuery(
-              "INSERT INTO members (name, email, status, team_id) VALUES ('B', 'col_b@t.com', 'ACTIVE', " + teamId + ")")
+              "INSERT INTO members (name, email, status, team_id) VALUES ('B', 'col_b@t.com', 'ACTIVE', "
+                  + teamId
+                  + ")")
           .executeUpdate();
       entityManager
           .createNativeQuery(
-              "INSERT INTO members (name, email, status, team_id) VALUES ('C', 'col_c@t.com', 'ACTIVE', " + teamId + ")")
+              "INSERT INTO members (name, email, status, team_id) VALUES ('C', 'col_c@t.com', 'ACTIVE', "
+                  + teamId
+                  + ")")
           .executeUpdate();
       queryInterceptor.stop();
 
       QueryAuditReport report =
           analyze("collectionManagement", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.COLLECTION_DELETE_REINSERT);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.COLLECTION_DELETE_REINSERT);
     }
   }
 }

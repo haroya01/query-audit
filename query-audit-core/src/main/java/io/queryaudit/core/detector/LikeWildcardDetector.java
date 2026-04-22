@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -26,11 +25,7 @@ public class LikeWildcardDetector implements DetectionRule {
   private static final Pattern LIKE_LEADING_WILDCARD =
       Pattern.compile("\\b(?:NOT\\s+)?I?LIKE\\s+'%", Pattern.CASE_INSENSITIVE);
 
-  /**
-   * Matches LIKE against a bound parameter (e.g. {@code LIKE ?}). Runtime bindings that start
-   * with {@code %} also cause a full-table scan, but we cannot confirm that statically — this
-   * case is reported at INFO severity as a suggestive heads-up (issue #91).
-   */
+  /** Matches parameterized LIKE (e.g. {@code LIKE ?}); reported at INFO since value is unknown. */
   private static final Pattern LIKE_PARAMETERIZED =
       Pattern.compile("\\b(?:NOT\\s+)?I?LIKE\\s+\\?", Pattern.CASE_INSENSITIVE);
 
@@ -74,11 +69,9 @@ public class LikeWildcardDetector implements DetectionRule {
                 "Leading wildcard (LIKE '%...') prevents B-tree index usage and causes a full table scan. "
                     + "Use a fulltext index (MATCH ... AGAINST), or move the search to the application layer.",
                 query.stackTrace()));
-        // If the query also has a parameterized LIKE, we've already warned — don't duplicate.
         continue;
       }
 
-      // Parameterized LIKE only — runtime value unknown, so INFO severity.
       issues.add(
           new Issue(
               IssueType.LIKE_LEADING_WILDCARD,

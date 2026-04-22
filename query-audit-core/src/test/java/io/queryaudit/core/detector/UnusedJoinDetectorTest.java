@@ -162,8 +162,7 @@ class UnusedJoinDetectorTest {
   @Test
   void noIssueForSelectDistinctStarWithLeftJoin() {
     // SELECT DISTINCT * also references all columns
-    String sql =
-        "SELECT DISTINCT * FROM users u LEFT JOIN orders o ON u.id = o.user_id";
+    String sql = "SELECT DISTINCT * FROM users u LEFT JOIN orders o ON u.id = o.user_id";
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 

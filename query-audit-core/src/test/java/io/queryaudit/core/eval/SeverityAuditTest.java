@@ -785,11 +785,7 @@ class SeverityAuditTest {
     List<AuditEntry> entries =
         List.of(
             new AuditEntry(
-                "N_PLUS_ONE",
-                "ERROR",
-                "ERROR",
-                "OK",
-                "Authoritative LazyLoad detector uses ERROR"),
+                "N_PLUS_ONE", "ERROR", "ERROR", "OK", "Authoritative LazyLoad detector uses ERROR"),
             new AuditEntry(
                 "N_PLUS_ONE_SUSPECT",
                 "INFO",

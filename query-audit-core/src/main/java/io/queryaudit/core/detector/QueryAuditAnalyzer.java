@@ -18,8 +18,8 @@ import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
- * Central analyzer that runs all detection rules against captured queries and produces a report.
- * It orchestrates the execution of built-in, ServiceLoader-discovered, and user-provided custom
+ * Central analyzer that runs all detection rules against captured queries and produces a report. It
+ * orchestrates the execution of built-in, ServiceLoader-discovered, and user-provided custom
  * detection rules, applies baseline filtering and severity overrides, and classifies issues into
  * confirmed, informational, and acknowledged categories.
  *
@@ -91,17 +91,15 @@ public class QueryAuditAnalyzer {
   }
 
   /**
-   * Creates an analyzer with a pre-loaded baseline list and additional custom detection rules.
-   * The additional rules are appended after the built-in and ServiceLoader-discovered rules.
+   * Creates an analyzer with a pre-loaded baseline list and additional custom detection rules. The
+   * additional rules are appended after the built-in and ServiceLoader-discovered rules.
    *
    * @param config query-audit configuration
    * @param baseline pre-loaded baseline entries
    * @param additionalRules extra detection rules to append, or {@code null} to skip
    */
   public QueryAuditAnalyzer(
-      QueryAuditConfig config,
-      List<BaselineEntry> baseline,
-      List<DetectionRule> additionalRules) {
+      QueryAuditConfig config, List<BaselineEntry> baseline, List<DetectionRule> additionalRules) {
     this.config = config;
     this.rules = createRules(config);
     if (additionalRules != null) {
@@ -136,7 +134,8 @@ public class QueryAuditAnalyzer {
     ruleList.add(new RedundantFilterDetector());
     ruleList.add(new SargabilityDetector());
     ruleList.add(new IndexRedundancyDetector());
-    ruleList.add(new SlowQueryDetector(config.getSlowQueryWarningMs(), config.getSlowQueryErrorMs()));
+    ruleList.add(
+        new SlowQueryDetector(config.getSlowQueryWarningMs(), config.getSlowQueryErrorMs()));
     ruleList.add(new CountInsteadOfExistsDetector());
     ruleList.add(new UnboundedResultSetDetector(config.getRepositoryReturnTypeResolver()));
     ruleList.add(new WriteAmplificationDetector(config.getWriteAmplificationThreshold()));
@@ -288,9 +287,7 @@ public class QueryAuditAnalyzer {
     List<QueryRecord> detectableQueries =
         config.isIncludeSetupQueries()
             ? filteredQueries
-            : filteredQueries.stream()
-                .filter(q -> q.phase() == LifecyclePhase.TEST)
-                .toList();
+            : filteredQueries.stream().filter(q -> q.phase() == LifecyclePhase.TEST).toList();
 
     // Collect all issues from all rules (only against detectable queries)
     List<Issue> allIssues = new ArrayList<>();

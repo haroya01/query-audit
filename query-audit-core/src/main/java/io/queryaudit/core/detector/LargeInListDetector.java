@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -44,12 +43,11 @@ public class LargeInListDetector implements DetectionRule {
       Pattern.compile("\\bIN\\s*\\(([^)]+)\\)", Pattern.CASE_INSENSITIVE);
 
   /**
-   * Matches an IN list that contains only parameter placeholders ({@code ?}). When all values
-   * are placeholders, the actual count at runtime is unknown and may differ from the analyzed
-   * SQL (e.g., Hibernate generates a fixed-size padded list). Flagging these is a false positive.
+   * Matches an IN list that contains only parameter placeholders ({@code ?}). When all values are
+   * placeholders, the actual count at runtime is unknown and may differ from the analyzed SQL
+   * (e.g., Hibernate generates a fixed-size padded list). Flagging these is a false positive.
    */
-  private static final Pattern ALL_PLACEHOLDERS =
-      Pattern.compile("^[\\s?,]+$");
+  private static final Pattern ALL_PLACEHOLDERS = Pattern.compile("^[\\s?,]+$");
 
   /**
    * Counts the number of comma-separated values (placeholders or literals) in an IN list. Counts

@@ -400,12 +400,13 @@ class UnboundedResultSetDetectorTest {
               Map.of(
                   "warehouses",
                   List.of(
-                      new IndexInfo("warehouses", "uk_tenant_region_code", "tenant_id", 1, false, 10),
+                      new IndexInfo(
+                          "warehouses", "uk_tenant_region_code", "tenant_id", 1, false, 10),
                       new IndexInfo("warehouses", "uk_tenant_region_code", "region", 2, false, 100),
-                      new IndexInfo("warehouses", "uk_tenant_region_code", "code", 3, false, 1000))));
+                      new IndexInfo(
+                          "warehouses", "uk_tenant_region_code", "code", 3, false, 1000))));
 
-      String sql =
-          "SELECT * FROM warehouses WHERE tenant_id = ? AND region = ? AND code = ?";
+      String sql = "SELECT * FROM warehouses WHERE tenant_id = ? AND region = ? AND code = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
 
@@ -420,9 +421,11 @@ class UnboundedResultSetDetectorTest {
               Map.of(
                   "warehouses",
                   List.of(
-                      new IndexInfo("warehouses", "uk_tenant_region_code", "tenant_id", 1, false, 10),
+                      new IndexInfo(
+                          "warehouses", "uk_tenant_region_code", "tenant_id", 1, false, 10),
                       new IndexInfo("warehouses", "uk_tenant_region_code", "region", 2, false, 100),
-                      new IndexInfo("warehouses", "uk_tenant_region_code", "code", 3, false, 1000))));
+                      new IndexInfo(
+                          "warehouses", "uk_tenant_region_code", "code", 3, false, 1000))));
 
       String sql = "SELECT * FROM warehouses WHERE tenant_id = ? AND region = ?";
 
@@ -481,8 +484,7 @@ class UnboundedResultSetDetectorTest {
                       new IndexInfo("users", "uk_oauth", "oauth_provider", 1, false, 100),
                       new IndexInfo("users", "uk_oauth", "oauth_sub", 2, false, 1000))));
 
-      String sql =
-          "SELECT * FROM users WHERE oauth_provider = ? OR oauth_sub = ?";
+      String sql = "SELECT * FROM users WHERE oauth_provider = ? OR oauth_sub = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
 
@@ -556,13 +558,10 @@ class UnboundedResultSetDetectorTest {
               Map.of(
                   "warehouse_items",
                   List.of(
-                      new IndexInfo(
-                          "warehouse_items", "uk_wh_item", "warehouse_id", 1, false, 50),
-                      new IndexInfo(
-                          "warehouse_items", "uk_wh_item", "item_code", 2, false, 500))));
+                      new IndexInfo("warehouse_items", "uk_wh_item", "warehouse_id", 1, false, 50),
+                      new IndexInfo("warehouse_items", "uk_wh_item", "item_code", 2, false, 500))));
 
-      String sql =
-          "SELECT * FROM warehouse_items WHERE warehouse_id = ? AND item_code = ?";
+      String sql = "SELECT * FROM warehouse_items WHERE warehouse_id = ? AND item_code = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
 
@@ -579,10 +578,8 @@ class UnboundedResultSetDetectorTest {
               Map.of(
                   "warehouse_items",
                   List.of(
-                      new IndexInfo(
-                          "warehouse_items", "uk_wh_item", "region", 1, false, 50),
-                      new IndexInfo(
-                          "warehouse_items", "uk_wh_item", "item_code", 2, false, 500))));
+                      new IndexInfo("warehouse_items", "uk_wh_item", "region", 1, false, 50),
+                      new IndexInfo("warehouse_items", "uk_wh_item", "item_code", 2, false, 500))));
 
       String sql = "SELECT * FROM warehouse_items WHERE region = ?";
 
@@ -652,8 +649,7 @@ class UnboundedResultSetDetectorTest {
       return new QueryRecord(sql, 0L, System.currentTimeMillis(), stackTrace);
     }
 
-    private final UnboundedResultSetDetector withoutResolver =
-        new UnboundedResultSetDetector();
+    private final UnboundedResultSetDetector withoutResolver = new UnboundedResultSetDetector();
 
     // ── Case 1: List<ChatMessage> findByChannelName(String) ──
     // 이슈 #44의 핵심 시나리오. WHERE 절이 있는 List<T> 반환 메서드.
@@ -666,8 +662,7 @@ class UnboundedResultSetDetectorTest {
               + "WHERE cm.channel_name = ?";
 
       List<Issue> issues =
-          withoutResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withoutResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       // Before: resolver 없으면 WARNING (false positive)
       assertThat(issues).hasSize(1);
@@ -677,13 +672,14 @@ class UnboundedResultSetDetectorTest {
     @Test
     void listWithWhere_after_downgradedToInfoWithResolver() {
       UnboundedResultSetDetector withResolver =
-          new UnboundedResultSetDetector(stack -> {
-            // 스택에 프록시 프레임이 있을 때만 COLLECTION 반환
-            if (stack.contains("$Proxy")) {
-              return RepositoryReturnType.COLLECTION;
-            }
-            return RepositoryReturnType.UNKNOWN;
-          });
+          new UnboundedResultSetDetector(
+              stack -> {
+                // 스택에 프록시 프레임이 있을 때만 COLLECTION 반환
+                if (stack.contains("$Proxy")) {
+                  return RepositoryReturnType.COLLECTION;
+                }
+                return RepositoryReturnType.UNKNOWN;
+              });
 
       String sql =
           "SELECT cm.id, cm.channel_name, cm.content "
@@ -691,8 +687,7 @@ class UnboundedResultSetDetectorTest {
               + "WHERE cm.channel_name = ?";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       // After: 같은 쿼리 + 같은 스택인데 INFO로 다운그레이드됨
       assertThat(issues).hasSize(1);
@@ -711,8 +706,7 @@ class UnboundedResultSetDetectorTest {
               + "WHERE cm.channel_name = ?";
 
       List<Issue> issues =
-          withoutResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withoutResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       assertThat(issues).hasSize(1);
       assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
@@ -721,10 +715,11 @@ class UnboundedResultSetDetectorTest {
     @Test
     void joinWithWhere_after_downgradedToInfoWithResolver() {
       UnboundedResultSetDetector withResolver =
-          new UnboundedResultSetDetector(stack ->
-              stack.contains("$Proxy")
-                  ? RepositoryReturnType.COLLECTION
-                  : RepositoryReturnType.UNKNOWN);
+          new UnboundedResultSetDetector(
+              stack ->
+                  stack.contains("$Proxy")
+                      ? RepositoryReturnType.COLLECTION
+                      : RepositoryReturnType.UNKNOWN);
 
       String sql =
           "SELECT cm.id, u.name, cm.content "
@@ -733,8 +728,7 @@ class UnboundedResultSetDetectorTest {
               + "WHERE cm.channel_name = ?";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       assertThat(issues).hasSize(1);
       assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
@@ -746,14 +740,12 @@ class UnboundedResultSetDetectorTest {
     @Test
     void optionalByNonPkColumn_before_warningWithoutResolver() {
       String proxyStack =
-          "jdk.proxy3.$Proxy101.findByPhone:-1\n"
-              + "com.example.service.UserService.findUser:25";
+          "jdk.proxy3.$Proxy101.findByPhone:-1\n" + "com.example.service.UserService.findUser:25";
 
       String sql = "SELECT u.id, u.name, u.phone FROM users u WHERE u.phone = ?";
 
       List<Issue> issues =
-          withoutResolver.evaluate(
-              List.of(recordWithStack(sql, proxyStack)), EMPTY_INDEX);
+          withoutResolver.evaluate(List.of(recordWithStack(sql, proxyStack)), EMPTY_INDEX);
 
       assertThat(issues).hasSize(1);
       assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
@@ -762,20 +754,19 @@ class UnboundedResultSetDetectorTest {
     @Test
     void optionalByNonPkColumn_after_suppressedWithResolver() {
       UnboundedResultSetDetector withResolver =
-          new UnboundedResultSetDetector(stack ->
-              stack.contains("$Proxy")
-                  ? RepositoryReturnType.OPTIONAL
-                  : RepositoryReturnType.UNKNOWN);
+          new UnboundedResultSetDetector(
+              stack ->
+                  stack.contains("$Proxy")
+                      ? RepositoryReturnType.OPTIONAL
+                      : RepositoryReturnType.UNKNOWN);
 
       String proxyStack =
-          "jdk.proxy3.$Proxy101.findByPhone:-1\n"
-              + "com.example.service.UserService.findUser:25";
+          "jdk.proxy3.$Proxy101.findByPhone:-1\n" + "com.example.service.UserService.findUser:25";
 
       String sql = "SELECT u.id, u.name, u.phone FROM users u WHERE u.phone = ?";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, proxyStack)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, proxyStack)), EMPTY_INDEX);
 
       // After: Optional 반환이므로 완전 suppress
       assertThat(issues).isEmpty();
@@ -786,16 +777,16 @@ class UnboundedResultSetDetectorTest {
     @Test
     void pageReturn_after_suppressedWithResolver() {
       UnboundedResultSetDetector withResolver =
-          new UnboundedResultSetDetector(stack ->
-              stack.contains("$Proxy")
-                  ? RepositoryReturnType.PAGE_OR_SLICE
-                  : RepositoryReturnType.UNKNOWN);
+          new UnboundedResultSetDetector(
+              stack ->
+                  stack.contains("$Proxy")
+                      ? RepositoryReturnType.PAGE_OR_SLICE
+                      : RepositoryReturnType.UNKNOWN);
 
       String sql = "SELECT o.id, o.status FROM orders o WHERE o.status = ?";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
     }
@@ -805,16 +796,16 @@ class UnboundedResultSetDetectorTest {
     @Test
     void singleEntity_after_suppressedWithResolver() {
       UnboundedResultSetDetector withResolver =
-          new UnboundedResultSetDetector(stack ->
-              stack.contains("$Proxy")
-                  ? RepositoryReturnType.SINGLE_ENTITY
-                  : RepositoryReturnType.UNKNOWN);
+          new UnboundedResultSetDetector(
+              stack ->
+                  stack.contains("$Proxy")
+                      ? RepositoryReturnType.SINGLE_ENTITY
+                      : RepositoryReturnType.UNKNOWN);
 
       String sql = "SELECT u.id, u.name, u.phone FROM users u WHERE u.phone = ?";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       // SINGLE_ENTITY 반환이므로 완전 suppress
       assertThat(issues).isEmpty();
@@ -823,17 +814,17 @@ class UnboundedResultSetDetectorTest {
     @Test
     void singleEntityWithoutWhere_after_suppressedWithResolver() {
       UnboundedResultSetDetector withResolver =
-          new UnboundedResultSetDetector(stack ->
-              stack.contains("$Proxy")
-                  ? RepositoryReturnType.SINGLE_ENTITY
-                  : RepositoryReturnType.UNKNOWN);
+          new UnboundedResultSetDetector(
+              stack ->
+                  stack.contains("$Proxy")
+                      ? RepositoryReturnType.SINGLE_ENTITY
+                      : RepositoryReturnType.UNKNOWN);
 
       // SINGLE_ENTITY는 WHERE 유무와 무관하게 단건 반환이므로 suppress
       String sql = "SELECT u.id, u.name FROM users u";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
     }
@@ -843,16 +834,16 @@ class UnboundedResultSetDetectorTest {
     @Test
     void collectionWithoutWhere_after_stillWarningWithResolver() {
       UnboundedResultSetDetector withResolver =
-          new UnboundedResultSetDetector(stack ->
-              stack.contains("$Proxy")
-                  ? RepositoryReturnType.COLLECTION
-                  : RepositoryReturnType.UNKNOWN);
+          new UnboundedResultSetDetector(
+              stack ->
+                  stack.contains("$Proxy")
+                      ? RepositoryReturnType.COLLECTION
+                      : RepositoryReturnType.UNKNOWN);
 
       String sql = "SELECT r.id, r.name FROM rooms r";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       // findAll()은 진짜 unbounded → resolver가 있어도 WARNING 유지
       assertThat(issues).hasSize(1);
@@ -864,17 +855,16 @@ class UnboundedResultSetDetectorTest {
     @Test
     void nonProxyStack_after_stillWarningWithResolver() {
       UnboundedResultSetDetector withResolver =
-          new UnboundedResultSetDetector(stack ->
-              stack.contains("$Proxy")
-                  ? RepositoryReturnType.COLLECTION
-                  : RepositoryReturnType.UNKNOWN);
+          new UnboundedResultSetDetector(
+              stack ->
+                  stack.contains("$Proxy")
+                      ? RepositoryReturnType.COLLECTION
+                      : RepositoryReturnType.UNKNOWN);
 
-      String sql =
-          "SELECT m.id, m.content FROM messages m WHERE m.channel_name = ?";
+      String sql = "SELECT m.id, m.content FROM messages m WHERE m.channel_name = ?";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, NON_PROXY_STACK)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, NON_PROXY_STACK)), EMPTY_INDEX);
 
       // 프록시가 없으면 UNKNOWN → WARNING 유지
       assertThat(issues).hasSize(1);
@@ -888,11 +878,9 @@ class UnboundedResultSetDetectorTest {
       UnboundedResultSetDetector withResolver =
           new UnboundedResultSetDetector(stack -> RepositoryReturnType.OPTIONAL);
 
-      String sql =
-          "SELECT cm.id, cm.content FROM chat_messages cm WHERE cm.channel_name = ?";
+      String sql = "SELECT cm.id, cm.content FROM chat_messages cm WHERE cm.channel_name = ?";
 
-      List<Issue> issues =
-          withResolver.evaluate(List.of(recordWithStack(sql, "")), EMPTY_INDEX);
+      List<Issue> issues = withResolver.evaluate(List.of(recordWithStack(sql, "")), EMPTY_INDEX);
 
       assertThat(issues).hasSize(1);
       assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
@@ -908,8 +896,7 @@ class UnboundedResultSetDetectorTest {
       String sql = "SELECT * FROM users WHERE id = ?";
 
       List<Issue> issues =
-          withResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
     }
@@ -919,16 +906,15 @@ class UnboundedResultSetDetectorTest {
     @Test
     void resolverException_fallsBackToWarning() {
       UnboundedResultSetDetector withBrokenResolver =
-          new UnboundedResultSetDetector(stack -> {
-            throw new RuntimeException("resolver broke");
-          });
+          new UnboundedResultSetDetector(
+              stack -> {
+                throw new RuntimeException("resolver broke");
+              });
 
-      String sql =
-          "SELECT cm.id, cm.content FROM chat_messages cm WHERE cm.channel_name = ?";
+      String sql = "SELECT cm.id, cm.content FROM chat_messages cm WHERE cm.channel_name = ?";
 
       List<Issue> issues =
-          withBrokenResolver.evaluate(
-              List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
+          withBrokenResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
       // 예외가 전파되지 않고 WARNING으로 fallback
       assertThat(issues).hasSize(1);

@@ -40,37 +40,135 @@ public class Product {
     this.updatedAt = LocalDateTime.now();
   }
 
-  public Long getId() { return id; }
-  public String getName() { return name; }
-  public void setName(String name) { this.name = name; }
-  public String getDescription() { return description; }
-  public void setDescription(String description) { this.description = description; }
-  public String getSku() { return sku; }
-  public BigDecimal getPrice() { return price; }
-  public void setPrice(BigDecimal price) { this.price = price; }
-  public Integer getQuantity() { return quantity; }
-  public void setQuantity(Integer quantity) { this.quantity = quantity; }
-  public Double getWeight() { return weight; }
-  public void setWeight(Double weight) { this.weight = weight; }
-  public Double getHeight() { return height; }
-  public void setHeight(Double height) { this.height = height; }
-  public Double getWidth() { return width; }
-  public void setWidth(Double width) { this.width = width; }
-  public Double getDepth() { return depth; }
-  public void setDepth(Double depth) { this.depth = depth; }
-  public String getColor() { return color; }
-  public void setColor(String color) { this.color = color; }
-  public String getBrand() { return brand; }
-  public void setBrand(String brand) { this.brand = brand; }
-  public String getCategory() { return category; }
-  public void setCategory(String category) { this.category = category; }
-  public String getImageUrl() { return imageUrl; }
-  public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
-  public String getBarcode() { return barcode; }
-  public void setBarcode(String barcode) { this.barcode = barcode; }
-  public String getNotes() { return notes; }
-  public void setNotes(String notes) { this.notes = notes; }
-  public LocalDateTime getCreatedAt() { return createdAt; }
-  public LocalDateTime getUpdatedAt() { return updatedAt; }
-  public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+  public Long getId() {
+    return id;
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  public void setName(String name) {
+    this.name = name;
+  }
+
+  public String getDescription() {
+    return description;
+  }
+
+  public void setDescription(String description) {
+    this.description = description;
+  }
+
+  public String getSku() {
+    return sku;
+  }
+
+  public BigDecimal getPrice() {
+    return price;
+  }
+
+  public void setPrice(BigDecimal price) {
+    this.price = price;
+  }
+
+  public Integer getQuantity() {
+    return quantity;
+  }
+
+  public void setQuantity(Integer quantity) {
+    this.quantity = quantity;
+  }
+
+  public Double getWeight() {
+    return weight;
+  }
+
+  public void setWeight(Double weight) {
+    this.weight = weight;
+  }
+
+  public Double getHeight() {
+    return height;
+  }
+
+  public void setHeight(Double height) {
+    this.height = height;
+  }
+
+  public Double getWidth() {
+    return width;
+  }
+
+  public void setWidth(Double width) {
+    this.width = width;
+  }
+
+  public Double getDepth() {
+    return depth;
+  }
+
+  public void setDepth(Double depth) {
+    this.depth = depth;
+  }
+
+  public String getColor() {
+    return color;
+  }
+
+  public void setColor(String color) {
+    this.color = color;
+  }
+
+  public String getBrand() {
+    return brand;
+  }
+
+  public void setBrand(String brand) {
+    this.brand = brand;
+  }
+
+  public String getCategory() {
+    return category;
+  }
+
+  public void setCategory(String category) {
+    this.category = category;
+  }
+
+  public String getImageUrl() {
+    return imageUrl;
+  }
+
+  public void setImageUrl(String imageUrl) {
+    this.imageUrl = imageUrl;
+  }
+
+  public String getBarcode() {
+    return barcode;
+  }
+
+  public void setBarcode(String barcode) {
+    this.barcode = barcode;
+  }
+
+  public String getNotes() {
+    return notes;
+  }
+
+  public void setNotes(String notes) {
+    this.notes = notes;
+  }
+
+  public LocalDateTime getCreatedAt() {
+    return createdAt;
+  }
+
+  public LocalDateTime getUpdatedAt() {
+    return updatedAt;
+  }
+
+  public void setUpdatedAt(LocalDateTime updatedAt) {
+    this.updatedAt = updatedAt;
+  }
 }

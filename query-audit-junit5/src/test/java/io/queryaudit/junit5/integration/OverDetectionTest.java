@@ -62,19 +62,15 @@ class OverDetectionTest {
     return allIssues(testName, queries, indexMetadata);
   }
 
-  private List<Issue> allIssues(
-      String testName, List<QueryRecord> queries, IndexMetadata meta) {
+  private List<Issue> allIssues(String testName, List<QueryRecord> queries, IndexMetadata meta) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-    QueryAuditReport report =
-        analyzer.analyze("OverDetectionTest", testName, queries, meta);
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    QueryAuditReport report = analyzer.analyze("OverDetectionTest", testName, queries, meta);
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
   private Map<IssueType, Long> issueCountsByType(List<Issue> issues) {
-    return issues.stream()
-        .collect(Collectors.groupingBy(Issue::type, Collectors.counting()));
+    return issues.stream().collect(Collectors.groupingBy(Issue::type, Collectors.counting()));
   }
 
   @Nested
@@ -110,8 +106,7 @@ class OverDetectionTest {
       queryInterceptor.stop();
 
       List<Issue> issues = allIssues("singleFindAll", queryInterceptor.getRecordedQueries());
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.N_PLUS_ONE);
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.N_PLUS_ONE);
     }
   }
 
@@ -130,12 +125,10 @@ class OverDetectionTest {
       }
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("nPlusOneVsMergeable", queryInterceptor.getRecordedQueries());
+      List<Issue> issues = allIssues("nPlusOneVsMergeable", queryInterceptor.getRecordedQueries());
 
       boolean hasNPlusOne = issues.stream().anyMatch(i -> i.type() == IssueType.N_PLUS_ONE);
-      boolean hasMergeable =
-          issues.stream().anyMatch(i -> i.type() == IssueType.MERGEABLE_QUERIES);
+      boolean hasMergeable = issues.stream().anyMatch(i -> i.type() == IssueType.MERGEABLE_QUERIES);
 
       assertThat(hasNPlusOne && hasMergeable)
           .as("N+1 and MERGEABLE_QUERIES should not both fire for same pattern")
@@ -147,16 +140,12 @@ class OverDetectionTest {
     void nPlusOneNotRepeatedInsert() {
       queryInterceptor.start();
       for (int i = 1; i <= 5; i++) {
-        entityManager
-            .createNativeQuery("SELECT * FROM members WHERE id = " + i)
-            .getResultList();
+        entityManager.createNativeQuery("SELECT * FROM members WHERE id = " + i).getResultList();
       }
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("nPlusOneVsInsert", queryInterceptor.getRecordedQueries());
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
+      List<Issue> issues = allIssues("nPlusOneVsInsert", queryInterceptor.getRecordedQueries());
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
     }
   }
 
@@ -173,14 +162,13 @@ class OverDetectionTest {
           .getResultList();
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("forUpdateUnbounded", queryInterceptor.getRecordedQueries());
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
+      List<Issue> issues = allIssues("forUpdateUnbounded", queryInterceptor.getRecordedQueries());
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
-    @DisplayName("FOR UPDATE + unindexed 컬럼 — FOR_UPDATE_WITHOUT_INDEX만, FOR_UPDATE_WITHOUT_TIMEOUT은 중복 허용")
+    @DisplayName(
+        "FOR UPDATE + unindexed 컬럼 — FOR_UPDATE_WITHOUT_INDEX만, FOR_UPDATE_WITHOUT_TIMEOUT은 중복 허용")
     void forUpdateIssueCount() {
       queryInterceptor.start();
       entityManager
@@ -188,8 +176,7 @@ class OverDetectionTest {
           .getResultList();
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("forUpdateIssueCount", queryInterceptor.getRecordedQueries());
+      List<Issue> issues = allIssues("forUpdateIssueCount", queryInterceptor.getRecordedQueries());
       Map<IssueType, Long> counts = issueCountsByType(issues);
 
       long forUpdateIssues =
@@ -201,9 +188,7 @@ class OverDetectionTest {
                           || i.type() == IssueType.FOR_UPDATE_WITHOUT_TIMEOUT
                           || i.type() == IssueType.RANGE_LOCK_RISK)
               .count();
-      assertThat(forUpdateIssues)
-          .as("FOR UPDATE 관련 이슈가 3개 이상이면 과잉 탐지")
-          .isLessThanOrEqualTo(2);
+      assertThat(forUpdateIssues).as("FOR UPDATE 관련 이슈가 3개 이상이면 과잉 탐지").isLessThanOrEqualTo(2);
     }
   }
 
@@ -218,8 +203,7 @@ class OverDetectionTest {
       entityManager.createNativeQuery("DELETE FROM orders").executeUpdate();
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("deleteNoWhere", queryInterceptor.getRecordedQueries());
+      List<Issue> issues = allIssues("deleteNoWhere", queryInterceptor.getRecordedQueries());
 
       boolean hasNoWhere =
           issues.stream().anyMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
@@ -237,8 +221,7 @@ class OverDetectionTest {
     @DisplayName("INSERT ... SELECT * — INSERT_SELECT_ALL과 INSERT_SELECT_LOCKS_SOURCE 동시에 최대 2개")
     void insertSelectOverlap() {
       entityManager
-          .createNativeQuery(
-              "CREATE TABLE members_bak AS SELECT * FROM members WHERE 1=0")
+          .createNativeQuery("CREATE TABLE members_bak AS SELECT * FROM members WHERE 1=0")
           .executeUpdate();
       entityManager.flush();
 
@@ -249,8 +232,7 @@ class OverDetectionTest {
           .executeUpdate();
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("insertSelectOverlap", queryInterceptor.getRecordedQueries());
+      List<Issue> issues = allIssues("insertSelectOverlap", queryInterceptor.getRecordedQueries());
 
       long insertSelectIssues =
           issues.stream()
@@ -277,8 +259,7 @@ class OverDetectionTest {
           .getResultList();
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("complexQuery", queryInterceptor.getRecordedQueries());
+      List<Issue> issues = allIssues("complexQuery", queryInterceptor.getRecordedQueries());
 
       assertThat(issues.size())
           .as("단일 쿼리에서 이슈 %d개 — 5개 초과면 과잉 탐지 의심", issues.size())
@@ -297,11 +278,9 @@ class OverDetectionTest {
           .getResultList();
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("unionOverlap", queryInterceptor.getRecordedQueries());
+      List<Issue> issues = allIssues("unionOverlap", queryInterceptor.getRecordedQueries());
 
-      List<String> issueTypes =
-          issues.stream().map(i -> i.type().name()).sorted().toList();
+      List<String> issueTypes = issues.stream().map(i -> i.type().name()).sorted().toList();
 
       assertThat(issues.size())
           .as("UNION 쿼리에서 이슈 %d개: %s", issues.size(), issueTypes)
@@ -322,8 +301,7 @@ class OverDetectionTest {
           .getSingleResult();
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("countDouble", queryInterceptor.getRecordedQueries());
+      List<Issue> issues = allIssues("countDouble", queryInterceptor.getRecordedQueries());
 
       boolean hasCountExists =
           issues.stream().anyMatch(i -> i.type() == IssueType.COUNT_INSTEAD_OF_EXISTS);
@@ -339,15 +317,11 @@ class OverDetectionTest {
     @DisplayName("COUNT(*) 집계에 UNBOUNDED_RESULT_SET이 뜨면 안 됨")
     void countNotUnbounded() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT COUNT(*) FROM members")
-          .getSingleResult();
+      entityManager.createNativeQuery("SELECT COUNT(*) FROM members").getSingleResult();
       queryInterceptor.stop();
 
-      List<Issue> issues =
-          allIssues("countUnbounded", queryInterceptor.getRecordedQueries());
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
+      List<Issue> issues = allIssues("countUnbounded", queryInterceptor.getRecordedQueries());
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
     }
   }
 }

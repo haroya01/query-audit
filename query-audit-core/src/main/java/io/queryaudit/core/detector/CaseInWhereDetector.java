@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -29,11 +28,10 @@ public class CaseInWhereDetector implements DetectionRule {
       Pattern.compile("\\bCASE\\b", Pattern.CASE_INSENSITIVE);
 
   /**
-   * Matches CASE that appears on the right-hand side of a comparison operator,
-   * optionally preceded by an opening parenthesis or IN keyword.
-   * When CASE is on the RHS (e.g. {@code WHERE status = CASE WHEN ...} or
-   * {@code WHERE status = (CASE WHEN ...)} or {@code WHERE status IN (CASE WHEN ...)}),
-   * the index on the left-hand column is still usable, so this should NOT be flagged.
+   * Matches CASE that appears on the right-hand side of a comparison operator, optionally preceded
+   * by an opening parenthesis or IN keyword. When CASE is on the RHS (e.g. {@code WHERE status =
+   * CASE WHEN ...} or {@code WHERE status = (CASE WHEN ...)} or {@code WHERE status IN (CASE WHEN
+   * ...)}), the index on the left-hand column is still usable, so this should NOT be flagged.
    */
   private static final Pattern CASE_ON_RHS =
       Pattern.compile(

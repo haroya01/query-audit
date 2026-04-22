@@ -49,8 +49,7 @@ class ResultSetSortFalsePositiveTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -68,8 +67,7 @@ class ResultSetSortFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("aggregate", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
@@ -80,8 +78,7 @@ class ResultSetSortFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("pkLookup", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
@@ -94,8 +91,7 @@ class ResultSetSortFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("withLimit", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
@@ -108,8 +104,7 @@ class ResultSetSortFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("forUpdate", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.UNBOUNDED_RESULT_SET);
     }
   }
 
@@ -127,8 +122,7 @@ class ResultSetSortFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("smallOffset", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.OFFSET_PAGINATION);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.OFFSET_PAGINATION);
     }
   }
 
@@ -141,22 +135,18 @@ class ResultSetSortFalsePositiveTest {
     void uniqueColumnOrderBy() {
       IndexMetadata meta =
           new IndexMetadata(
-              Map.of(
-                  "members",
-                  List.of(new IndexInfo("members", "PRIMARY", "id", 1, false, 100))));
+              Map.of("members", List.of(new IndexInfo("members", "PRIMARY", "id", 1, false, 100))));
 
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members ORDER BY id LIMIT 10")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members ORDER BY id LIMIT 10").getResultList();
       queryInterceptor.stop();
 
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
       QueryAuditReport report =
           analyzer.analyze("Team5FP", "uniqueOrderBy", queryInterceptor.getRecordedQueries(), meta);
-      assertThat(Stream.concat(
-              report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
-          .toList())
+      assertThat(
+              Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+                  .toList())
           .noneMatch(i -> i.type() == IssueType.NON_DETERMINISTIC_PAGINATION);
     }
   }
@@ -175,8 +165,7 @@ class ResultSetSortFalsePositiveTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("countWithWhere", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.COUNT_STAR_WITHOUT_WHERE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.COUNT_STAR_WITHOUT_WHERE);
     }
   }
 
@@ -194,8 +183,7 @@ class ResultSetSortFalsePositiveTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("withPartition", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("withPartition", queryInterceptor.getRecordedQueries());
       assertThat(allIssues(report))
           .noneMatch(i -> i.type() == IssueType.WINDOW_FUNCTION_WITHOUT_PARTITION);
     }
@@ -209,14 +197,11 @@ class ResultSetSortFalsePositiveTest {
     @DisplayName("SELECT with few columns should NOT trigger")
     void fewColumns() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT id, name, email FROM members")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT id, name, email FROM members").getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("fewColumns", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .noneMatch(i -> i.type() == IssueType.EXCESSIVE_COLUMN_FETCH);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.EXCESSIVE_COLUMN_FETCH);
     }
   }
 }

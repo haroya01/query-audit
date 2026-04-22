@@ -13,7 +13,6 @@ import java.util.List;
  * @param occurrenceCount total number of times this issue appeared across all tests
  * @param affectedTests test method names where this issue was found (max 10)
  * @param highestSeverity the most severe level seen for this fingerprint
- *
  * @author haroya
  * @since 0.2.0
  */

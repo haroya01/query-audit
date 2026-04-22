@@ -7,6 +7,7 @@ import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -64,7 +65,7 @@ class OrAbuseDetectorTest {
   class IndexMergeOptimizationTests {
 
     private static IndexMetadata metadataWithIndexes(String table, String... columns) {
-      List<IndexInfo> infos = new java.util.ArrayList<>();
+      List<IndexInfo> infos = new ArrayList<>();
       for (String col : columns) {
         infos.add(new IndexInfo(table, "idx_" + col, col, 1, true, 100));
       }

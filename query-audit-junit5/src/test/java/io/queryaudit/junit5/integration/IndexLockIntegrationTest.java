@@ -68,8 +68,7 @@ class IndexLockIntegrationTest {
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
-    return Stream.concat(
-            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+    return Stream.concat(report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
         .toList();
   }
 
@@ -87,8 +86,7 @@ class IndexLockIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("missingIndex", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.MISSING_WHERE_INDEX);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.MISSING_WHERE_INDEX);
     }
   }
 
@@ -139,10 +137,8 @@ class IndexLockIntegrationTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("coveringIndex", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.COVERING_INDEX_OPPORTUNITY);
+      QueryAuditReport report = analyze("coveringIndex", queryInterceptor.getRecordedQueries());
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.COVERING_INDEX_OPPORTUNITY);
     }
   }
 
@@ -177,8 +173,7 @@ class IndexLockIntegrationTest {
               "redundantIndex",
               queryInterceptor.getRecordedQueries(),
               redundantMetadata);
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.REDUNDANT_INDEX);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.REDUNDANT_INDEX);
     }
   }
 
@@ -206,9 +201,7 @@ class IndexLockIntegrationTest {
 
       queryInterceptor.start();
       // Use SELECT to let extractTableNames find 'members' via FROM clause
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE id = 1")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE id = 1").getResultList();
       queryInterceptor.stop();
 
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
@@ -218,8 +211,7 @@ class IndexLockIntegrationTest {
               "writeAmplification",
               queryInterceptor.getRecordedQueries(),
               heavyIndexMetadata);
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.WRITE_AMPLIFICATION);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.WRITE_AMPLIFICATION);
     }
   }
 
@@ -238,8 +230,7 @@ class IndexLockIntegrationTest {
 
       QueryAuditReport report =
           analyze("forUpdateWithoutIndex", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.FOR_UPDATE_WITHOUT_INDEX);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.FOR_UPDATE_WITHOUT_INDEX);
     }
   }
 
@@ -271,8 +262,7 @@ class IndexLockIntegrationTest {
               "forUpdateNonUnique",
               queryInterceptor.getRecordedQueries(),
               nonUniqueMetadata);
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.FOR_UPDATE_NON_UNIQUE);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.FOR_UPDATE_NON_UNIQUE);
     }
   }
 
@@ -291,8 +281,7 @@ class IndexLockIntegrationTest {
 
       QueryAuditReport report =
           analyze("forUpdateWithoutTimeout", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.FOR_UPDATE_WITHOUT_TIMEOUT);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.FOR_UPDATE_WITHOUT_TIMEOUT);
     }
   }
 
@@ -306,14 +295,12 @@ class IndexLockIntegrationTest {
       // Use unindexed column 'name' for range — indexMetadata has no index on 'name'
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM members WHERE name >= 'A' AND name <= 'Z' FOR UPDATE")
+          .createNativeQuery("SELECT * FROM members WHERE name >= 'A' AND name <= 'Z' FOR UPDATE")
           .getResultList();
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("rangeLock", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.RANGE_LOCK_RISK);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.RANGE_LOCK_RISK);
     }
   }
 
@@ -332,8 +319,7 @@ class IndexLockIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("orAbuse", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report))
-          .anyMatch(i -> i.type() == IssueType.OR_ABUSE);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.OR_ABUSE);
     }
   }
 }

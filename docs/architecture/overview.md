@@ -59,7 +59,7 @@ and the full lifecycle of a query from execution to report.
       |
       +- 16. Write HTML report to build/reports/query-audit/
       +- 17. Write JSON report (if configured)
-      +- 18. Update query count baseline (if -DqueryGuard.updateBaseline=true)
+      +- 18. Update query count baseline (if -DqueryAudit.updateBaseline=true)
       +- 19. Auto-open report in browser (if configured)
 ```
 
@@ -501,7 +501,7 @@ QueryAudit tracks query counts per test method across runs using a baseline file
 ### Updating the Baseline
 
 ```bash
-./gradlew test -DqueryGuard.updateBaseline=true
+./gradlew test -DqueryAudit.updateBaseline=true
 ```
 
 ---

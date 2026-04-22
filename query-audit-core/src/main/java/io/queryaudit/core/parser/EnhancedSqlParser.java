@@ -10,6 +10,7 @@ import net.sf.jsqlparser.expression.operators.conditional.AndExpression;
 import net.sf.jsqlparser.expression.operators.relational.Between;
 import net.sf.jsqlparser.expression.operators.relational.EqualsTo;
 import net.sf.jsqlparser.expression.operators.relational.ExistsExpression;
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.expression.operators.relational.GreaterThan;
 import net.sf.jsqlparser.expression.operators.relational.GreaterThanEquals;
 import net.sf.jsqlparser.expression.operators.relational.InExpression;
@@ -24,7 +25,6 @@ import net.sf.jsqlparser.schema.Table;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.delete.Delete;
 import net.sf.jsqlparser.statement.insert.Insert;
-import net.sf.jsqlparser.expression.operators.relational.ExpressionList;
 import net.sf.jsqlparser.statement.select.GroupByElement;
 import net.sf.jsqlparser.statement.select.Join;
 import net.sf.jsqlparser.statement.select.OrderByElement;
@@ -39,12 +39,12 @@ import net.sf.jsqlparser.util.deparser.SelectDeParser;
 import net.sf.jsqlparser.util.deparser.StatementDeParser;
 
 /**
- * JSqlParser-backed SQL parser for extraction methods that benefit from AST-level accuracy.
- * Falls back to {@link SqlParser} when JSqlParser is not on the classpath or fails to parse.
+ * JSqlParser-backed SQL parser for extraction methods that benefit from AST-level accuracy. Falls
+ * back to {@link SqlParser} when JSqlParser is not on the classpath or fails to parse.
  *
- * <p>JSqlParser is an optional dependency ({@code compileOnly}). All JSqlParser types are used
- * only inside {@link JSqlParserDelegate}, which the JVM loads lazily when
- * {@link #JSQLPARSER_AVAILABLE} is true.
+ * <p>JSqlParser is an optional dependency ({@code compileOnly}). All JSqlParser types are used only
+ * inside {@link JSqlParserDelegate}, which the JVM loads lazily when {@link #JSQLPARSER_AVAILABLE}
+ * is true.
  *
  * @author haroya
  * @since 0.2.0
@@ -422,7 +422,8 @@ public final class EnhancedSqlParser {
       return result;
     }
 
-    static List<WhereColumnReference> extractWhereColumnsWithOperators(String sql) throws Exception {
+    static List<WhereColumnReference> extractWhereColumnsWithOperators(String sql)
+        throws Exception {
       Statement statement = parse(sql);
       Expression where = null;
       if (statement instanceof Select select) {
@@ -578,9 +579,7 @@ public final class EnhancedSqlParser {
 
       Statement statement = parse(sql);
       boolean hasWhereCapable =
-          statement instanceof Select
-              || statement instanceof Delete
-              || statement instanceof Update;
+          statement instanceof Select || statement instanceof Delete || statement instanceof Update;
       if (!hasWhereCapable) {
         return null;
       }
@@ -604,9 +603,9 @@ public final class EnhancedSqlParser {
     }
 
     /**
-     * Find the next case-insensitive whole-word occurrence of {@code keyword} starting at
-     * {@code from}, skipping content inside single-quoted string literals and double-quoted
-     * identifiers. Returns -1 if not found.
+     * Find the next case-insensitive whole-word occurrence of {@code keyword} starting at {@code
+     * from}, skipping content inside single-quoted string literals and double-quoted identifiers.
+     * Returns -1 if not found.
      */
     private static int scanForKeyword(String sql, int from, String keyword) {
       int len = sql.length();
@@ -640,8 +639,7 @@ public final class EnhancedSqlParser {
         // Word boundary check + keyword match
         if (i + klen <= len && sql.regionMatches(true, i, keyword, 0, klen)) {
           boolean leftOk = i == 0 || !Character.isLetterOrDigit(sql.charAt(i - 1));
-          boolean rightOk =
-              i + klen == len || !Character.isLetterOrDigit(sql.charAt(i + klen));
+          boolean rightOk = i + klen == len || !Character.isLetterOrDigit(sql.charAt(i + klen));
           if (leftOk && rightOk) {
             return i;
           }
@@ -855,7 +853,8 @@ public final class EnhancedSqlParser {
       return select.getPlainSelect();
     }
 
-    private static void extractJoinPairsFromExpression(Expression expr, List<JoinColumnPair> result) {
+    private static void extractJoinPairsFromExpression(
+        Expression expr, List<JoinColumnPair> result) {
       if (expr instanceof EqualsTo eq) {
         Expression left = eq.getLeftExpression();
         Expression right = eq.getRightExpression();

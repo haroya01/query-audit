@@ -54,5 +54,4 @@ class EnhancedHavingJoinFunctionTest {
   void noJoin() {
     assertThat(EnhancedSqlParser.extractJoinOnBodies("SELECT * FROM t")).isEmpty();
   }
-
 }

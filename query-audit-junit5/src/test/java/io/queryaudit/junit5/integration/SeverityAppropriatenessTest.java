@@ -51,8 +51,7 @@ class SeverityAppropriatenessTest {
     return analyze(testName, queries, null);
   }
 
-  private QueryAuditReport analyze(
-      String testName, List<QueryRecord> queries, IndexMetadata meta) {
+  private QueryAuditReport analyze(String testName, List<QueryRecord> queries, IndexMetadata meta) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
     return analyzer.analyze("SeverityTest", testName, queries, meta);
   }
@@ -73,18 +72,14 @@ class SeverityAppropriatenessTest {
     @DisplayName("네이티브 SELECT * — INFO여야 함, WARNING/ERROR이면 과잉")
     void selectAllShouldBeInfo() {
       queryInterceptor.start();
-      entityManager
-          .createNativeQuery("SELECT * FROM members WHERE id = 1")
-          .getResultList();
+      entityManager.createNativeQuery("SELECT * FROM members WHERE id = 1").getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("selectAllSeverity", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("selectAllSeverity", queryInterceptor.getRecordedQueries());
       assertThat(warnings(report))
           .as("SELECT * 는 INFO로 충분 — WARNING/ERROR로 올라가면 안 됨")
           .noneMatch(i -> i.type() == IssueType.SELECT_ALL);
-      assertThat(infos(report))
-          .anyMatch(i -> i.type() == IssueType.SELECT_ALL);
+      assertThat(infos(report)).anyMatch(i -> i.type() == IssueType.SELECT_ALL);
     }
   }
 
@@ -104,8 +99,7 @@ class SeverityAppropriatenessTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("unionSeverity", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("unionSeverity", queryInterceptor.getRecordedQueries());
       assertThat(warnings(report))
           .as("UNION WITHOUT ALL은 INFO — WARNING이면 과잉")
           .noneMatch(i -> i.type() == IssueType.UNION_WITHOUT_ALL);
@@ -181,8 +175,7 @@ class SeverityAppropriatenessTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("mergeableSeverity", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("mergeableSeverity", queryInterceptor.getRecordedQueries());
       assertThat(warnings(report))
           .as("MERGEABLE_QUERIES는 제안 — WARNING이면 과잉")
           .noneMatch(i -> i.type() == IssueType.MERGEABLE_QUERIES);
@@ -276,13 +269,10 @@ class SeverityAppropriatenessTest {
       memberRepository.findByStatus("ACTIVE");
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("jpaStandard", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("jpaStandard", queryInterceptor.getRecordedQueries());
 
       List<String> warningTypes =
-          warnings(report).stream()
-              .map(i -> i.type().name())
-              .collect(Collectors.toList());
+          warnings(report).stream().map(i -> i.type().name()).collect(Collectors.toList());
 
       // UNBOUNDED_RESULT_SET can fire without IndexMetadata, so allow it
       List<String> unexpectedWarnings =
@@ -302,11 +292,8 @@ class SeverityAppropriatenessTest {
       memberRepository.findById(1L);
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("jpaFindById", queryInterceptor.getRecordedQueries());
-      assertThat(warnings(report))
-          .as("findById에 WARNING이 있으면 과잉")
-          .isEmpty();
+      QueryAuditReport report = analyze("jpaFindById", queryInterceptor.getRecordedQueries());
+      assertThat(warnings(report)).as("findById에 WARNING이 있으면 과잉").isEmpty();
     }
 
     @Test
@@ -316,16 +303,12 @@ class SeverityAppropriatenessTest {
       teamRepository.findAll();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("jpaFindAll", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("jpaFindAll", queryInterceptor.getRecordedQueries());
 
       List<Issue> errors =
-          warnings(report).stream()
-              .filter(i -> i.severity() == Severity.ERROR)
-              .toList();
+          warnings(report).stream().filter(i -> i.severity() == Severity.ERROR).toList();
       assertThat(errors)
-          .as("findAll에 ERROR가 있으면 과잉: %s",
-              errors.stream().map(i -> i.type().name()).toList())
+          .as("findAll에 ERROR가 있으면 과잉: %s", errors.stream().map(i -> i.type().name()).toList())
           .isEmpty();
     }
   }
@@ -343,11 +326,11 @@ class SeverityAppropriatenessTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("likeError", queryInterceptor.getRecordedQueries());
-      assertThat(warnings(report).stream()
-          .filter(i -> i.type() == IssueType.LIKE_LEADING_WILDCARD)
-          .toList())
+      QueryAuditReport report = analyze("likeError", queryInterceptor.getRecordedQueries());
+      assertThat(
+              warnings(report).stream()
+                  .filter(i -> i.type() == IssueType.LIKE_LEADING_WILDCARD)
+                  .toList())
           .as("LIKE wildcard는 WARNING — ERROR이면 과잉")
           .allMatch(i -> i.severity() == Severity.WARNING);
     }
@@ -357,16 +340,13 @@ class SeverityAppropriatenessTest {
     void implicitJoinNotError() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT * FROM teams t, members m WHERE t.id = m.team_id")
+          .createNativeQuery("SELECT * FROM teams t, members m WHERE t.id = m.team_id")
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("implicitJoinError", queryInterceptor.getRecordedQueries());
-      assertThat(warnings(report).stream()
-          .filter(i -> i.type() == IssueType.IMPLICIT_JOIN)
-          .toList())
+      QueryAuditReport report = analyze("implicitJoinError", queryInterceptor.getRecordedQueries());
+      assertThat(
+              warnings(report).stream().filter(i -> i.type() == IssueType.IMPLICIT_JOIN).toList())
           .as("IMPLICIT_JOIN은 WARNING — ERROR이면 과잉")
           .allMatch(i -> i.severity() == Severity.WARNING);
     }
@@ -384,9 +364,10 @@ class SeverityAppropriatenessTest {
 
       QueryAuditReport report =
           analyze("repeatedInsertError", queryInterceptor.getRecordedQueries());
-      assertThat(warnings(report).stream()
-          .filter(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT)
-          .toList())
+      assertThat(
+              warnings(report).stream()
+                  .filter(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT)
+                  .toList())
           .as("REPEATED_SINGLE_INSERT는 WARNING — ERROR이면 과잉")
           .allMatch(i -> i.severity() == Severity.WARNING);
     }
@@ -396,16 +377,13 @@ class SeverityAppropriatenessTest {
     void distinctMisuseNotError() {
       queryInterceptor.start();
       entityManager
-          .createNativeQuery(
-              "SELECT DISTINCT status, COUNT(*) FROM members GROUP BY status")
+          .createNativeQuery("SELECT DISTINCT status, COUNT(*) FROM members GROUP BY status")
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditReport report =
-          analyze("distinctError", queryInterceptor.getRecordedQueries());
-      assertThat(warnings(report).stream()
-          .filter(i -> i.type() == IssueType.DISTINCT_MISUSE)
-          .toList())
+      QueryAuditReport report = analyze("distinctError", queryInterceptor.getRecordedQueries());
+      assertThat(
+              warnings(report).stream().filter(i -> i.type() == IssueType.DISTINCT_MISUSE).toList())
           .as("DISTINCT_MISUSE는 WARNING — ERROR이면 과잉")
           .allMatch(i -> i.severity() == Severity.WARNING);
     }

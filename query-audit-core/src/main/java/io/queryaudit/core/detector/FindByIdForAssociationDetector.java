@@ -88,7 +88,8 @@ public class FindByIdForAssociationDetector {
 
       // Check if a subsequent INSERT/UPDATE references this entity type as a FK
       String simpleEntityName = simpleClassName(load.entityType());
-      boolean hasSubsequentDml = hasSubsequentFkReference(queries, load.timestamp(), simpleEntityName);
+      boolean hasSubsequentDml =
+          hasSubsequentFkReference(queries, load.timestamp(), simpleEntityName);
 
       if (hasSubsequentDml) {
         issues.add(buildIssue(load, simpleEntityName));
@@ -109,11 +110,16 @@ public class FindByIdForAssociationDetector {
 
     // Build word-boundary patterns for FK column matching
     String snakeFk = toSnakeCase(simpleEntityName) + "_id";
-    String camelFk = Character.toLowerCase(simpleEntityName.charAt(0)) + simpleEntityName.substring(1) + "Id";
+    String camelFk =
+        Character.toLowerCase(simpleEntityName.charAt(0)) + simpleEntityName.substring(1) + "Id";
 
     // Word boundary: preceded by non-alphanumeric or start of string
-    Pattern snakePattern = Pattern.compile("(?<![a-zA-Z0-9_])" + Pattern.quote(snakeFk) + "(?![a-zA-Z0-9_])", Pattern.CASE_INSENSITIVE);
-    Pattern camelPattern = Pattern.compile("(?<![a-zA-Z0-9_])" + Pattern.quote(camelFk) + "(?![a-zA-Z0-9_])");
+    Pattern snakePattern =
+        Pattern.compile(
+            "(?<![a-zA-Z0-9_])" + Pattern.quote(snakeFk) + "(?![a-zA-Z0-9_])",
+            Pattern.CASE_INSENSITIVE);
+    Pattern camelPattern =
+        Pattern.compile("(?<![a-zA-Z0-9_])" + Pattern.quote(camelFk) + "(?![a-zA-Z0-9_])");
 
     for (QueryRecord query : queries) {
       if (query.timestamp() <= afterTimestamp) continue;

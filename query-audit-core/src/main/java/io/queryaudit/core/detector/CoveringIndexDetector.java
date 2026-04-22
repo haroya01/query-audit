@@ -177,8 +177,8 @@ public class CoveringIndexDetector implements DetectionRule {
   }
 
   /**
-   * Returns the set of primary key column names (lowercased) for the given table.
-   * In InnoDB, secondary indexes always include PK columns, so they are effectively covered.
+   * Returns the set of primary key column names (lowercased) for the given table. In InnoDB,
+   * secondary indexes always include PK columns, so they are effectively covered.
    */
   private Set<String> getPrimaryKeyColumns(IndexMetadata indexMetadata, String table) {
     Set<String> pkCols = new HashSet<>();

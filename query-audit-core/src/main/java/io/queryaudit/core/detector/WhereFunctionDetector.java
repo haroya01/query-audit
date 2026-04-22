@@ -5,8 +5,8 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
-import io.queryaudit.core.parser.FunctionUsage;
 import io.queryaudit.core.parser.EnhancedSqlParser;
+import io.queryaudit.core.parser.FunctionUsage;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -16,8 +16,8 @@ import java.util.Set;
 
 /**
  * Detects function calls wrapping columns in WHERE and JOIN ON conditions, which prevent index
- * usage. When a function like {@code LOWER()}, {@code DATE()}, or {@code CONCAT()} wraps an
- * indexed column, the database cannot use the index and falls back to a full table scan.
+ * usage. When a function like {@code LOWER()}, {@code DATE()}, or {@code CONCAT()} wraps an indexed
+ * column, the database cannot use the index and falls back to a full table scan.
  *
  * <p>Index-safe functions like {@code COALESCE}, {@code IFNULL}, {@code IF}, and {@code NULLIF} are
  * excluded from detection because MySQL 8.0.13+ and other modern databases can utilize indexes with
@@ -32,8 +32,7 @@ public class WhereFunctionDetector implements DetectionRule {
    * Index-safe functions that MySQL 8.0.13+ and modern databases can use with indexes. Flagging
    * these produces false positives.
    */
-  static final Set<String> INDEX_SAFE_FUNCTIONS =
-      Set.of("COALESCE", "IFNULL", "IF", "NULLIF");
+  static final Set<String> INDEX_SAFE_FUNCTIONS = Set.of("COALESCE", "IFNULL", "IF", "NULLIF");
 
   /**
    * Function-specific rewrite suggestions. Maps function name (uppercase) to a descriptive

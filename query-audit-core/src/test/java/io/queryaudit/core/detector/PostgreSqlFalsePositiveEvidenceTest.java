@@ -21,9 +21,10 @@ import org.junit.jupiter.api.Test;
  * the pattern is legitimate. Results are categorised as:
  *
  * <ul>
- *   <li><b>TP</b> (True Positive): Detector correctly flags an anti-pattern, even if PostgreSQL
- *       has a workaround (e.g., expression indexes). The flag is still valid general advice.
- *   <li><b>TN</b> (True Negative): Detector correctly does NOT flag a legitimate PostgreSQL pattern.
+ *   <li><b>TP</b> (True Positive): Detector correctly flags an anti-pattern, even if PostgreSQL has
+ *       a workaround (e.g., expression indexes). The flag is still valid general advice.
+ *   <li><b>TN</b> (True Negative): Detector correctly does NOT flag a legitimate PostgreSQL
+ *       pattern.
  * </ul>
  */
 class PostgreSqlFalsePositiveEvidenceTest {
@@ -82,9 +83,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // as it can use a B-tree index on created_at directly.
       List<Issue> issues =
           detector.evaluate(
-              List.of(
-                  record(
-                      "SELECT * FROM events WHERE EXTRACT(YEAR FROM created_at) = 2024")),
+              List.of(record("SELECT * FROM events WHERE EXTRACT(YEAR FROM created_at) = 2024")),
               EMPTY_INDEX);
 
       List<Issue> whereFunctionIssues = issuesOfType(issues, IssueType.WHERE_FUNCTION);
@@ -102,9 +101,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // Example: WHERE data->>'name' = 'test' uses the JSONB text extraction operator.
       List<Issue> issues =
           detector.evaluate(
-              List.of(
-                  record("SELECT * FROM documents WHERE data->>'name' = 'test'")),
-              EMPTY_INDEX);
+              List.of(record("SELECT * FROM documents WHERE data->>'name' = 'test'")), EMPTY_INDEX);
 
       List<Issue> whereFunctionIssues = issuesOfType(issues, IssueType.WHERE_FUNCTION);
       assertThat(whereFunctionIssues)
@@ -133,8 +130,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // default values, trigger-computed columns) without knowing the schema at compile time.
       List<Issue> issues =
           detector.evaluate(
-              List.of(record("INSERT INTO users (name) VALUES ('test') RETURNING *")),
-              EMPTY_INDEX);
+              List.of(record("INSERT INTO users (name) VALUES ('test') RETURNING *")), EMPTY_INDEX);
 
       List<Issue> selectAllIssues = issuesOfType(issues, IssueType.SELECT_ALL);
       assertThat(selectAllIssues)
@@ -200,7 +196,8 @@ class PostgreSqlFalsePositiveEvidenceTest {
       //   SELECT o.id, i.cnt FROM orders o
       //   LEFT JOIN LATERAL (SELECT COUNT(*) AS cnt FROM items i WHERE i.order_id = o.id) i ON true
       // or equivalently:
-      //   SELECT o.id, COUNT(i.id) FROM orders o LEFT JOIN items i ON i.order_id = o.id GROUP BY o.id
+      //   SELECT o.id, COUNT(i.id) FROM orders o LEFT JOIN items i ON i.order_id = o.id GROUP BY
+      // o.id
       List<Issue> issues =
           detector.evaluate(
               List.of(
@@ -237,8 +234,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // and the performance overhead of DISTINCT sort on small literal sets is negligible.
       List<Issue> issues =
           detector.evaluate(
-              List.of(record("SELECT 'ACTIVE' AS status UNION SELECT 'INACTIVE'")),
-              EMPTY_INDEX);
+              List.of(record("SELECT 'ACTIVE' AS status UNION SELECT 'INACTIVE'")), EMPTY_INDEX);
 
       List<Issue> unionIssues = issuesOfType(issues, IssueType.UNION_WITHOUT_ALL);
       assertThat(unionIssues)
@@ -299,8 +295,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // so @> should not be detected as non-sargable.
       List<Issue> issues =
           detector.evaluate(
-              List.of(record("SELECT * FROM tickets WHERE tags @> ARRAY['urgent']")),
-              EMPTY_INDEX);
+              List.of(record("SELECT * FROM tickets WHERE tags @> ARRAY['urgent']")), EMPTY_INDEX);
 
       List<Issue> sargabilityIssues = issuesOfType(issues, IssueType.NON_SARGABLE_EXPRESSION);
       assertThat(sargabilityIssues)
@@ -330,9 +325,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // implicit Cartesian joins (FROM a, b without WHERE) and JOINs missing ON/USING.
       List<Issue> issues =
           detector.evaluate(
-              List.of(
-                  record(
-                      "SELECT * FROM generate_series(1, 10) AS g CROSS JOIN products p")),
+              List.of(record("SELECT * FROM generate_series(1, 10) AS g CROSS JOIN products p")),
               EMPTY_INDEX);
 
       List<Issue> cartesianIssues = issuesOfType(issues, IssueType.CARTESIAN_JOIN);
@@ -398,9 +391,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // The detector correctly flags this as WARNING.
       List<Issue> issues =
           detector.evaluate(
-              List.of(
-                  record(
-                      "SELECT dept, COUNT(*) FROM emp GROUP BY dept HAVING dept = 'sales'")),
+              List.of(record("SELECT dept, COUNT(*) FROM emp GROUP BY dept HAVING dept = 'sales'")),
               EMPTY_INDEX);
 
       List<Issue> havingIssues = issuesOfType(issues, IssueType.HAVING_MISUSE);
@@ -434,8 +425,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // reminder to verify the pg_trgm index is in place.
       List<Issue> issues =
           detector.evaluate(
-              List.of(record("SELECT * FROM articles WHERE title LIKE '%test%'")),
-              EMPTY_INDEX);
+              List.of(record("SELECT * FROM articles WHERE title LIKE '%test%'")), EMPTY_INDEX);
 
       List<Issue> likeIssues = issuesOfType(issues, IssueType.LIKE_LEADING_WILDCARD);
       assertThat(likeIssues)
@@ -455,8 +445,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
   @DisplayName("ForUpdateWithoutTimeoutDetector — PostgreSQL NOWAIT / SKIP LOCKED")
   class ForUpdateWithoutTimeoutDetectorTests {
 
-    private final ForUpdateWithoutTimeoutDetector detector =
-        new ForUpdateWithoutTimeoutDetector();
+    private final ForUpdateWithoutTimeoutDetector detector = new ForUpdateWithoutTimeoutDetector();
 
     @Test
     @DisplayName(
@@ -509,8 +498,7 @@ class PostgreSqlFalsePositiveEvidenceTest {
       // is designed to catch. Both MySQL and PostgreSQL have the same blocking behavior.
       List<Issue> issues =
           detector.evaluate(
-              List.of(record("SELECT * FROM accounts WHERE id = 1 FOR UPDATE")),
-              EMPTY_INDEX);
+              List.of(record("SELECT * FROM accounts WHERE id = 1 FOR UPDATE")), EMPTY_INDEX);
 
       List<Issue> forUpdateIssues = issuesOfType(issues, IssueType.FOR_UPDATE_WITHOUT_TIMEOUT);
       assertThat(forUpdateIssues)

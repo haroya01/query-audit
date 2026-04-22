@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -26,16 +25,7 @@ import java.util.regex.Pattern;
  */
 public class ImplicitTypeConversionDetector implements DetectionRule {
 
-  /**
-   * Tokens (in the snake_case or camelCase-ends-with sense) in column names that strongly suggest
-   * a string type. Matched at three positions:
-   *
-   * <ul>
-   *   <li>as an entire {@code _}-separated segment (e.g. {@code user_name}, {@code email_address})
-   *   <li>as the end of a non-separated identifier (e.g. {@code ucode}, {@code firstname})
-   *   <li>as the beginning of a non-separated identifier (e.g. {@code codebook})
-   * </ul>
-   */
+  /** Tokens in column names that suggest a string type (matched as segment / prefix / suffix). */
   private static final Set<String> STRING_COLUMN_TOKENS =
       Set.of(
           "name",
@@ -62,12 +52,7 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
           "tag",
           "remark");
 
-  /**
-   * Tokens that strongly suggest a numeric/identifier column. If a column ends with one of these,
-   * we trust the numeric hint even if another token earlier in the name would otherwise match.
-   * Without this guard, {@code description_id} (FK INT column) would be flagged because it
-   * contains the {@code description} token.
-   */
+  /** If a column ends with one of these, suppress the string-column match (e.g. description_id). */
   private static final Set<String> NUMERIC_COLUMN_TOKENS =
       Set.of("id", "count", "num", "no", "seq", "order", "size", "length");
 
@@ -89,9 +74,6 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
         continue;
       }
 
-      // Use EnhancedSqlParser.extractWhereBody to properly extract only the WHERE clause,
-      // excluding ORDER BY, GROUP BY, HAVING, LIMIT, and other trailing clauses
-      // that could cause false positives.
       String whereClause = EnhancedSqlParser.extractWhereBody(sql);
       if (whereClause == null) {
         continue;
@@ -136,14 +118,10 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
     return issues;
   }
 
-  /** Check if the column name suggests a string type based on known indicators. */
-  // Package-private for testability.
+  /** Returns true when the column name suggests a string type. */
   boolean isStringColumn(String columnName) {
     String lower = columnName.toLowerCase();
 
-    // If the last snake_case segment is a numeric hint (e.g. *_id, *_count, *_order), bail out
-    // before the string-token check. This prevents false positives on FK-style column names
-    // whose leading segment happens to look string-like (e.g. "description_id").
     int lastUnderscore = lower.lastIndexOf('_');
     if (lastUnderscore >= 0) {
       String lastSegment = lower.substring(lastUnderscore + 1);
@@ -152,14 +130,12 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
       }
     }
 
-    // Match as any _-separated segment.
     for (String segment : lower.split("_")) {
       if (STRING_COLUMN_TOKENS.contains(segment)) {
         return true;
       }
     }
 
-    // Match as end or start of a non-separated identifier (ucode, firstname, codebook).
     for (String token : STRING_COLUMN_TOKENS) {
       if (lower.endsWith(token) || lower.startsWith(token)) {
         return true;

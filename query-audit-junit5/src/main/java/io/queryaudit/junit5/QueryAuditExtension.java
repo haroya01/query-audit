@@ -18,6 +18,7 @@ import io.queryaudit.core.reporter.GitHubActionsReporter;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import io.queryaudit.core.reporter.JsonReporter;
 import java.awt.Desktop;
+import java.io.File;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -215,10 +216,7 @@ public class QueryAuditExtension
         new ConsoleReporter(System.out, ConsoleReporter.detectColorSupport(), baseline);
     reporter.report(report);
 
-    // When running inside GitHub Actions, also emit workflow-command annotations + a step
-    // summary so issues surface as inline PR comments and a job-page overview (issue #85).
-    // Detection is env-driven (GITHUB_ACTIONS is set to "true" by the runner), so no config
-    // change is needed to get the behavior in CI — and it stays silent locally.
+    // GitHub Actions annotations + step summary (issue #85).
     if ("true".equals(System.getenv("GITHUB_ACTIONS"))) {
       new GitHubActionsReporter().report(report);
     }
@@ -338,18 +336,12 @@ public class QueryAuditExtension
       return;
     }
 
-    // Release the Hibernate event listener registered in beforeAll. When a SessionFactory is
-    // reused across test classes (shared Spring context), skipping this leaks one tracker per
-    // class onto the EventListenerRegistry and multiplies event dispatch cost (issue #101).
+    // Release per-class resources so shared SessionFactory / reused worker threads don't leak
+    // listeners or ThreadLocal holders across classes (issues #100, #101).
     LazyLoadTracker tracker = getLazyLoadTracker(context);
     if (tracker != null) {
       hibernateIntegration.unregisterTracker(context, tracker);
     }
-
-    // Release the ThreadLocal holder that beforeAll populated when we had to wrap the
-    // DataSource ourselves. Without this, long-lived test worker threads (Gradle reuses them)
-    // retain the QueryInterceptorHolder for their entire lifetime, leaking recorded queries
-    // and potentially serving a stale holder to a subsequent test class (issue #100).
     QueryAuditDataSourceStore.clear();
 
     writeCountBaselineIfRequested(context);
@@ -679,7 +671,8 @@ public class QueryAuditExtension
   // ── Baseline & report helpers ──────────────────────────────────────
 
   private Path resolveCountBaselinePath(ExtensionContext context) {
-    String sysProp = System.getProperty("queryGuard.countBaselinePath");
+    String sysProp =
+        resolveSystemProperty("queryAudit.countBaselinePath", "queryGuard.countBaselinePath");
     if (sysProp != null && !sysProp.isEmpty()) {
       return Path.of(sysProp);
     }
@@ -689,7 +682,9 @@ public class QueryAuditExtension
   @SuppressWarnings("unchecked")
   private void writeCountBaselineIfRequested(ExtensionContext context) {
     boolean updateBaseline =
-        Boolean.parseBoolean(System.getProperty("queryGuard.updateBaseline", "false"));
+        Boolean.parseBoolean(
+            resolveSystemProperty(
+                "queryAudit.updateBaseline", "queryGuard.updateBaseline", "false"));
     if (!updateBaseline) {
       return;
     }
@@ -753,7 +748,7 @@ public class QueryAuditExtension
 
   private void openReportInBrowser(Path reportPath) {
     try {
-      java.io.File reportFile = reportPath.toFile();
+      File reportFile = reportPath.toFile();
       if (!reportFile.exists()) {
         return;
       }
@@ -897,5 +892,23 @@ public class QueryAuditExtension
       }
     }
     return null;
+  }
+
+  /**
+   * Returns the first non-null system property among the candidates, or {@code null} if none are
+   * set. Used to honor both {@code queryAudit.*} (preferred) and the legacy {@code queryGuard.*}
+   * prefix from the pre-rename days.
+   */
+  private static String resolveSystemProperty(String... keys) {
+    for (String key : keys) {
+      String v = System.getProperty(key);
+      if (v != null) return v;
+    }
+    return null;
+  }
+
+  private static String resolveSystemProperty(String primary, String legacy, String defaultValue) {
+    String v = resolveSystemProperty(primary, legacy);
+    return v != null ? v : defaultValue;
   }
 }

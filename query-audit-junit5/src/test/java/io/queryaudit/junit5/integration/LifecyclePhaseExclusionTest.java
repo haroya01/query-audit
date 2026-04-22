@@ -5,14 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
-import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
-import io.queryaudit.junit5.EnableQueryInspector;
 import io.queryaudit.junit5.BooleanOverride;
+import io.queryaudit.junit5.EnableQueryInspector;
 import io.queryaudit.junit5.QueryAudit;
 import io.queryaudit.junit5.integration.entity.Member;
 import io.queryaudit.junit5.integration.entity.Team;
@@ -20,7 +19,6 @@ import io.queryaudit.junit5.integration.repository.MemberRepository;
 import io.queryaudit.junit5.integration.repository.TeamRepository;
 import jakarta.persistence.EntityManager;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,19 +29,20 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Tests verifying that test lifecycle queries ({@code @BeforeEach} / {@code @AfterEach})
- * should be excluded from query-audit detection to prevent false positives.
+ * Tests verifying that test lifecycle queries ({@code @BeforeEach} / {@code @AfterEach}) should be
+ * excluded from query-audit detection to prevent false positives.
  *
- * <p>Issue #35: {@code deleteAll()} in setup triggers {@code update-without-where} (ERROR),
- * and repeated {@code save()} triggers {@code repeated-single-insert} (WARNING).
- * These are test infrastructure, not production code paths.
+ * <p>Issue #35: {@code deleteAll()} in setup triggers {@code update-without-where} (ERROR), and
+ * repeated {@code save()} triggers {@code repeated-single-insert} (WARNING). These are test
+ * infrastructure, not production code paths.
  *
  * <h3>Test Groups</h3>
+ *
  * <ul>
  *   <li><b>FalsePositiveProof</b> — Proves false positives exist with the current approach
- *       (capturing all queries between start/stop). These tests PASS now.</li>
- *   <li><b>DesiredBehavior</b> — Defines the expected behavior after lifecycle phase
- *       awareness is implemented. These tests FAIL until the feature is implemented.</li>
+ *       (capturing all queries between start/stop). These tests PASS now.
+ *   <li><b>DesiredBehavior</b> — Defines the expected behavior after lifecycle phase awareness is
+ *       implemented. These tests FAIL until the feature is implemented.
  * </ul>
  */
 @SpringBootTest(classes = TestApplication.class)
@@ -83,7 +82,8 @@ class LifecyclePhaseExclusionTest {
               .toList();
 
       assertThat(updateWithoutWhere)
-          .as("deleteAll() in @BeforeEach should trigger update-without-where (proving false positive exists)")
+          .as(
+              "deleteAll() in @BeforeEach should trigger update-without-where (proving false positive exists)")
           .isNotEmpty();
     }
 
@@ -117,12 +117,14 @@ class LifecyclePhaseExclusionTest {
               .toList();
 
       assertThat(repeatedInsert.size() + repeatedInsertInfo.size())
-          .as("Repeated save() in @BeforeEach should trigger repeated-single-insert (proving false positive exists)")
+          .as(
+              "Repeated save() in @BeforeEach should trigger repeated-single-insert (proving false positive exists)")
           .isGreaterThan(0);
     }
 
     @Test
-    @DisplayName("Combined setup pattern: deleteAll + repeated save produces multiple false positives")
+    @DisplayName(
+        "Combined setup pattern: deleteAll + repeated save produces multiple false positives")
     void combinedSetupPatternProducesMultipleFalsePositives() {
       // This is the realistic scenario described in the issue
       queryInterceptor.start();
@@ -136,8 +138,7 @@ class LifecyclePhaseExclusionTest {
         Team team = new Team("Team " + i);
         teamRepository.save(team);
         for (int j = 0; j < 3; j++) {
-          Member member =
-              new Member("Member " + i + "-" + j, "m" + i + j + "@test.com", "ACTIVE");
+          Member member = new Member("Member " + i + "-" + j, "m" + i + j + "@test.com", "ACTIVE");
           member.setTeam(team);
           memberRepository.save(member);
         }
@@ -152,8 +153,7 @@ class LifecyclePhaseExclusionTest {
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-      QueryAuditReport report =
-          analyzer.analyze("FalsePositiveProof", "combined", queries, null);
+      QueryAuditReport report = analyzer.analyze("FalsePositiveProof", "combined", queries, null);
 
       // Count false positives from setup
       long setupFalsePositives =
@@ -165,7 +165,8 @@ class LifecyclePhaseExclusionTest {
               .count();
 
       assertThat(setupFalsePositives)
-          .as("Combined setup pattern should produce multiple false positives from test infrastructure")
+          .as(
+              "Combined setup pattern should produce multiple false positives from test infrastructure")
           .isGreaterThanOrEqualTo(2);
     }
   }
@@ -182,8 +183,7 @@ class LifecyclePhaseExclusionTest {
         Team team = new Team("Team " + i);
         teamRepository.save(team);
         for (int j = 0; j < 3; j++) {
-          Member member =
-              new Member("Member " + i + "-" + j, "m" + i + j + "@test.com", "ACTIVE");
+          Member member = new Member("Member " + i + "-" + j, "m" + i + j + "@test.com", "ACTIVE");
           member.setTeam(team);
           memberRepository.save(member);
         }
@@ -221,9 +221,7 @@ class LifecyclePhaseExclusionTest {
       // Test queries should be tagged as TEST
       List<QueryRecord> testQueries =
           queries.stream().filter(q -> q.phase() == LifecyclePhase.TEST).toList();
-      assertThat(testQueries)
-          .as("findByStatus() queries should be tagged as TEST")
-          .isNotEmpty();
+      assertThat(testQueries).as("findByStatus() queries should be tagged as TEST").isNotEmpty();
     }
 
     @Test
@@ -249,8 +247,7 @@ class LifecyclePhaseExclusionTest {
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-      QueryAuditReport report =
-          analyzer.analyze("DesiredBehavior", "excludeSetup", queries, null);
+      QueryAuditReport report = analyzer.analyze("DesiredBehavior", "excludeSetup", queries, null);
 
       // After the fix: setup-phase false positives should NOT appear
       assertThat(report.getConfirmedIssues())
@@ -343,8 +340,7 @@ class LifecyclePhaseExclusionTest {
       QueryAuditConfig config =
           QueryAuditConfig.builder().includeSetupQueries(true).failOnDetection(false).build();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
-      QueryAuditReport report =
-          analyzer.analyze("DesiredBehavior", "includeSetup", queries, null);
+      QueryAuditReport report = analyzer.analyze("DesiredBehavior", "includeSetup", queries, null);
 
       // When includeSetupQueries is enabled, setup-phase issues should be detected
       assertThat(report.getConfirmedIssues())
@@ -353,7 +349,8 @@ class LifecyclePhaseExclusionTest {
     }
 
     @Test
-    @DisplayName("Report should include query count from all phases but only detect issues in TEST phase")
+    @DisplayName(
+        "Report should include query count from all phases but only detect issues in TEST phase")
     void reportCountsAllQueriesButDetectsOnlyTestPhase() {
       queryInterceptor.start();
       queryInterceptor.setPhase(LifecyclePhase.SETUP);
@@ -377,8 +374,7 @@ class LifecyclePhaseExclusionTest {
       assertThat(testCount).as("Should have captured test queries").isGreaterThanOrEqualTo(1);
 
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-      QueryAuditReport report =
-          analyzer.analyze("DesiredBehavior", "countAll", allQueries, null);
+      QueryAuditReport report = analyzer.analyze("DesiredBehavior", "countAll", allQueries, null);
 
       // Total count includes all phases (for reporting transparency)
       assertThat(report.getTotalQueryCount())
@@ -402,14 +398,13 @@ class LifecyclePhaseExclusionTest {
   class ExtensionAutoPhase {
 
     /**
-     * The Extension's beforeEach() starts the interceptor with SETUP phase,
-     * then beforeTestExecution() switches to TEST before the @Test method runs.
-     * If the Extension does NOT manage phases correctly, deleteAllInBatch() in
-     * @BeforeEach would be tagged as TEST and trigger update-without-where,
-     * causing failOnDetection=true to throw an AssertionError.
+     * The Extension's beforeEach() starts the interceptor with SETUP phase, then
+     * beforeTestExecution() switches to TEST before the @Test method runs. If the Extension does
+     * NOT manage phases correctly, deleteAllInBatch() in @BeforeEach would be tagged as TEST and
+     * trigger update-without-where, causing failOnDetection=true to throw an AssertionError.
      *
-     * <p>This test passing IS the assertion: it proves the Extension auto-excludes
-     * @BeforeEach queries from detection.
+     * <p>This test passing IS the assertion: it proves the Extension auto-excludes @BeforeEach
+     * queries from detection.
      */
     @BeforeEach
     void setupWithProblematicQueries() {
@@ -501,8 +496,7 @@ class LifecyclePhaseExclusionTest {
       QueryAuditConfig config =
           QueryAuditConfig.builder().includeSetupQueries(true).failOnDetection(false).build();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
-      QueryAuditReport report =
-          analyzer.analyze("IncludeSetup", "optIn", queries, null);
+      QueryAuditReport report = analyzer.analyze("IncludeSetup", "optIn", queries, null);
 
       assertThat(report.getConfirmedIssues())
           .as("With includeSetupQueries=true, SETUP-phase update-without-where should be detected")
@@ -528,8 +522,7 @@ class LifecyclePhaseExclusionTest {
 
       // Default config: includeSetupQueries=false → SETUP excluded
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-      QueryAuditReport report =
-          analyzer.analyze("IncludeSetup", "default", queries, null);
+      QueryAuditReport report = analyzer.analyze("IncludeSetup", "default", queries, null);
 
       assertThat(report.getConfirmedIssues())
           .as("With default config, SETUP-phase update-without-where should be excluded")

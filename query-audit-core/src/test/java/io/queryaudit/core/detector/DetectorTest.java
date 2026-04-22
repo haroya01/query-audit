@@ -888,9 +888,7 @@ class DetectorTest {
       // Self-join: u1_0 -> users, u2_0 -> users
       IndexMetadata metadata =
           new IndexMetadata(
-              Map.of(
-                  "users",
-                  List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 1000))));
+              Map.of("users", List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 1000))));
 
       MissingIndexDetector detector = new MissingIndexDetector();
       List<QueryRecord> queries =

@@ -2,12 +2,12 @@ package io.queryaudit.core.detector;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.interceptor.LazyLoadTracker.LazyLoadRecord;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.model.Severity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -1502,10 +1502,7 @@ class AdversarialFalsePositiveTest {
     void likeWithParameterEmitsInfoOnly() {
       List<Issue> issues =
           detector.evaluate(List.of(record("SELECT * FROM users WHERE name LIKE ?")), EMPTY_INDEX);
-      assertThat(issues).allSatisfy(
-          i ->
-              assertThat(i.severity())
-                  .isEqualTo(io.queryaudit.core.model.Severity.INFO));
+      assertThat(issues).allSatisfy(i -> assertThat(i.severity()).isEqualTo(Severity.INFO));
     }
 
     @Test

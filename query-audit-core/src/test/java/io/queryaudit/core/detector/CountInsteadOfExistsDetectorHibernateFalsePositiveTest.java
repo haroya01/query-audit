@@ -18,14 +18,16 @@ import org.junit.jupiter.api.Test;
  *
  * <h2>Background</h2>
  *
- * <p>Hibernate translates Spring Data {@code existsBy*} repository methods into
- * {@code SELECT count(col) > ?} SQL. The key insight is <b>actionability</b>:
- * a detection rule should only flag queries the developer can actually improve.
+ * <p>Hibernate translates Spring Data {@code existsBy*} repository methods into {@code SELECT
+ * count(col) > ?} SQL. The key insight is <b>actionability</b>: a detection rule should only flag
+ * queries the developer can actually improve.
  *
  * <ul>
- *   <li>{@code COUNT(col) > ?} — developer already wrote {@code existsBy*}; nothing to fix → must NOT flag
+ *   <li>{@code COUNT(col) > ?} — developer already wrote {@code existsBy*}; nothing to fix → must
+ *       NOT flag
  *   <li>{@code COUNT(col) > 0} — same boolean expression in SQL; nothing to fix → must NOT flag
- *   <li>Plain {@code SELECT COUNT(*) … WHERE …} — developer could switch to EXISTS → INFO is appropriate
+ *   <li>Plain {@code SELECT COUNT(*) … WHERE …} — developer could switch to EXISTS → INFO is
+ *       appropriate
  * </ul>
  */
 class CountInsteadOfExistsDetectorHibernateFalsePositiveTest {
@@ -67,9 +69,7 @@ class CountInsteadOfExistsDetectorHibernateFalsePositiveTest {
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues)
-          .as("count(*) > ? is also a Hibernate existsBy* pattern")
-          .isEmpty();
+      assertThat(issues).as("count(*) > ? is also a Hibernate existsBy* pattern").isEmpty();
     }
 
     @Test
@@ -91,9 +91,7 @@ class CountInsteadOfExistsDetectorHibernateFalsePositiveTest {
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues)
-          .as("count(*) >= 1 is equivalent to existence check")
-          .isEmpty();
+      assertThat(issues).as("count(*) >= 1 is equivalent to existence check").isEmpty();
     }
   }
 

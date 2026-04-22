@@ -58,11 +58,10 @@ class JpaOnlyIndexFalsePositiveTest {
   class DbOnlyMetadataPreventsFalsePositives {
 
     /**
-     * 이슈에서 보고된 정확한 시나리오:
-     * - rooms 테이블에 DB에는 PRIMARY KEY만 존재
-     * - JPA @Index(name="idx_room_location_type", columnList="location_id, type") 선언됨
-     * - 실제 DB에는 idx_room_location_type 인덱스가 없음 (ddl-auto=none, migration 미작성)
-     * - DB 메타데이터만 사용하면 false positive가 발생하지 않음
+     * 이슈에서 보고된 정확한 시나리오: - rooms 테이블에 DB에는 PRIMARY KEY만 존재 -
+     * JPA @Index(name="idx_room_location_type", columnList="location_id, type") 선언됨 - 실제 DB에는
+     * idx_room_location_type 인덱스가 없음 (ddl-auto=none, migration 미작성) - DB 메타데이터만 사용하면 false
+     * positive가 발생하지 않음
      */
     @Test
     @DisplayName("DB-only metadata does not trigger warning for non-existent composite index")
@@ -76,14 +75,10 @@ class JpaOnlyIndexFalsePositiveTest {
       List<Issue> issues = detector.evaluate(List.of(query(sql)), dbMetadata);
 
       // DB에 복합 인덱스가 없으므로 composite-index-leading 경고가 발생하면 안 됨
-      assertThat(issues)
-          .noneMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
     }
 
-    /**
-     * 여러 테이블에 걸쳐 DB에 없는 JPA-only 인덱스가 있어도,
-     * DB 메타데이터만 사용하면 false positive가 발생하지 않음.
-     */
+    /** 여러 테이블에 걸쳐 DB에 없는 JPA-only 인덱스가 있어도, DB 메타데이터만 사용하면 false positive가 발생하지 않음. */
     @Test
     @DisplayName("Multiple tables — DB-only metadata produces no false positives")
     void multipleTablesDbOnlyMetadataNoFalsePositives() {
@@ -91,16 +86,12 @@ class JpaOnlyIndexFalsePositiveTest {
       IndexMetadata dbMetadata = metadata(pk("rooms", "id"), pk("orders", "id"));
 
       List<Issue> roomIssues =
-          detector.evaluate(
-              List.of(query("SELECT * FROM rooms WHERE type = ?")), dbMetadata);
+          detector.evaluate(List.of(query("SELECT * FROM rooms WHERE type = ?")), dbMetadata);
       List<Issue> orderIssues =
-          detector.evaluate(
-              List.of(query("SELECT * FROM orders WHERE status = ?")), dbMetadata);
+          detector.evaluate(List.of(query("SELECT * FROM orders WHERE status = ?")), dbMetadata);
 
-      assertThat(roomIssues)
-          .noneMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
-      assertThat(orderIssues)
-          .noneMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
+      assertThat(roomIssues).noneMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
+      assertThat(orderIssues).noneMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
     }
   }
 
@@ -113,9 +104,8 @@ class JpaOnlyIndexFalsePositiveTest {
   class JpaFallback {
 
     /**
-     * DB provider가 없는 경우 (예: H2), JPA 메타데이터를 fallback으로 사용하면
-     * 실제 인덱스 정보가 없더라도 JPA 선언 기반으로 경고를 제공.
-     * 이 경우 merge가 아니라 JPA 메타데이터 단독 사용.
+     * DB provider가 없는 경우 (예: H2), JPA 메타데이터를 fallback으로 사용하면 실제 인덱스 정보가 없더라도 JPA 선언 기반으로 경고를 제공. 이
+     * 경우 merge가 아니라 JPA 메타데이터 단독 사용.
      */
     @Test
     @DisplayName("JPA-only metadata correctly detects composite index violation as fallback")
@@ -147,9 +137,7 @@ class JpaOnlyIndexFalsePositiveTest {
   @DisplayName("Real DB composite index — true positive")
   class RealDbIndex {
 
-    /**
-     * DB에도 인덱스가 있는 경우 이는 정상적인 warning이므로 true positive.
-     */
+    /** DB에도 인덱스가 있는 경우 이는 정상적인 warning이므로 true positive. */
     @Test
     @DisplayName("Real DB composite index correctly triggers warning")
     void realDbCompositeIndexCorrectlyWarns() {
@@ -179,8 +167,8 @@ class JpaOnlyIndexFalsePositiveTest {
   class RegressionGuard {
 
     /**
-     * merge()를 직접 호출하면 여전히 JPA-only 인덱스가 포함됨을 증명.
-     * IndexMetadataCollector가 merge()를 호출하지 않는 것이 수정의 핵심.
+     * merge()를 직접 호출하면 여전히 JPA-only 인덱스가 포함됨을 증명. IndexMetadataCollector가 merge()를 호출하지 않는 것이 수정의
+     * 핵심.
      */
     @Test
     @DisplayName("merge() adds JPA-only indexes — this is why collector must not merge")
@@ -201,13 +189,13 @@ class JpaOnlyIndexFalsePositiveTest {
       String sql = "SELECT r1_0.id FROM rooms r1_0 WHERE r1_0.type = ?";
       List<Issue> issues = detector.evaluate(List.of(query(sql)), merged);
       assertThat(issues)
-          .as("merge() causes false positive — collector must not call merge when DB metadata exists")
+          .as(
+              "merge() causes false positive — collector must not call merge when DB metadata exists")
           .anyMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
 
       // DB 메타데이터만 사용하면 false positive 없음
       List<Issue> dbOnlyIssues = detector.evaluate(List.of(query(sql)), dbMetadata);
-      assertThat(dbOnlyIssues)
-          .noneMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
+      assertThat(dbOnlyIssues).noneMatch(i -> i.type() == IssueType.COMPOSITE_INDEX_LEADING_COLUMN);
     }
   }
 }

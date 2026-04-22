@@ -285,7 +285,7 @@ not cause test failures.
 
 ```bash
 # Create or update the baseline from current test results
-./gradlew test -DqueryGuard.updateBaseline=true
+./gradlew test -DqueryAudit.updateBaseline=true
 ```
 
 This is useful for gradual adoption: establish a baseline of existing issues, then

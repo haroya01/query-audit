@@ -46,17 +46,12 @@ class PostgreSqlExplainAnalyzerIntegrationTest {
   void detectsSeqScan() throws SQLException {
     try (Connection conn = getConnection()) {
       List<QueryRecord> queries =
-          List.of(
-              new QueryRecord(
-                  "SELECT * FROM orders WHERE total > 100", 0L, 0L, null));
+          List.of(new QueryRecord("SELECT * FROM orders WHERE total > 100", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(conn, queries);
 
       assertThat(issues)
-          .anyMatch(
-              i ->
-                  i.type() == IssueType.FULL_TABLE_SCAN
-                      && i.severity() == Severity.INFO);
+          .anyMatch(i -> i.type() == IssueType.FULL_TABLE_SCAN && i.severity() == Severity.INFO);
     }
   }
 
@@ -65,9 +60,7 @@ class PostgreSqlExplainAnalyzerIntegrationTest {
   void explainWorksWithSinglePlaceholder() throws SQLException {
     try (Connection conn = getConnection()) {
       List<QueryRecord> queries =
-          List.of(
-              new QueryRecord(
-                  "SELECT * FROM users WHERE id = ?", 0L, 0L, null));
+          List.of(new QueryRecord("SELECT * FROM users WHERE id = ?", 0L, 0L, null));
 
       // Should NOT throw — the ? is replaced with 1 before EXPLAIN
       List<Issue> issues = analyzer.analyze(conn, queries);
@@ -100,7 +93,9 @@ class PostgreSqlExplainAnalyzerIntegrationTest {
           List.of(
               new QueryRecord(
                   "INSERT INTO users (email, username, status) VALUES ('a@b.com', 'a', 'active')",
-                  0L, 0L, null));
+                  0L,
+                  0L,
+                  null));
 
       List<Issue> issues = analyzer.analyze(conn, queries);
 

@@ -180,9 +180,7 @@ class OrderByLimitWithoutIndexDetectorTest {
     // ORDER BY primary key is always indexed, should never be flagged
     IndexMetadata metadata =
         new IndexMetadata(
-            Map.of(
-                "orders",
-                List.of(new IndexInfo("orders", "PRIMARY", "id", 1, false, 10000))));
+            Map.of("orders", List.of(new IndexInfo("orders", "PRIMARY", "id", 1, false, 10000))));
 
     String sql = "SELECT * FROM orders ORDER BY id ASC LIMIT 100";
     List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);

@@ -185,8 +185,7 @@ class MySqlIntegrationTest {
 
     List<Issue> emailIssues =
         issues.stream()
-            .filter(
-                i -> i.type() == IssueType.MISSING_WHERE_INDEX && "email".equals(i.column()))
+            .filter(i -> i.type() == IssueType.MISSING_WHERE_INDEX && "email".equals(i.column()))
             .collect(Collectors.toList());
 
     assertThat(emailIssues).isEmpty();

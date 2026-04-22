@@ -9,8 +9,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A test-only detection rule discovered via ServiceLoader. Registered in
- * {@code META-INF/services/io.queryaudit.core.detector.DetectionRule} under test resources.
+ * A test-only detection rule discovered via ServiceLoader. Registered in {@code
+ * META-INF/services/io.queryaudit.core.detector.DetectionRule} under test resources.
  *
  * <p>Flags any query containing the keyword "SERVICELOADER_TEST".
  */

@@ -15,8 +15,8 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Regression for issue #96 — metadata-dependent detectors must log a one-shot warning when they
- * disable themselves due to empty/null {@link IndexMetadata}, so users have a trail to follow
- * when a rule mysteriously stops firing.
+ * disable themselves due to empty/null {@link IndexMetadata}, so users have a trail to follow when
+ * a rule mysteriously stops firing.
  */
 @DisplayName("MetadataSkipLog — warn-once contract (issue #96)")
 class MetadataSkipLogTest {

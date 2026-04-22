@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -15,10 +14,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Detects Cartesian JOIN anti-patterns where a JOIN is missing an ON or USING clause,
- * or where an implicit join (comma-separated tables in FROM) lacks a WHERE clause.
- * Cartesian products produce a cross product of all rows, leading to massive result sets
- * and severe performance degradation.
+ * Detects Cartesian JOIN anti-patterns where a JOIN is missing an ON or USING clause, or where an
+ * implicit join (comma-separated tables in FROM) lacks a WHERE clause. Cartesian products produce a
+ * cross product of all rows, leading to massive result sets and severe performance degradation.
  *
  * @author haroya
  * @since 0.2.0

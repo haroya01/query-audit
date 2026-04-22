@@ -123,8 +123,8 @@ public class QueryInterceptor implements QueryExecutionListener {
   }
 
   /**
-   * Sets the current lifecycle phase. Queries recorded after this call will be
-   * tagged with the given phase.
+   * Sets the current lifecycle phase. Queries recorded after this call will be tagged with the
+   * given phase.
    *
    * @param phase the lifecycle phase (SETUP, TEST, or TEARDOWN)
    */

@@ -49,8 +49,7 @@ public class UnusedJoinDetector implements DetectionRule {
   /** Matches unqualified SELECT * which implicitly references all joined tables. */
   private static final Pattern UNQUALIFIED_SELECT_STAR =
       Pattern.compile(
-          "\\bSELECT\\s+(?:DISTINCT\\s+|ALL\\s+)?\\*\\s+FROM\\b",
-          Pattern.CASE_INSENSITIVE);
+          "\\bSELECT\\s+(?:DISTINCT\\s+|ALL\\s+)?\\*\\s+FROM\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {

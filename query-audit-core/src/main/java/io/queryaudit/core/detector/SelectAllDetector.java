@@ -45,8 +45,7 @@ public class SelectAllDetector implements DetectionRule {
                 normalized,
                 table,
                 null,
-                "SELECT * usage detected"
-                    + (table != null ? " on table '" + table + "'" : ""),
+                "SELECT * usage detected" + (table != null ? " on table '" + table + "'" : ""),
                 "Replace SELECT * with an explicit column list to reduce network I/O and enable covering index optimization.",
                 query.stackTrace()));
       }

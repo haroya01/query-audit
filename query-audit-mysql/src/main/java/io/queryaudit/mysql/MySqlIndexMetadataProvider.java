@@ -71,9 +71,7 @@ public class MySqlIndexMetadataProvider implements IndexMetadataProvider {
         boolean nonUnique = rs.getInt("Non_unique") != 0;
         long cardinality = rs.getLong("Cardinality");
 
-        indexes.add(
-            new IndexInfo(
-                table, keyName, columnName, seqInIndex, nonUnique, cardinality));
+        indexes.add(new IndexInfo(table, keyName, columnName, seqInIndex, nonUnique, cardinality));
       }
     }
     return indexes;

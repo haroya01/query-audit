@@ -24,7 +24,9 @@ class ForceIndexHintDetectorTest {
   void detectsForceIndex() {
     List<Issue> issues =
         detector.evaluate(
-            List.of(q("SELECT id FROM users FORCE INDEX(idx_users_email) WHERE email = 'test@example.com'")),
+            List.of(
+                q(
+                    "SELECT id FROM users FORCE INDEX(idx_users_email) WHERE email = 'test@example.com'")),
             emptyIndex);
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).type()).isEqualTo(IssueType.FORCE_INDEX_HINT);
@@ -118,7 +120,9 @@ class ForceIndexHintDetectorTest {
     // Null stack trace should still be flagged (not migration context)
     List<Issue> issues =
         detector.evaluate(
-            List.of(q("SELECT id FROM users FORCE INDEX(idx_users_email) WHERE email = 'test@example.com'")),
+            List.of(
+                q(
+                    "SELECT id FROM users FORCE INDEX(idx_users_email) WHERE email = 'test@example.com'")),
             emptyIndex);
     assertThat(issues).hasSize(1);
   }

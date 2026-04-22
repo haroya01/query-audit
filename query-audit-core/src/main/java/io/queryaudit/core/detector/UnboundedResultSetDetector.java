@@ -6,7 +6,6 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -105,15 +104,14 @@ public class UnboundedResultSetDetector implements DetectionRule {
       Pattern.compile("\\bWHERE\\b", Pattern.CASE_INSENSITIVE);
 
   /**
-   * Extracts column names from equality conditions: {@code (alias.)column = ?}. Used to collect
-   * all equality columns in a WHERE clause for unique index checks.
+   * Extracts column names from equality conditions: {@code (alias.)column = ?}. Used to collect all
+   * equality columns in a WHERE clause for unique index checks.
    */
   private static final Pattern EQUALITY_COLUMN_PATTERN =
       Pattern.compile("(?:\\w+\\.)?(\\w+)\\s*=\\s*\\?", Pattern.CASE_INSENSITIVE);
 
   /** Matches OR — unique index check is unsafe when OR is present in the WHERE clause. */
-  private static final Pattern OR_PATTERN =
-      Pattern.compile("\\bOR\\b", Pattern.CASE_INSENSITIVE);
+  private static final Pattern OR_PATTERN = Pattern.compile("\\bOR\\b", Pattern.CASE_INSENSITIVE);
 
   /** Extracts the WHERE clause from a SQL statement. */
   private static final Pattern WHERE_CLAUSE_PATTERN =
@@ -208,8 +206,7 @@ public class UnboundedResultSetDetector implements DetectionRule {
         if (whereClause != null && !OR_PATTERN.matcher(whereClause).find()) {
           String cleaned = stripSubqueries(whereClause);
           Set<String> eqColumns = extractEqualityColumns(cleaned);
-          if (!eqColumns.isEmpty()
-              && indexMetadata.hasUniqueIndexCoveredBy(table, eqColumns)) {
+          if (!eqColumns.isEmpty() && indexMetadata.hasUniqueIndexCoveredBy(table, eqColumns)) {
             continue;
           }
         }
@@ -248,8 +245,7 @@ public class UnboundedResultSetDetector implements DetectionRule {
               detail =
                   "Collection-returning repository method with WHERE clause "
                       + "(intentional fetch, not unbounded)";
-              suggestion =
-                  "If the result set could grow large, consider adding Pageable or LIMIT.";
+              suggestion = "If the result set could grow large, consider adding Pageable or LIMIT.";
             }
           }
           case UNKNOWN -> {

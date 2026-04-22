@@ -10,6 +10,10 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -174,7 +178,7 @@ class QueryAuditAnalyzerTest {
     // When baselinePath is null, the analyzer should load from the default file
     // (which doesn't exist, so baseline is empty)
     QueryAuditConfig config = QueryAuditConfig.defaults();
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, (java.nio.file.Path) null);
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, (Path) null);
 
     // Baseline should be empty since default file doesn't exist
     assertThat(analyzer.getBaseline()).isEmpty();
@@ -185,8 +189,7 @@ class QueryAuditAnalyzerTest {
     // When baselinePath is non-null but points to a non-existent file, baseline is empty
     QueryAuditConfig config = QueryAuditConfig.defaults();
     QueryAuditAnalyzer analyzer =
-        new QueryAuditAnalyzer(
-            config, java.nio.file.Paths.get("/tmp/nonexistent-baseline-file-xyz"));
+        new QueryAuditAnalyzer(config, Paths.get("/tmp/nonexistent-baseline-file-xyz"));
 
     assertThat(analyzer.getBaseline()).isEmpty();
   }
@@ -392,12 +395,12 @@ class QueryAuditAnalyzerTest {
   @Test
   void constructorWithNonNullBaselinePathUsesProvidedPath_killsLine76() {
     // Create a temporary baseline file
-    java.nio.file.Path tempDir;
+    Path tempDir;
     try {
-      tempDir = java.nio.file.Files.createTempDirectory("queryaudit-test");
-      java.nio.file.Path baselineFile = tempDir.resolve(".query-audit-baseline");
+      tempDir = Files.createTempDirectory("queryaudit-test");
+      Path baselineFile = tempDir.resolve(".query-audit-baseline");
       // Write a valid baseline entry
-      java.nio.file.Files.writeString(baselineFile, "select-all | | | tester | acceptable\n");
+      Files.writeString(baselineFile, "select-all | | | tester | acceptable\n");
 
       QueryAuditConfig config = QueryAuditConfig.defaults();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, baselineFile);
@@ -406,9 +409,9 @@ class QueryAuditAnalyzerTest {
       assertThat(analyzer.getBaseline()).isNotEmpty();
 
       // Cleanup
-      java.nio.file.Files.deleteIfExists(baselineFile);
-      java.nio.file.Files.deleteIfExists(tempDir);
-    } catch (java.io.IOException e) {
+      Files.deleteIfExists(baselineFile);
+      Files.deleteIfExists(tempDir);
+    } catch (IOException e) {
       throw new RuntimeException(e);
     }
   }
@@ -417,7 +420,7 @@ class QueryAuditAnalyzerTest {
   void constructorWithNullBaselinePathUsesDefault_killsLine76() {
     // When baselinePath is null, should use default file name (which doesn't exist in test)
     QueryAuditConfig config = QueryAuditConfig.defaults();
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, (java.nio.file.Path) null);
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, (Path) null);
 
     // Default baseline file doesn't exist -> baseline should be empty
     assertThat(analyzer.getBaseline()).isEmpty();

@@ -210,9 +210,7 @@ class RangeLockDetectorTest {
     // the column has an index (hasIndexOn returns true).
     IndexMetadata metadata =
         new IndexMetadata(
-            Map.of(
-                "orders",
-                List.of(new IndexInfo("orders", "PRIMARY", "id", 1, false, 10000))));
+            Map.of("orders", List.of(new IndexInfo("orders", "PRIMARY", "id", 1, false, 10000))));
 
     String sql = "SELECT * FROM orders WHERE id > 100 FOR UPDATE";
 

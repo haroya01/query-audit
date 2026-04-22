@@ -10,8 +10,7 @@ import static io.queryaudit.core.model.Severity.*;
  */
 public enum IssueType {
   N_PLUS_ONE("n-plus-one", "N+1 Query detected", ERROR),
-  N_PLUS_ONE_SUSPECT(
-      "n-plus-one-suspect", "N+1 Query suspected (SQL-level heuristic)", INFO),
+  N_PLUS_ONE_SUSPECT("n-plus-one-suspect", "N+1 Query suspected (SQL-level heuristic)", INFO),
   SELECT_ALL("select-all", "SELECT * usage", INFO),
   WHERE_FUNCTION("where-function", "Function usage in WHERE clause disables index", ERROR),
   OR_ABUSE("or-abuse", "Excessive OR conditions in WHERE clause", WARNING),
@@ -26,9 +25,8 @@ public enum IssueType {
       "like-leading-wildcard", "Leading wildcard in LIKE disables index", WARNING),
   /**
    * Reserved for future use. DuplicateQueryDetector exists but is currently disabled because
-   * datasource-proxy provides SQL with '?' placeholders, making it impossible to distinguish
-   * "same query, same params" from "same query, different params". Not currently emitted by any
-   * detector.
+   * datasource-proxy provides SQL with '?' placeholders, making it impossible to distinguish "same
+   * query, same params" from "same query, different params". Not currently emitted by any detector.
    */
   DUPLICATE_QUERY("duplicate-query", "Duplicate exact query detected", WARNING),
   CARTESIAN_JOIN("cartesian-join", "Cartesian JOIN detected (missing ON condition)", ERROR),

@@ -2,9 +2,9 @@ package io.queryaudit.core.analyzer;
 
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
+import java.io.File;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.io.File;
 import java.net.URL;
 import java.util.*;
 
@@ -230,14 +230,14 @@ public class JpaIndexScanner {
   }
 
   private void scanDirectory(
-      java.io.File directory,
+      File directory,
       String packageName,
       Class<? extends Annotation> entityAnnotation,
       List<Class<?>> result) {
-    java.io.File[] files = directory.listFiles();
+    File[] files = directory.listFiles();
     if (files == null) return;
 
-    for (java.io.File file : files) {
+    for (File file : files) {
       if (file.isDirectory()) {
         scanDirectory(file, packageName + "." + file.getName(), entityAnnotation, result);
       } else if (file.getName().endsWith(".class")) {

@@ -353,7 +353,7 @@ should be optimized. Add the missing index or use `@Query` with optimized SQL.
    query patterns.
 
 3. **Baseline drift:** The `.query-audit-counts` baseline file is out of date.
-   Update it: `./gradlew test -DqueryGuard.updateBaseline=true`
+   Update it: `./gradlew test -DqueryAudit.updateBaseline=true`
 
 4. **Schema differences:** The CI database may have different indexes or table
    definitions than your local environment.

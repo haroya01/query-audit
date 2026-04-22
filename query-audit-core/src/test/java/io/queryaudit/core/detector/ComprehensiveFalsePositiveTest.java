@@ -574,10 +574,7 @@ class ComprehensiveFalsePositiveTest {
       // Still LIKE_LEADING_WILDCARD type, but never WARNING for the parameter-only form —
       // the runtime binding is unknown so the detector speaks at INFO.
       assertThat(issuesOfType(issues, IssueType.LIKE_LEADING_WILDCARD))
-          .allSatisfy(
-              i ->
-                  assertThat(i.severity())
-                      .isEqualTo(io.queryaudit.core.model.Severity.INFO));
+          .allSatisfy(i -> assertThat(i.severity()).isEqualTo(Severity.INFO));
     }
   }
 
