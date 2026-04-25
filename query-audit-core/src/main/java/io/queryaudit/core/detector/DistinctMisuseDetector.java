@@ -1,12 +1,5 @@
 package io.queryaudit.core.detector;
 
-import io.queryaudit.core.model.IndexInfo;
-import io.queryaudit.core.model.IndexMetadata;
-import io.queryaudit.core.model.Issue;
-import io.queryaudit.core.model.IssueType;
-import io.queryaudit.core.model.QueryRecord;
-import io.queryaudit.core.model.Severity;
-import io.queryaudit.core.parser.EnhancedSqlParser;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -14,6 +7,14 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import io.queryaudit.core.model.IndexInfo;
+import io.queryaudit.core.model.IndexMetadata;
+import io.queryaudit.core.model.Issue;
+import io.queryaudit.core.model.IssueType;
+import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.EnhancedSqlParser;
 
 /**
  * Detects potentially unnecessary DISTINCT usage:
@@ -104,7 +105,7 @@ public class DistinctMisuseDetector implements DetectionRule {
       }
 
       // (c) DISTINCT on primary key column
-      if (indexMetadata != null && !indexMetadata.isEmpty()) {
+      if (!hasJoin && indexMetadata != null && !indexMetadata.isEmpty()) {
         List<String> distinctCols = extractDistinctColumnNames(sql);
         List<String> tables = EnhancedSqlParser.extractTableNames(sql);
         String table = tables.isEmpty() ? null : tables.get(0);
