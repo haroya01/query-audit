@@ -256,6 +256,36 @@ See the [Configuration Reference](https://haroya01.github.io/query-audit/guide/c
 
 ---
 
+## Recommended Adoption
+
+For new projects, start in report-only mode and promote rules to fail-tier as you build trust in their signal:
+
+```yaml
+query-audit:
+  fail-on-detection: false   # collect findings without failing the build
+  report:
+    show-info: true
+```
+
+Once the baseline is clean, flip `fail-on-detection: true` and use `suppress-patterns` to acknowledge any rules you have decided to live with.
+
+### Known noise profiles (v0.3.x)
+
+A handful of detectors are noisier than they should be in specific environments. The fixes are tracked individually; in the meantime the workarounds below let you keep `fail-on-detection: true` without spurious failures.
+
+| Environment / pattern | Affected rule | Workaround | Tracking |
+|---|---|---|---|
+| Schema-qualified table names (`schema.table`) on PostgreSQL/Oracle | `MISSING_INDEX` may silently skip the table (false negative) | Reference tables by their bare name in tests, or wait for the fix | [#128](https://github.com/haroya01/query-audit/issues/128) |
+| Short `suppress-queries` patterns (≤ ~10 chars) | Patterns may match text inside string literals | Use longer/more specific patterns, or prefer rule-code-based `suppress-patterns` over free-text `suppress-queries` | [#124](https://github.com/haroya01/query-audit/issues/124) |
+| Numeric columns named `*_code` (`zip_code`, `area_code`, ...) | `IMPLICIT_TYPE_CONVERSION` false positive | `suppress-patterns: ["implicit-type-conversion:<table>.<col>"]` | [#125](https://github.com/haroya01/query-audit/issues/125) |
+| Aggregate `SELECT COUNT(*) ... WHERE` that genuinely needs the count | `COUNT_INSTEAD_OF_EXISTS` (INFO) noise | Hide via `report.show-info: false`, or `suppress-patterns: ["count-instead-of-exists"]` | [#126](https://github.com/haroya01/query-audit/issues/126) |
+| `DISTINCT` over a 1:N or `LEFT JOIN` with a PK column in `SELECT` | `DISTINCT_MISUSE` false positive | `suppress-patterns: ["distinct-misuse:<table>"]` | [#127](https://github.com/haroya01/query-audit/issues/127) |
+| Repeated single-row inserts into temp / staging tables | `REPEATED_SINGLE_INSERT` false positive | `suppress-patterns: ["repeated-single-insert:<table>"]` | [#129](https://github.com/haroya01/query-audit/issues/129) |
+
+For everything else — N+1 detection, missing-index hunting on bare-name tables, DML safety, locking risk, ORM anti-patterns — the v0.3.x rules are reliable and can run as fail-tier from day one.
+
+---
+
 ## Documentation
 
 Full documentation is available at **[query-audit.github.io/query-audit](https://haroya01.github.io/query-audit)**.
