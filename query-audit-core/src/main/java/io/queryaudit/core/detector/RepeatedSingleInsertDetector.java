@@ -1,16 +1,17 @@
 package io.queryaudit.core.detector;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
+
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.SqlParser;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Pattern;
 
 /**
  * Detects repeated single-row INSERT statements to the same table that could benefit from batch
@@ -29,7 +30,10 @@ public class RepeatedSingleInsertDetector implements DetectionRule {
   private static final Pattern MULTI_ROW_INSERT =
       Pattern.compile(
           "\\bVALUES\\s*\\(.*\\)\\s*,\\s*\\(", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
-
+  
+  private static final Pattern TEMP_TABLE_PATTERN =
+      Pattern.compile("^(#|##|temp_|tmp_|pg_temp_).*", Pattern.CASE_INSENSITIVE);
+  
   private final int threshold;
 
   public RepeatedSingleInsertDetector() {
