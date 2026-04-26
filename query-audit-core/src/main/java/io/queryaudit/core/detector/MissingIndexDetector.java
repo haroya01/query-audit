@@ -1,5 +1,15 @@
 package io.queryaudit.core.detector;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
@@ -11,15 +21,6 @@ import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.JoinColumnPair;
 import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.parser.WhereColumnReference;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Detects missing indexes on WHERE, JOIN, ORDER BY, and GROUP BY columns by comparing query columns
@@ -30,11 +31,11 @@ import java.util.regex.Pattern;
  */
 public class MissingIndexDetector implements DetectionRule {
 
-  private static final Pattern FROM_ALIAS =
-      Pattern.compile("\\bFROM\\s+(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
+ private static final Pattern FROM_ALIAS =
+      Pattern.compile("\\bFROM\\s+([\\w\\.]+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
 
   private static final Pattern JOIN_ALIAS =
-      Pattern.compile("\\bJOIN\\s+(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
+      Pattern.compile("\\bJOIN\\s+([\\w\\.]+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
 
   // ── Improvement 1: Low cardinality column name patterns ──────────
   private static final Set<String> LOW_CARDINALITY_EXACT_NAMES =
@@ -651,10 +652,16 @@ public class MissingIndexDetector implements DetectionRule {
   static Map<String, String> resolveAliases(String sql) {
     Map<String, String> aliasToTable = new HashMap<>();
 
-    Matcher fromMatcher = FROM_ALIAS.matcher(sql);
+
+ Matcher fromMatcher = FROM_ALIAS.matcher(sql);
     while (fromMatcher.find()) {
-      String table = fromMatcher.group(1);
+      String rawTable = fromMatcher.group(1);
+      
+      String[] parts = rawTable.split("\\.");
+      String table = parts[parts.length - 1]; 
+      
       String alias = fromMatcher.group(2);
+      
       if (!isKeyword(table)) {
         aliasToTable.put(table.toLowerCase(), table.toLowerCase());
         if (alias != null && !isKeyword(alias)) {
@@ -665,8 +672,12 @@ public class MissingIndexDetector implements DetectionRule {
 
     Matcher joinMatcher = JOIN_ALIAS.matcher(sql);
     while (joinMatcher.find()) {
-      String table = joinMatcher.group(1);
+      String rawTable = joinMatcher.group(1);
+      String[] parts = rawTable.split("\\.");
+      String table = parts[parts.length - 1];
+      
       String alias = joinMatcher.group(2);
+      
       if (!isKeyword(table)) {
         aliasToTable.put(table.toLowerCase(), table.toLowerCase());
         if (alias != null && !isKeyword(alias)) {
