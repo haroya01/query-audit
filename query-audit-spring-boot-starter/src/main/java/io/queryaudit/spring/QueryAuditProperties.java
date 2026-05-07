@@ -297,12 +297,31 @@ public class QueryAuditProperties {
   public static class RepeatedInsert {
     private int threshold = 3;
 
+    /**
+     * Table-name globs (case-insensitive, {@code *} wildcard) the detector treats as deliberate
+     * staging targets — repeated single-row inserts into these are not flagged. Defaults to common
+     * temp/staging conventions; set to an empty list to disable the exclusion.
+     *
+     * @since 0.4.0
+     */
+    private List<String> excludeTables =
+        new ArrayList<>(
+            io.queryaudit.core.detector.RepeatedSingleInsertDetector.DEFAULT_EXCLUDE_TABLES);
+
     public int getThreshold() {
       return threshold;
     }
 
     public void setThreshold(int threshold) {
       this.threshold = threshold;
+    }
+
+    public List<String> getExcludeTables() {
+      return excludeTables;
+    }
+
+    public void setExcludeTables(List<String> excludeTables) {
+      this.excludeTables = excludeTables;
     }
   }
 

@@ -150,7 +150,9 @@ public class QueryAuditAnalyzer {
     ruleList.add(new RangeLockDetector());
     ruleList.add(new UpdateWithoutWhereDetector());
     ruleList.add(new DmlWithoutIndexDetector());
-    ruleList.add(new RepeatedSingleInsertDetector(config.getRepeatedInsertThreshold()));
+    ruleList.add(
+        new RepeatedSingleInsertDetector(
+            config.getRepeatedInsertThreshold(), config.getRepeatedInsertExcludeTables()));
     ruleList.add(new InsertSelectAllDetector());
     ruleList.add(new OrderByRandDetector());
     ruleList.add(new NotInSubqueryDetector());

@@ -7,9 +7,11 @@ import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -26,18 +28,68 @@ public class RepeatedSingleInsertDetector implements DetectionRule {
 
   private static final int DEFAULT_THRESHOLD = 3;
 
+  /**
+   * Default table-name globs treated as deliberate staging targets — repeated single-row inserts
+   * into these tables are intentional (test fixtures, ETL stage, session-local temp tables) and the
+   * round-trip / log-flush cost the rule warns about does not apply.
+   */
+  public static final Set<String> DEFAULT_EXCLUDE_TABLES =
+      Set.of("temp_*", "*_temp", "tmp_*", "*_tmp", "staging_*", "*_staging");
+
   private static final Pattern MULTI_ROW_INSERT =
       Pattern.compile(
           "\\bVALUES\\s*\\(.*\\)\\s*,\\s*\\(", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
   private final int threshold;
+  private final List<Pattern> excludeTablePatterns;
 
   public RepeatedSingleInsertDetector() {
-    this(DEFAULT_THRESHOLD);
+    this(DEFAULT_THRESHOLD, DEFAULT_EXCLUDE_TABLES);
   }
 
   public RepeatedSingleInsertDetector(int threshold) {
+    this(threshold, DEFAULT_EXCLUDE_TABLES);
+  }
+
+  public RepeatedSingleInsertDetector(int threshold, Collection<String> excludeTablePatterns) {
     this.threshold = threshold;
+    this.excludeTablePatterns = compileGlobs(excludeTablePatterns);
+  }
+
+  private static List<Pattern> compileGlobs(Collection<String> globs) {
+    if (globs == null || globs.isEmpty()) {
+      return List.of();
+    }
+    List<Pattern> compiled = new ArrayList<>(globs.size());
+    for (String glob : globs) {
+      if (glob == null || glob.isBlank()) {
+        continue;
+      }
+      StringBuilder regex = new StringBuilder("^");
+      for (int i = 0; i < glob.length(); i++) {
+        char c = glob.charAt(i);
+        if (c == '*') {
+          regex.append(".*");
+        } else {
+          regex.append(Pattern.quote(String.valueOf(c)));
+        }
+      }
+      regex.append('$');
+      compiled.add(Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE));
+    }
+    return compiled;
+  }
+
+  private boolean isExcludedTable(String table) {
+    if (table == null || excludeTablePatterns.isEmpty()) {
+      return false;
+    }
+    for (Pattern p : excludeTablePatterns) {
+      if (p.matcher(table).matches()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override
@@ -64,6 +116,9 @@ public class RepeatedSingleInsertDetector implements DetectionRule {
       }
 
       String table = SqlParser.extractInsertTable(sql);
+      if (isExcludedTable(table)) {
+        continue;
+      }
       groups.computeIfAbsent(normalized, k -> new InsertGroup(table, normalized)).count++;
     }
 
