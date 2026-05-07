@@ -71,8 +71,19 @@ public class QueryAuditAutoConfiguration {
     return interceptor;
   }
 
+  /**
+   * Wraps every {@link DataSource} bean with a query-recording proxy. Both {@code
+   * query-audit.enabled} and {@code query-audit.wrap-data-source.enabled} default to {@code true};
+   * either can be flipped to {@code false} to skip the wrap. {@code wrap-data-source.enabled =
+   * false} is the documented escape hatch for issue #134 — it disables only the auto-wrap while
+   * keeping {@link QueryAuditConfig} and {@link QueryInterceptor} available, so {@code
+   * @QueryAudit} per-test wrapping still works.
+   */
   @Bean(name = {"queryAuditDataSourcePostProcessor", "queryGuardDataSourcePostProcessor"})
-  @ConditionalOnProperty(name = "query-audit.enabled", havingValue = "true", matchIfMissing = true)
+  @ConditionalOnProperty(
+      name = {"query-audit.enabled", "query-audit.wrap-data-source.enabled"},
+      havingValue = "true",
+      matchIfMissing = true)
   public BeanPostProcessor queryAuditDataSourcePostProcessor(QueryInterceptor interceptor) {
     return new BeanPostProcessor() {
       @Override

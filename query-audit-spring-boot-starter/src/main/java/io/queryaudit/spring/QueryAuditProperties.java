@@ -36,6 +36,7 @@ public class QueryAuditProperties {
   private WriteAmplification writeAmplification = new WriteAmplification();
   private SlowQuery slowQuery = new SlowQuery();
   private CountInsteadOfExists countInsteadOfExists = new CountInsteadOfExists();
+  private WrapDataSource wrapDataSource = new WrapDataSource();
 
   // ── Top-level getters & setters ────────────────────────────────────
 
@@ -199,6 +200,14 @@ public class QueryAuditProperties {
     this.countInsteadOfExists = countInsteadOfExists;
   }
 
+  public WrapDataSource getWrapDataSource() {
+    return wrapDataSource;
+  }
+
+  public void setWrapDataSource(WrapDataSource wrapDataSource) {
+    this.wrapDataSource = wrapDataSource;
+  }
+
   // ── Nested configuration classes ───────────────────────────────────
 
   public static class NPlusOne {
@@ -343,6 +352,31 @@ public class QueryAuditProperties {
 
     public void setThreshold(int threshold) {
       this.threshold = threshold;
+    }
+  }
+
+  /**
+   * Controls the autoconfigured {@link
+   * org.springframework.beans.factory.config.BeanPostProcessor} that wraps every {@code DataSource}
+   * bean. Set {@code query-audit.wrap-data-source.enabled: false} as the documented escape hatch
+   * for issue #134 — when 3+ {@code @SpringBootTest} cache signatures coexist, the wrap interacts
+   * badly with Spring TestContext caching and the underlying {@code HikariDataSource} can be
+   * closed prematurely. Disabling this leaves {@link
+   * io.queryaudit.core.config.QueryAuditConfig} and {@link
+   * io.queryaudit.core.interceptor.QueryInterceptor} active so {@code @QueryAudit} per-test still
+   * works.
+   *
+   * @since 0.4.0
+   */
+  public static class WrapDataSource {
+    private boolean enabled = true;
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+      this.enabled = enabled;
     }
   }
 
