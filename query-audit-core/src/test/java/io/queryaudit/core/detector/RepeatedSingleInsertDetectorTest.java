@@ -10,6 +10,7 @@ import io.queryaudit.core.model.Severity;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -215,6 +216,55 @@ class RepeatedSingleInsertDetectorTest {
       List<QueryRecord> queries = repeat("INSERT INTO users (name) VALUES (?)", 2);
 
       List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
+
+      assertThat(issues).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Default excludes temp_*/staging tables (regression for #129)")
+    void defaultExcludesTempStaging() {
+      List<QueryRecord> queries =
+          repeat("INSERT INTO temp_staging VALUES (1, 'a')", 4);
+
+      List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
+
+      assertThat(issues).isEmpty();
+    }
+
+    @Test
+    @DisplayName("Default exclude does not affect non-staging tables")
+    void defaultDoesNotExcludeRegularTable() {
+      List<QueryRecord> queries =
+          repeat("INSERT INTO orders (id, total) VALUES (1, 100)", 4);
+
+      List<Issue> issues = detector.evaluate(queries, EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Empty exclude set restores legacy behavior")
+    void emptyExcludeSetWarnsOnTempTable() {
+      RepeatedSingleInsertDetector noExcludes =
+          new RepeatedSingleInsertDetector(3, Set.of());
+
+      List<QueryRecord> queries = repeat("INSERT INTO temp_staging VALUES (1, 'a')", 4);
+
+      List<Issue> issues = noExcludes.evaluate(queries, EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("Custom exclude pattern matches case-insensitively")
+    void customExcludePatternCaseInsensitive() {
+      RepeatedSingleInsertDetector custom =
+          new RepeatedSingleInsertDetector(3, Set.of("etl_*"));
+
+      List<QueryRecord> queries =
+          repeat("INSERT INTO ETL_LANDING VALUES (1, 'a')", 4);
+
+      List<Issue> issues = custom.evaluate(queries, EMPTY_INDEX);
 
       assertThat(issues).isEmpty();
     }

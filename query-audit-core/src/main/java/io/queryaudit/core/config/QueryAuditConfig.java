@@ -1,5 +1,6 @@
 package io.queryaudit.core.config;
 
+import io.queryaudit.core.detector.RepeatedSingleInsertDetector;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Severity;
@@ -37,6 +38,7 @@ public class QueryAuditConfig {
   private final int tooManyJoinsThreshold;
   private final int excessiveColumnThreshold;
   private final int repeatedInsertThreshold;
+  private final Set<String> repeatedInsertExcludeTables;
   private final int writeAmplificationThreshold;
   private final long slowQueryWarningMs;
   private final long slowQueryErrorMs;
@@ -61,6 +63,8 @@ public class QueryAuditConfig {
     this.tooManyJoinsThreshold = builder.tooManyJoinsThreshold;
     this.excessiveColumnThreshold = builder.excessiveColumnThreshold;
     this.repeatedInsertThreshold = builder.repeatedInsertThreshold;
+    this.repeatedInsertExcludeTables =
+        Collections.unmodifiableSet(new HashSet<>(builder.repeatedInsertExcludeTables));
     this.writeAmplificationThreshold = builder.writeAmplificationThreshold;
     this.slowQueryWarningMs = builder.slowQueryWarningMs;
     this.slowQueryErrorMs = builder.slowQueryErrorMs;
@@ -176,6 +180,16 @@ public class QueryAuditConfig {
     return repeatedInsertThreshold;
   }
 
+  /**
+   * Returns table-name globs (e.g. {@code temp_*}) that the repeated-single-insert detector should
+   * skip. Defaults to {@link RepeatedSingleInsertDetector#DEFAULT_EXCLUDE_TABLES}.
+   *
+   * @since 0.4.0
+   */
+  public Set<String> getRepeatedInsertExcludeTables() {
+    return repeatedInsertExcludeTables;
+  }
+
   public int getWriteAmplificationThreshold() {
     return writeAmplificationThreshold;
   }
@@ -255,6 +269,8 @@ public class QueryAuditConfig {
     private int tooManyJoinsThreshold = 5;
     private int excessiveColumnThreshold = 15;
     private int repeatedInsertThreshold = 3;
+    private Set<String> repeatedInsertExcludeTables =
+        new HashSet<>(RepeatedSingleInsertDetector.DEFAULT_EXCLUDE_TABLES);
     private int writeAmplificationThreshold = 6;
     private long slowQueryWarningMs = 500;
     private long slowQueryErrorMs = 3000;
@@ -285,6 +301,7 @@ public class QueryAuditConfig {
       b.tooManyJoinsThreshold = source.tooManyJoinsThreshold;
       b.excessiveColumnThreshold = source.excessiveColumnThreshold;
       b.repeatedInsertThreshold = source.repeatedInsertThreshold;
+      b.repeatedInsertExcludeTables = new HashSet<>(source.repeatedInsertExcludeTables);
       b.writeAmplificationThreshold = source.writeAmplificationThreshold;
       b.slowQueryWarningMs = source.slowQueryWarningMs;
       b.slowQueryErrorMs = source.slowQueryErrorMs;
@@ -394,6 +411,28 @@ public class QueryAuditConfig {
 
     public Builder repeatedInsertThreshold(int repeatedInsertThreshold) {
       this.repeatedInsertThreshold = repeatedInsertThreshold;
+      return this;
+    }
+
+    /**
+     * Replaces the table-name globs that {@link RepeatedSingleInsertDetector} treats as deliberate
+     * staging tables. Each entry is a case-insensitive glob with {@code *} as the only wildcard
+     * (e.g. {@code "etl_*"}). Pass an empty set to disable the exclusion entirely.
+     *
+     * @since 0.4.0
+     */
+    public Builder repeatedInsertExcludeTables(Set<String> patterns) {
+      this.repeatedInsertExcludeTables = patterns;
+      return this;
+    }
+
+    /**
+     * Adds one extra table-name glob to the repeated-single-insert exclusion list.
+     *
+     * @since 0.4.0
+     */
+    public Builder addRepeatedInsertExcludeTable(String pattern) {
+      this.repeatedInsertExcludeTables.add(pattern);
       return this;
     }
 
