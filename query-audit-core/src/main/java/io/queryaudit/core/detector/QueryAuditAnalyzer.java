@@ -136,7 +136,7 @@ public class QueryAuditAnalyzer {
     ruleList.add(new IndexRedundancyDetector());
     ruleList.add(
         new SlowQueryDetector(config.getSlowQueryWarningMs(), config.getSlowQueryErrorMs()));
-    ruleList.add(new CountInsteadOfExistsDetector());
+    ruleList.add(new CountInsteadOfExistsDetector(config.isCountInsteadOfExistsEnabled()));
     ruleList.add(new UnboundedResultSetDetector(config.getRepositoryReturnTypeResolver()));
     ruleList.add(new WriteAmplificationDetector(config.getWriteAmplificationThreshold()));
     ruleList.add(new ImplicitTypeConversionDetector());

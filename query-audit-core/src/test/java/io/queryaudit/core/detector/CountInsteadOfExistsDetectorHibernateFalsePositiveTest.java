@@ -38,7 +38,7 @@ class CountInsteadOfExistsDetectorHibernateFalsePositiveTest {
     return new QueryRecord(sql, 0L, System.currentTimeMillis(), "");
   }
 
-  private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector();
+  private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector(true);
 
   // ── SQL already contains a boolean comparison (count > ?) ────────────────
   // These queries express existence intent AT the SQL level.

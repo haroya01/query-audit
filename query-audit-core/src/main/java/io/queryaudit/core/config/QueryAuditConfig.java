@@ -44,6 +44,7 @@ public class QueryAuditConfig {
   private final long slowQueryErrorMs;
   private final RepositoryReturnTypeResolver repositoryReturnTypeResolver;
   private final boolean includeSetupQueries;
+  private final boolean countInsteadOfExistsEnabled;
 
   private QueryAuditConfig(Builder builder) {
     this.enabled = builder.enabled;
@@ -70,6 +71,7 @@ public class QueryAuditConfig {
     this.slowQueryErrorMs = builder.slowQueryErrorMs;
     this.repositoryReturnTypeResolver = builder.repositoryReturnTypeResolver;
     this.includeSetupQueries = builder.includeSetupQueries;
+    this.countInsteadOfExistsEnabled = builder.countInsteadOfExistsEnabled;
   }
 
   public static Builder builder() {
@@ -221,6 +223,17 @@ public class QueryAuditConfig {
     return includeSetupQueries;
   }
 
+  /**
+   * Returns whether {@link io.queryaudit.core.detector.CountInsteadOfExistsDetector} is enabled.
+   * Off by default since 0.4.0 (issue #126) — the rule cannot tell aggregate counts from existence
+   * checks from SQL alone, and was the loudest noise source on real reports.
+   *
+   * @since 0.4.0
+   */
+  public boolean isCountInsteadOfExistsEnabled() {
+    return countInsteadOfExistsEnabled;
+  }
+
   public boolean isSuppressed(String issueCode, String table, String column) {
     if (suppressPatterns.isEmpty()) {
       return false;
@@ -276,6 +289,7 @@ public class QueryAuditConfig {
     private long slowQueryErrorMs = 3000;
     private RepositoryReturnTypeResolver repositoryReturnTypeResolver = null;
     private boolean includeSetupQueries = false;
+    private boolean countInsteadOfExistsEnabled = false;
 
     /**
      * Creates a new builder pre-populated with all values from the given config. Useful for
@@ -306,6 +320,7 @@ public class QueryAuditConfig {
       b.slowQueryWarningMs = source.slowQueryWarningMs;
       b.slowQueryErrorMs = source.slowQueryErrorMs;
       b.repositoryReturnTypeResolver = source.repositoryReturnTypeResolver;
+      b.countInsteadOfExistsEnabled = source.countInsteadOfExistsEnabled;
       return b;
     }
 
@@ -458,6 +473,17 @@ public class QueryAuditConfig {
 
     public Builder includeSetupQueries(boolean includeSetupQueries) {
       this.includeSetupQueries = includeSetupQueries;
+      return this;
+    }
+
+    /**
+     * Toggles {@link io.queryaudit.core.detector.CountInsteadOfExistsDetector}. Off by default
+     * since 0.4.0 (issue #126).
+     *
+     * @since 0.4.0
+     */
+    public Builder countInsteadOfExistsEnabled(boolean enabled) {
+      this.countInsteadOfExistsEnabled = enabled;
       return this;
     }
 

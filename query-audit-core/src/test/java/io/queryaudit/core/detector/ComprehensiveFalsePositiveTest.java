@@ -789,7 +789,7 @@ class ComprehensiveFalsePositiveTest {
   @DisplayName("15. CountInsteadOfExistsDetector")
   class CountInsteadOfExistsDetectorTests {
 
-    private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector();
+    private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector(true);
 
     @Test
     @DisplayName("TP: COUNT(*) with WHERE (existence check) should detect")

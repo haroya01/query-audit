@@ -1680,7 +1680,7 @@ class AdversarialFalsePositiveTest {
   @Nested
   class CountInsteadOfExistsDetectorFalsePositives {
 
-    private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector();
+    private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector(true);
 
     @Test
     void countWithGroupByShouldNotTrigger() {

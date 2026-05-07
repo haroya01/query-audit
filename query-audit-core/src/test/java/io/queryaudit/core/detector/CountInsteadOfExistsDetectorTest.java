@@ -19,7 +19,7 @@ class CountInsteadOfExistsDetectorTest {
     return new QueryRecord(sql, 0L, System.currentTimeMillis(), "");
   }
 
-  private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector();
+  private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector(true);
 
   @Test
   void detectsCountStarWithWhere() {
@@ -150,5 +150,17 @@ class CountInsteadOfExistsDetectorTest {
 
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
+  }
+
+  @Test
+  void defaultIsDisabledRegressionForIssue126() {
+    // Regression for #126: the detector cannot tell aggregate counts from existence checks from
+    // SQL alone, so the no-arg constructor is off-by-default since 0.4.0.
+    CountInsteadOfExistsDetector defaultDetector = new CountInsteadOfExistsDetector();
+
+    String sql = "SELECT COUNT(*) FROM orders WHERE user_id = 42";
+    List<Issue> issues = defaultDetector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+    assertThat(issues).isEmpty();
   }
 }

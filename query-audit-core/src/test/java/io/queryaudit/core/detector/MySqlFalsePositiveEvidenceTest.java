@@ -381,7 +381,7 @@ class MySqlFalsePositiveEvidenceTest {
   @DisplayName("CountInsteadOfExistsDetector — Legitimate COUNT usage")
   class CountInsteadOfExistsDetectorFalsePositives {
 
-    private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector();
+    private final CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector(true);
 
     @Test
     @DisplayName(
