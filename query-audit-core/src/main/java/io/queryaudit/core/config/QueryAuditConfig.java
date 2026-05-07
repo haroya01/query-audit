@@ -4,11 +4,14 @@ import io.queryaudit.core.detector.RepeatedSingleInsertDetector;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.parser.SqlParser;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 /**
  * Immutable configuration for QueryAudit analysis. Controls which rules are enabled, their severity
@@ -250,13 +253,32 @@ public class QueryAuditConfig {
     return false;
   }
 
+  /**
+   * Cache of compiled word-boundary regexes for {@link #suppressQueries} patterns. The patterns
+   * are user-supplied, immutable for the lifetime of this config, and small (one entry per
+   * suppression rule); a plain {@link ConcurrentHashMap} is sufficient.
+   */
+  private static final Map<String, Pattern> SUPPRESS_PATTERN_CACHE = new ConcurrentHashMap<>();
+
   public boolean isQuerySuppressed(String sql) {
     if (suppressQueries.isEmpty() || sql == null) {
       return false;
     }
-    String normalized = sql.trim().toLowerCase();
-    for (String pattern : suppressQueries) {
-      if (normalized.contains(pattern.trim().toLowerCase())) {
+    // Mask string literals first so a suppression pattern can never match content inside a quoted
+    // string (issue #124: "from users" used to spuriously match `description = 'from users …'`).
+    String masked = SqlParser.replaceStringLiterals(sql).toLowerCase();
+    for (String raw : suppressQueries) {
+      String pattern = raw == null ? null : raw.trim();
+      if (pattern == null || pattern.isEmpty()) {
+        continue;
+      }
+      Pattern compiled =
+          SUPPRESS_PATTERN_CACHE.computeIfAbsent(
+              pattern.toLowerCase(),
+              p ->
+                  Pattern.compile(
+                      "(?<![\\w])" + Pattern.quote(p) + "(?![\\w])", Pattern.CASE_INSENSITIVE));
+      if (compiled.matcher(masked).find()) {
         return true;
       }
     }
