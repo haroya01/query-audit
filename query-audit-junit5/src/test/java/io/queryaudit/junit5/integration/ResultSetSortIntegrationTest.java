@@ -226,8 +226,8 @@ class ResultSetSortIntegrationTest {
   class CountInsteadOfExistsTests {
 
     @Test
-    @DisplayName("COUNT(*) for existence check should use EXISTS")
-    void detectsCountInsteadOfExists() {
+    @DisplayName("CountInsteadOfExists is opt-in (issue #126); default analyzer does not fire")
+    void countInsteadOfExistsIsOptIn() {
       queryInterceptor.start();
       entityManager
           .createNativeQuery("SELECT COUNT(*) FROM members WHERE status = 'ACTIVE'")
@@ -236,7 +236,7 @@ class ResultSetSortIntegrationTest {
 
       QueryAuditReport report =
           analyze("countInsteadOfExists", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.COUNT_INSTEAD_OF_EXISTS);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.COUNT_INSTEAD_OF_EXISTS);
     }
   }
 
