@@ -94,8 +94,8 @@ class SqlStyleIntegrationTest {
     }
 
     @Test
-    @DisplayName("DISTINCT with JOIN may indicate missing condition")
-    void detectsDistinctWithJoin() {
+    @DisplayName("DISTINCT with JOIN is intentionally not flagged (issue #127)")
+    void doesNotFlagDistinctWithJoin() {
       queryInterceptor.start();
       entityManager
           .createNativeQuery(
@@ -104,7 +104,7 @@ class SqlStyleIntegrationTest {
       queryInterceptor.stop();
 
       QueryAuditReport report = analyze("distinctWithJoin", queryInterceptor.getRecordedQueries());
-      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.DISTINCT_MISUSE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.DISTINCT_MISUSE);
     }
   }
 

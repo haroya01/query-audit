@@ -36,15 +36,34 @@ class DistinctMisuseDetectorTest {
   }
 
   @Test
-  void detectsDistinctWithJoin() {
+  void doesNotFlagDistinctWithJoin() {
+    // DISTINCT with any JOIN is intentionally not flagged: a 1:N JOIN legitimately needs DISTINCT
+    // to dedupe rows, and we cannot prove 1:1 cardinality from the SQL alone (issue #127).
     String sql = "SELECT DISTINCT u.name FROM users u JOIN orders o ON u.id = o.user_id";
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-    assertThat(issues).hasSize(1);
-    assertThat(issues.get(0).type()).isEqualTo(IssueType.DISTINCT_MISUSE);
-    assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
-    assertThat(issues.get(0).detail()).contains("JOIN");
+    assertThat(issues).isEmpty();
+  }
+
+  @Test
+  void doesNotFlagDistinctOnPkWithLeftJoin() {
+    // Regression for #127: SELECT DISTINCT u.id … LEFT JOIN orders … used to fire
+    // "DISTINCT on primary key column is unnecessary", which was actively harmful — removing
+    // DISTINCT would silently produce duplicate user rows for users with multiple orders.
+    IndexMetadata metadata =
+        new IndexMetadata(
+            Map.of(
+                "users", List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 10000)),
+                "orders", List.of(new IndexInfo("orders", "idx_user_id", "user_id", 1, true, 100))));
+
+    String sql =
+        "SELECT DISTINCT u.id, u.name FROM users u "
+            + "LEFT JOIN orders o ON u.id = o.user_id WHERE u.active = true";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
+
+    assertThat(issues).isEmpty();
   }
 
   @Test
@@ -140,24 +159,21 @@ class DistinctMisuseDetectorTest {
   }
 
   @Test
-  void distinctWithJoinDetectedWhenNoPKMatch() {
-    // Kills NegateConditionalsMutator on line 124: hasJoin check
-    // Verifies the JOIN detection path is hit after PK check fails
+  void distinctWithJoinNoLongerFiresWhenNoPKMatch() {
+    // Per #127, any JOIN suppresses DISTINCT_MISUSE entirely (PK or otherwise), since 1:N JOINs
+    // legitimately require DISTINCT and we cannot prove 1:1 cardinality from SQL alone.
     IndexMetadata metadata =
         new IndexMetadata(
             Map.of("users", List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 10000))));
 
-    // DISTINCT on non-PK column with JOIN
     String sql = "SELECT DISTINCT u.name FROM users u JOIN orders o ON u.id = o.user_id";
     List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
-    assertThat(issues).hasSize(1);
-    assertThat(issues.get(0).detail()).contains("JOIN");
+    assertThat(issues).isEmpty();
   }
 
   @Test
-  void distinctOnPKColumnWithJoinReportsPKIssue() {
-    // Kills NegateConditionalsMutator on line 78 (table empty check)
-    // and ensures PK detection takes priority over JOIN detection
+  void distinctOnPKColumnSingleTableStillReportsPKIssue() {
+    // The genuine misuse — DISTINCT on a PK column of a single-table query — still fires.
     IndexMetadata metadata =
         new IndexMetadata(
             Map.of("users", List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 10000))));
@@ -275,15 +291,11 @@ class DistinctMisuseDetectorTest {
   }
 
   @Test
-  void distinctWithJoinReportsCorrectTable_killsLine124() {
-    // Kills NegateConditionalsMutator on line 124: tables.isEmpty() negated.
-    // If negated, table would be null when tables exist.
-    // Verify table is NOT null in the JOIN detection path.
+  void distinctWithJoinIsSuppressed() {
+    // Per #127, any JOIN suppresses DISTINCT_MISUSE entirely.
     String sql = "SELECT DISTINCT u.email FROM users u JOIN orders o ON u.id = o.user_id";
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
-    assertThat(issues).hasSize(1);
-    assertThat(issues.get(0).table()).isNotNull();
-    assertThat(issues.get(0).table()).isEqualTo("users");
+    assertThat(issues).isEmpty();
   }
 
   @Test
@@ -336,18 +348,15 @@ class DistinctMisuseDetectorTest {
   }
 
   @Test
-  void distinctWithJoinNoGroupByNoPKMetadata_killsLine124Path() {
-    // Specifically tests the path where PK check is performed but doesn't match,
-    // falling through to JOIN detection (line 122-137).
+  void distinctOnNonPkColumnWithJoinIsSuppressed() {
+    // After #127 the detector skips any JOIN query; the prior "JOIN may indicate missing JOIN
+    // condition" warning was a noisy false positive in 1:N joins.
     IndexMetadata metadata =
         new IndexMetadata(
             Map.of("users", List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 10000))));
-    // DISTINCT on 'name' (not PK) with JOIN -> should report JOIN issue
     String sql = "SELECT DISTINCT name FROM users JOIN roles ON users.role_id = roles.id";
     List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
-    assertThat(issues).hasSize(1);
-    assertThat(issues.get(0).detail()).contains("JOIN");
-    assertThat(issues.get(0).table()).isNotNull();
+    assertThat(issues).isEmpty();
   }
 
   // ── false positive fix: DISTINCT in subquery ──────────────────────
@@ -369,14 +378,14 @@ class DistinctMisuseDetectorTest {
   }
 
   @Test
-  void stillDetectsDistinctInOuterQueryWithSubquery() {
-    // DISTINCT in the outer query should still be detected even if there's a subquery
+  void distinctInOuterQueryWithJoinAndSubqueryIsSuppressed() {
+    // The outer query has a JOIN, so per #127 the entire rule is skipped — the inner subquery
+    // just confirms removeSubqueries does not somehow re-introduce a false positive.
     String sql =
         "SELECT DISTINCT u.name FROM users u "
             + "JOIN orders o ON u.id = o.user_id "
             + "WHERE o.id IN (SELECT id FROM recent_orders)";
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
-    assertThat(issues).hasSize(1);
-    assertThat(issues.get(0).detail()).contains("JOIN");
+    assertThat(issues).isEmpty();
   }
 }

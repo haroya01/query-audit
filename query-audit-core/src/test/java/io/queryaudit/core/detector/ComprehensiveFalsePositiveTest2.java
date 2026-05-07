@@ -531,15 +531,15 @@ class ComprehensiveFalsePositiveTest2 {
     private final DistinctMisuseDetector detector = new DistinctMisuseDetector();
 
     @Test
-    @DisplayName("TP: DISTINCT with JOIN triggers WARNING")
-    void truePositive_distinctWithJoin() {
+    @DisplayName("Suppressed: DISTINCT with JOIN no longer fires (issue #127)")
+    void distinctWithJoinSuppressed() {
+      // Per #127, any JOIN suppresses DISTINCT_MISUSE entirely — 1:N joins legitimately need
+      // DISTINCT and the prior WARNING was a build-breaking false positive.
       List<Issue> issues =
           detector.evaluate(
               queries("SELECT DISTINCT a.id FROM a JOIN b ON a.id = b.a_id"), EMPTY_INDEX);
 
-      assertThat(issues).hasSize(1);
-      assertThat(issues.get(0).type()).isEqualTo(IssueType.DISTINCT_MISUSE);
-      assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+      assertThat(issues).isEmpty();
     }
 
     @Test
