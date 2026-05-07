@@ -57,6 +57,23 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
       Set.of("id", "count", "num", "no", "seq", "order", "size", "length");
 
   /**
+   * Column names that contain a string-like token but are conventionally numeric. Without column
+   * type metadata the detector cannot tell {@code zip_code = 12345} (numeric, correct) from
+   * {@code email = 12345} (string, wrong); this list short-circuits the false-positive cases
+   * called out in issue #125.
+   */
+  private static final Set<String> KNOWN_NUMERIC_COLUMNS =
+      Set.of(
+          "zip_code",
+          "area_code",
+          "country_code",
+          "error_code",
+          "type_code",
+          "status_code",
+          "post_code",
+          "postal_code");
+
+  /**
    * Pattern to match: column_name = bare_number in a WHERE context. Captures group(1) = column
    * name, group(2) = numeric literal. Works on raw SQL (before normalization replaces literals).
    */
@@ -121,6 +138,10 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
   /** Returns true when the column name suggests a string type. */
   boolean isStringColumn(String columnName) {
     String lower = columnName.toLowerCase();
+
+    if (KNOWN_NUMERIC_COLUMNS.contains(lower)) {
+      return false;
+    }
 
     int lastUnderscore = lower.lastIndexOf('_');
     if (lastUnderscore >= 0) {
