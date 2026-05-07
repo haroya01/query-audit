@@ -251,8 +251,13 @@ public final class SqlParser {
    * ({@code ''}) and MySQL backslash escaping ({@code \'}). Double-quoted identifiers are preserved
    * per SQL standard (PostgreSQL, Oracle, SQL Server). Uses a manual loop instead of regex to avoid
    * StackOverflowError on large inputs.
+   *
+   * <p>Public so other modules (notably suppression-pattern matching in {@code QueryAuditConfig})
+   * can mask literals before doing structural comparisons against the SQL.
+   *
+   * @since 0.4.0
    */
-  private static String replaceStringLiterals(String sql) {
+  public static String replaceStringLiterals(String sql) {
     StringBuilder sb = new StringBuilder(sql.length());
     int i = 0;
     while (i < sql.length()) {
