@@ -372,7 +372,7 @@ class FalsePositiveAuditTest {
             "update users set name=? where id=?",
             "select sum(total) from orders where user_id=?",
             "select max(created_at) from users where status=?");
-    List<Issue> issues = evaluate(new CountInsteadOfExistsDetector(), sqls);
+    List<Issue> issues = evaluate(new CountInsteadOfExistsDetector(true), sqls);
     assertThat(issues).as("CountInsteadOfExistsDetector false positives").isEmpty();
   }
 
@@ -898,7 +898,7 @@ class FalsePositiveAuditTest {
         List.of(
             "select status,count(*) from orders group by status",
             "select user_id,count(1) from orders group by user_id");
-    List<Issue> issues = evaluate(new CountInsteadOfExistsDetector(), sqls);
+    List<Issue> issues = evaluate(new CountInsteadOfExistsDetector(true), sqls);
     assertThat(issues).as("CountInsteadOfExistsDetector with GROUP BY").isEmpty();
   }
 

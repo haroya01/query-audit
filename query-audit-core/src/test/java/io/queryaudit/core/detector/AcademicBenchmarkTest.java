@@ -572,7 +572,7 @@ class AcademicBenchmarkTest {
       @Test
       @DisplayName("AP21: COUNT(*) where EXISTS would suffice")
       void countInsteadOfExists() {
-        CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector();
+        CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector(true);
 
         List<Issue> bad =
             detector.evaluate(
@@ -592,7 +592,7 @@ class AcademicBenchmarkTest {
       @Test
       @DisplayName("AP22: COUNT(column) for existence check")
       void countColumnInsteadOfExists() {
-        CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector();
+        CountInsteadOfExistsDetector detector = new CountInsteadOfExistsDetector(true);
 
         List<Issue> bad =
             detector.evaluate(

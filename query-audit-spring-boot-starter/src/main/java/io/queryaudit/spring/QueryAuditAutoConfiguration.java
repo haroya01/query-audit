@@ -60,6 +60,7 @@ public class QueryAuditAutoConfiguration {
         .writeAmplificationThreshold(properties.getWriteAmplification().getThreshold())
         .slowQueryWarningMs(properties.getSlowQuery().getWarningMs())
         .slowQueryErrorMs(properties.getSlowQuery().getErrorMs())
+        .countInsteadOfExistsEnabled(properties.getCountInsteadOfExists().isEnabled())
         .build();
   }
 

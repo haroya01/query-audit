@@ -35,6 +35,7 @@ public class QueryAuditProperties {
   private RepeatedInsert repeatedInsert = new RepeatedInsert();
   private WriteAmplification writeAmplification = new WriteAmplification();
   private SlowQuery slowQuery = new SlowQuery();
+  private CountInsteadOfExists countInsteadOfExists = new CountInsteadOfExists();
 
   // ── Top-level getters & setters ────────────────────────────────────
 
@@ -190,6 +191,14 @@ public class QueryAuditProperties {
     this.slowQuery = slowQuery;
   }
 
+  public CountInsteadOfExists getCountInsteadOfExists() {
+    return countInsteadOfExists;
+  }
+
+  public void setCountInsteadOfExists(CountInsteadOfExists countInsteadOfExists) {
+    this.countInsteadOfExists = countInsteadOfExists;
+  }
+
   // ── Nested configuration classes ───────────────────────────────────
 
   public static class NPlusOne {
@@ -334,6 +343,21 @@ public class QueryAuditProperties {
 
     public void setThreshold(int threshold) {
       this.threshold = threshold;
+    }
+  }
+
+  /**
+   * @since 0.4.0
+   */
+  public static class CountInsteadOfExists {
+    private boolean enabled = false;
+
+    public boolean isEnabled() {
+      return enabled;
+    }
+
+    public void setEnabled(boolean enabled) {
+      this.enabled = enabled;
     }
   }
 

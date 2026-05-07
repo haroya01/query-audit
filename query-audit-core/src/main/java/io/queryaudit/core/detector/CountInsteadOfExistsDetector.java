@@ -25,10 +25,32 @@ import java.util.regex.Pattern;
  *   <li>Does NOT have HAVING
  * </ul>
  *
+ * <p><b>Off by default since 0.4.0 (issue #126):</b> the SQL alone cannot tell an aggregate count
+ * from an existence check, and on real codebases the rule produced one of the highest issue
+ * volumes (every paginated count, every dashboard metric, every audit query). Users who want it
+ * must opt in via {@code QueryAuditConfig.countInsteadOfExistsEnabled(true)} or
+ * {@code query-audit.count-instead-of-exists.enabled: true}. When constructing the detector
+ * directly (e.g. in tests) use the {@code (true)} overload to keep the legacy behavior.
+ *
  * @author haroya
  * @since 0.2.0
  */
 public class CountInsteadOfExistsDetector implements DetectionRule {
+
+  private final boolean enabled;
+
+  /** Constructs the detector in its default-off state — calling {@link #evaluate} returns empty. */
+  public CountInsteadOfExistsDetector() {
+    this(false);
+  }
+
+  /**
+   * @param enabled when {@code false}, {@link #evaluate} short-circuits and returns no issues
+   * @since 0.4.0
+   */
+  public CountInsteadOfExistsDetector(boolean enabled) {
+    this.enabled = enabled;
+  }
 
   private static final Pattern COUNT_PATTERN =
       Pattern.compile(
@@ -60,6 +82,9 @@ public class CountInsteadOfExistsDetector implements DetectionRule {
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
+    if (!enabled) {
+      return List.of();
+    }
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();
 
