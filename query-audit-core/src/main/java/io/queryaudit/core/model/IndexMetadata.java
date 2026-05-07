@@ -29,12 +29,45 @@ public class IndexMetadata {
     if (table == null) {
       return false;
     }
-    List<IndexInfo> indexes = indexesByTable.get(table);
+    List<IndexInfo> indexes = lookup(table);
     if (indexes == null) {
       return false;
     }
     return indexes.stream()
         .anyMatch(idx -> idx.columnName() != null && idx.columnName().equalsIgnoreCase(column));
+  }
+
+  /**
+   * Returns the index list registered for the given table. If the table is schema-qualified (e.g.
+   * {@code myschema.users}) and the qualified key is not registered, falls back to the unqualified
+   * suffix. Returns {@code null} when neither key is registered.
+   */
+  private List<IndexInfo> lookup(String table) {
+    if (table == null) {
+      return null;
+    }
+    List<IndexInfo> direct = indexesByTable.get(table);
+    if (direct != null) {
+      return direct;
+    }
+    String unqualified = stripSchemaPrefix(table);
+    if (unqualified == null || unqualified.equals(table)) {
+      return null;
+    }
+    return indexesByTable.get(unqualified);
+  }
+
+  /**
+   * Returns the suffix of a schema-qualified identifier (e.g. {@code myschema.users} →
+   * {@code users}, {@code db.schema.users} → {@code users}). Returns the input unchanged when no
+   * dot is present.
+   */
+  private static String stripSchemaPrefix(String table) {
+    if (table == null) {
+      return null;
+    }
+    int lastDot = table.lastIndexOf('.');
+    return lastDot < 0 ? table : table.substring(lastDot + 1);
   }
 
   /**
@@ -58,7 +91,7 @@ public class IndexMetadata {
     if (table == null || columns == null || columns.isEmpty()) {
       return false;
     }
-    List<IndexInfo> indexes = indexesByTable.get(table);
+    List<IndexInfo> indexes = lookup(table);
     if (indexes == null) {
       return false;
     }
@@ -94,7 +127,7 @@ public class IndexMetadata {
     if (table == null || columns == null || columns.isEmpty()) {
       return false;
     }
-    List<IndexInfo> indexes = indexesByTable.get(table);
+    List<IndexInfo> indexes = lookup(table);
     if (indexes == null) {
       return false;
     }
@@ -124,7 +157,8 @@ public class IndexMetadata {
     if (table == null) {
       return Collections.emptyList();
     }
-    return indexesByTable.getOrDefault(table, Collections.emptyList());
+    List<IndexInfo> indexes = lookup(table);
+    return indexes != null ? indexes : Collections.emptyList();
   }
 
   public Map<String, List<IndexInfo>> getCompositeIndexes(String table) {
@@ -144,7 +178,7 @@ public class IndexMetadata {
    * should skip it to avoid false positives.
    */
   public boolean hasTable(String table) {
-    return table != null && indexesByTable.containsKey(table);
+    return lookup(table) != null;
   }
 
   public boolean isEmpty() {
