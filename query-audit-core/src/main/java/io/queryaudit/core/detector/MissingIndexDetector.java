@@ -30,11 +30,17 @@ import java.util.regex.Pattern;
  */
 public class MissingIndexDetector implements DetectionRule {
 
+  // Matches "FROM <table>" with optional schema/database prefixes (e.g. "myschema.users",
+  // "db.schema.users") and an optional alias.
   private static final Pattern FROM_ALIAS =
-      Pattern.compile("\\bFROM\\s+(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
+      Pattern.compile(
+          "\\bFROM\\s+((?:\\w+\\.){0,2}\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?",
+          Pattern.CASE_INSENSITIVE);
 
   private static final Pattern JOIN_ALIAS =
-      Pattern.compile("\\bJOIN\\s+(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
+      Pattern.compile(
+          "\\bJOIN\\s+((?:\\w+\\.){0,2}\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?",
+          Pattern.CASE_INSENSITIVE);
 
   // ── Improvement 1: Low cardinality column name patterns ──────────
   private static final Set<String> LOW_CARDINALITY_EXACT_NAMES =
@@ -653,29 +659,42 @@ public class MissingIndexDetector implements DetectionRule {
 
     Matcher fromMatcher = FROM_ALIAS.matcher(sql);
     while (fromMatcher.find()) {
-      String table = fromMatcher.group(1);
-      String alias = fromMatcher.group(2);
-      if (!isKeyword(table)) {
-        aliasToTable.put(table.toLowerCase(), table.toLowerCase());
-        if (alias != null && !isKeyword(alias)) {
-          aliasToTable.put(alias.toLowerCase(), table.toLowerCase());
-        }
-      }
+      registerAlias(aliasToTable, fromMatcher.group(1), fromMatcher.group(2));
     }
 
     Matcher joinMatcher = JOIN_ALIAS.matcher(sql);
     while (joinMatcher.find()) {
-      String table = joinMatcher.group(1);
-      String alias = joinMatcher.group(2);
-      if (!isKeyword(table)) {
-        aliasToTable.put(table.toLowerCase(), table.toLowerCase());
-        if (alias != null && !isKeyword(alias)) {
-          aliasToTable.put(alias.toLowerCase(), table.toLowerCase());
-        }
-      }
+      registerAlias(aliasToTable, joinMatcher.group(1), joinMatcher.group(2));
     }
 
     return aliasToTable;
+  }
+
+  private static void registerAlias(
+      Map<String, String> aliasToTable, String tableToken, String aliasToken) {
+    if (tableToken == null) {
+      return;
+    }
+    // The token may be schema-qualified ("myschema.users", "db.schema.users"). Drop the prefix so
+    // detectors look up metadata under the canonical bare name; preserve the qualified form too so
+    // `WHERE myschema.users.col` resolves through the same map.
+    String unqualified = stripSchemaPrefix(tableToken).toLowerCase();
+    if (isKeyword(unqualified)) {
+      return;
+    }
+    aliasToTable.put(unqualified, unqualified);
+    String qualified = tableToken.toLowerCase();
+    if (!qualified.equals(unqualified)) {
+      aliasToTable.put(qualified, unqualified);
+    }
+    if (aliasToken != null && !isKeyword(aliasToken)) {
+      aliasToTable.put(aliasToken.toLowerCase(), unqualified);
+    }
+  }
+
+  private static String stripSchemaPrefix(String token) {
+    int lastDot = token.lastIndexOf('.');
+    return lastDot < 0 ? token : token.substring(lastDot + 1);
   }
 
   /**
