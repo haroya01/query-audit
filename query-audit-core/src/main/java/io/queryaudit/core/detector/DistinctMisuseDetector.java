@@ -103,7 +103,15 @@ public class DistinctMisuseDetector implements DetectionRule {
         continue; // Don't report multiple issues for the same query
       }
 
-      // (c) DISTINCT on primary key column
+      // Any JOIN can multiply rows on the result side, breaking PK uniqueness on the base table
+      // and making DISTINCT a legitimate dedupe step. Without proven 1:1 cardinality (issue #127),
+      // we skip the entire rule for JOIN queries — false positives there fail the build, while
+      // the lost true positive (a redundant DISTINCT on a 1:1 JOIN) is at most cosmetic.
+      if (hasJoin) {
+        continue;
+      }
+
+      // (c) DISTINCT on primary key column — only safe to flag without JOINs.
       if (indexMetadata != null && !indexMetadata.isEmpty()) {
         List<String> distinctCols = extractDistinctColumnNames(sql);
         List<String> tables = EnhancedSqlParser.extractTableNames(sql);
@@ -125,27 +133,8 @@ public class DistinctMisuseDetector implements DetectionRule {
                     "DISTINCT on primary key column is unnecessary",
                     "Remove DISTINCT — the primary key column is already unique by definition.",
                     query.stackTrace()));
-            continue;
           }
         }
-      }
-
-      // (a) DISTINCT + JOIN may indicate a missing JOIN condition
-      if (hasJoin) {
-        List<String> tables = EnhancedSqlParser.extractTableNames(sql);
-        String table = tables.isEmpty() ? null : tables.get(0);
-
-        issues.add(
-            new Issue(
-                IssueType.DISTINCT_MISUSE,
-                Severity.WARNING,
-                normalized,
-                table,
-                null,
-                "DISTINCT with JOIN may indicate a missing JOIN condition or could use EXISTS",
-                "Review JOIN conditions for correctness. "
-                    + "If checking existence, use EXISTS (SELECT 1 FROM ...) instead.",
-                query.stackTrace()));
       }
     }
 

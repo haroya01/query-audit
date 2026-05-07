@@ -362,24 +362,22 @@ class AcademicBenchmarkTest {
       }
 
       @Test
-      @DisplayName("AP10: Unnecessary DISTINCT with JOIN")
+      @DisplayName("AP10: DISTINCT with JOIN — intentionally suppressed since #127")
       void distinctWithJoin() {
+        // Per issue #127, the detector no longer flags any DISTINCT+JOIN combination because
+        // 1:N JOINs legitimately require DISTINCT and we cannot prove 1:1 cardinality from SQL
+        // alone. This benchmark case is acknowledged as a missed detection (acceptable per the
+        // issue's acceptance criteria).
         DistinctMisuseDetector detector = new DistinctMisuseDetector();
 
-        List<Issue> bad =
+        List<Issue> issues =
             detector.evaluate(
                 List.of(
                     record(
                         "SELECT DISTINCT u.name FROM users u JOIN orders o ON o.user_id = u.id")),
                 EMPTY_INDEX);
-        List<Issue> good =
-            detector.evaluate(
-                List.of(
-                    record(
-                        "SELECT u.name FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)")),
-                EMPTY_INDEX);
 
-        assertAntiPatternDetected(bad, IssueType.DISTINCT_MISUSE, good);
+        assertThat(issues).isEmpty();
       }
 
       @Test
