@@ -273,4 +273,42 @@ class ImplicitTypeConversionDetectorTest {
 
     assertThat(issues).isEmpty();
   }
+
+  // ── Regression: issue #125 — known-numeric `_code` columns ──────────
+
+  @Test
+  void noIssueForZipCodeRegressionForIssue125() {
+    String sql = "SELECT * FROM addresses WHERE zip_code = 12345";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
+
+    assertThat(issues).isEmpty();
+  }
+
+  @Test
+  void noIssueForKnownNumericCodeColumns() {
+    List<String> sqls =
+        List.of(
+            "SELECT * FROM phones WHERE area_code = 415",
+            "SELECT * FROM countries WHERE country_code = 82",
+            "SELECT * FROM responses WHERE error_code = 404",
+            "SELECT * FROM types WHERE type_code = 7",
+            "SELECT * FROM orders WHERE status_code = 1",
+            "SELECT * FROM addresses WHERE postal_code = 90210");
+
+    for (String sql : sqls) {
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
+      assertThat(issues).as("should not flag: %s", sql).isEmpty();
+    }
+  }
+
+  @Test
+  void stillFlagsActualStringColumnComparedToNumber() {
+    String sql = "SELECT * FROM users WHERE name = 12345";
+
+    List<Issue> issues = detector.evaluate(List.of(record(sql)), emptyMetadata);
+
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).column()).isEqualTo("name");
+  }
 }

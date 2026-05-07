@@ -181,46 +181,32 @@ class MySqlFalsePositiveEvidenceTest {
   // ═══════════════════════════════════════════════════════════════
 
   @Nested
-  @DisplayName("ImplicitTypeConversionDetector — Numeric _code column limitation")
+  @DisplayName("ImplicitTypeConversionDetector — known-numeric _code columns suppressed")
   class ImplicitTypeConversionDetectorFalsePositives {
 
     private final ImplicitTypeConversionDetector detector = new ImplicitTypeConversionDetector();
 
     @Test
-    @DisplayName(
-        "TN: zip_code = 12345 triggers despite possibly being an INTEGER column (known limitation) "
-            + "- Ref: https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html")
-    void numericComparisonOnCodeColumn_flaggedAsKnownLimitation() {
-      // country_code, zip_code, area_code could be INTEGER columns.
-      // WHERE zip_code = 12345 is NOT implicit type conversion if the column is numeric.
-      // The detector uses heuristics (_code suffix -> string) and cannot verify actual schema.
+    @DisplayName("TN: zip_code = 12345 no longer flagged (issue #125)")
+    void zipCodeNumeric_notFlaggedAfterIssue125() {
+      // Per issue #125, zip_code/area_code/country_code/error_code/type_code/status_code/
+      // postal_code are conventionally numeric and have been added to the deny-list to suppress
+      // the heuristic mismatch.
       String sql = "SELECT * FROM addresses WHERE zip_code = 12345";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      // Known limitation: detector flags this because _code is in STRING_COLUMN_INDICATORS
-      assertThat(issues)
-          .anyMatch(
-              i -> i.type() == IssueType.IMPLICIT_TYPE_CONVERSION && "zip_code".equals(i.column()));
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.IMPLICIT_TYPE_CONVERSION);
     }
 
     @Test
-    @DisplayName(
-        "TN: country_code = 82 triggers despite being a valid numeric comparison (known limitation) "
-            + "- Ref: https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html")
-    void countryCodeNumeric_flaggedAsKnownLimitation() {
-      // country_code could be an INT storing ISO 3166-1 numeric codes (e.g., 82 = South Korea).
-      // The detector cannot distinguish string vs numeric column types.
+    @DisplayName("TN: country_code = 82 no longer flagged (issue #125)")
+    void countryCodeNumeric_notFlaggedAfterIssue125() {
       String sql = "SELECT * FROM countries WHERE country_code = 82";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      // Known limitation: heuristic-based detection cannot verify column type
-      assertThat(issues)
-          .anyMatch(
-              i ->
-                  i.type() == IssueType.IMPLICIT_TYPE_CONVERSION
-                      && "country_code".equals(i.column()));
+      assertThat(issues).noneMatch(i -> i.type() == IssueType.IMPLICIT_TYPE_CONVERSION);
     }
   }
 
