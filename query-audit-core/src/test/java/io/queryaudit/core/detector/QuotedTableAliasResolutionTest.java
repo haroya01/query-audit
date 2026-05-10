@@ -20,8 +20,10 @@ import org.junit.jupiter.api.Test;
  * register the alias. The {@code resolveTable} fallback then drops Hibernate-pattern aliases on
  * the floor (returns {@code null}), silently skipping legitimate missing-index issues.
  *
- * <p>The detectors that share {@code MissingIndexDetector.resolveAliases} are:
- * MissingIndexDetector, CompositeIndexDetector, RedundantFilterDetector, ForUpdateWithoutIndexDetector.
+ * <p>Detectors covered here: MissingIndexDetector, RedundantFilterDetector,
+ * NonDeterministicPaginationDetector, RangeLockDetector, ForUpdateNonUniqueIndexDetector. All
+ * five route through {@code MissingIndexDetector.resolveAliases} after the consolidation
+ * follow-up to PR #143.
  */
 class QuotedTableAliasResolutionTest {
 
@@ -31,6 +33,10 @@ class QuotedTableAliasResolutionTest {
 
   private static IndexInfo pk(String table, String column) {
     return new IndexInfo(table, "PRIMARY", column, 1, false, 1000);
+  }
+
+  private static IndexInfo nonUniqueIdx(String table, String name, String column) {
+    return new IndexInfo(table, name, column, 1, true, 100);
   }
 
   private static IndexMetadata metadata(IndexInfo... infos) {
@@ -95,5 +101,66 @@ class QuotedTableAliasResolutionTest {
         .anyMatch(
             i ->
                 "rooms".equalsIgnoreCase(i.table()) && "status".equalsIgnoreCase(i.column()));
+  }
+
+  @Test
+  @DisplayName("Double-quoted FROM with Hibernate alias: NonDeterministicPagination still reported")
+  void doubleQuoted_nonDeterministicPagination_reported() {
+    // messages: PK(id), no unique index on created_at — ORDER BY created_at LIMIT N
+    // is non-deterministic. Pre-fix the detector's local FROM_ALIAS regex matched only
+    // bare and backtick-quoted segments (no double-quote support), so the alias map
+    // was empty for this SQL, resolveTable returned "m1_0", hasTable("m1_0") was false,
+    // the detector treated this as "can't determine — skip".
+    IndexMetadata meta = metadata(pk("messages", "id"));
+
+    String sql = "SELECT m1_0.id FROM \"messages\" m1_0 ORDER BY m1_0.created_at LIMIT 10";
+
+    List<Issue> issues =
+        new NonDeterministicPaginationDetector().evaluate(List.of(record(sql)), meta);
+
+    assertThat(issues)
+        .anyMatch(i -> i.type() == IssueType.NON_DETERMINISTIC_PAGINATION);
+  }
+
+  @Test
+  @DisplayName("Backtick-quoted FROM with Hibernate alias: RangeLockDetector still reported")
+  void backtickQuoted_rangeLock_reported() {
+    // orders: PK(id), no index on created_at. FOR UPDATE with range condition on
+    // unindexed column → gap-lock risk. Pre-fix the detector silently skipped because
+    // resolveTable returned "o1_0" which is not in metadata.
+    IndexMetadata meta = metadata(pk("orders", "id"));
+
+    String sql =
+        "SELECT o1_0.id FROM `orders` o1_0 WHERE o1_0.created_at > ? FOR UPDATE";
+
+    List<Issue> issues = new RangeLockDetector().evaluate(List.of(record(sql)), meta);
+
+    assertThat(issues)
+        .anyMatch(
+            i ->
+                i.type() == IssueType.RANGE_LOCK_RISK
+                    && "orders".equalsIgnoreCase(i.table())
+                    && "created_at".equalsIgnoreCase(i.column()));
+  }
+
+  @Test
+  @DisplayName("Backtick-quoted FROM with Hibernate alias: ForUpdateNonUniqueIndex still reported")
+  void backtickQuoted_forUpdateNonUnique_reported() {
+    // orders: PK(id), non-unique idx on user_id. FOR UPDATE WHERE user_id = ? takes a
+    // next-key lock on a non-unique index. Pre-fix the detector silently skipped.
+    IndexMetadata meta = metadata(pk("orders", "id"), nonUniqueIdx("orders", "idx_user", "user_id"));
+
+    String sql =
+        "SELECT o1_0.id FROM `orders` o1_0 WHERE o1_0.user_id = ? FOR UPDATE";
+
+    List<Issue> issues =
+        new ForUpdateNonUniqueIndexDetector().evaluate(List.of(record(sql)), meta);
+
+    assertThat(issues)
+        .anyMatch(
+            i ->
+                i.type() == IssueType.FOR_UPDATE_NON_UNIQUE
+                    && "orders".equalsIgnoreCase(i.table())
+                    && "user_id".equalsIgnoreCase(i.column()));
   }
 }
