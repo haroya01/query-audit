@@ -10,12 +10,10 @@ import io.queryaudit.core.parser.ColumnReference;
 import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -37,14 +35,6 @@ public class NonDeterministicPaginationDetector implements DetectionRule {
 
   private static final Pattern LIMIT_PATTERN =
       Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern FROM_ALIAS =
-      Pattern.compile(
-          "\\bFROM\\s+`?(\\w+)`?(?:\\s+(?:AS\\s+)?`?(\\w+)`?)?", Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern JOIN_ALIAS =
-      Pattern.compile(
-          "\\bJOIN\\s+`?(\\w+)`?(?:\\s+(?:AS\\s+)?`?(\\w+)`?)?", Pattern.CASE_INSENSITIVE);
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
@@ -80,7 +70,7 @@ public class NonDeterministicPaginationDetector implements DetectionRule {
         continue;
       }
 
-      Map<String, String> aliasToTable = resolveAliases(sql);
+      Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
 
       // Check if any ORDER BY column has a unique index
       boolean hasUniqueTiebreaker = false;
@@ -140,32 +130,6 @@ public class NonDeterministicPaginationDetector implements DetectionRule {
       }
     }
     return false;
-  }
-
-  private Map<String, String> resolveAliases(String sql) {
-    Map<String, String> aliasToTable = new HashMap<>();
-
-    Matcher fromMatcher = FROM_ALIAS.matcher(sql);
-    while (fromMatcher.find()) {
-      String table = fromMatcher.group(1);
-      String alias = fromMatcher.group(2);
-      aliasToTable.put(table.toLowerCase(), table.toLowerCase());
-      if (alias != null) {
-        aliasToTable.put(alias.toLowerCase(), table.toLowerCase());
-      }
-    }
-
-    Matcher joinMatcher = JOIN_ALIAS.matcher(sql);
-    while (joinMatcher.find()) {
-      String table = joinMatcher.group(1);
-      String alias = joinMatcher.group(2);
-      aliasToTable.put(table.toLowerCase(), table.toLowerCase());
-      if (alias != null) {
-        aliasToTable.put(alias.toLowerCase(), table.toLowerCase());
-      }
-    }
-
-    return aliasToTable;
   }
 
   private String resolveTable(String tableOrAlias, Map<String, String> aliasToTable) {

@@ -34,12 +34,6 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
   private static final Pattern ORDER_BY_PATTERN =
       Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE);
 
-  private static final Pattern FROM_ALIAS =
-      Pattern.compile("\\bFROM\\s+(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern JOIN_ALIAS =
-      Pattern.compile("\\bJOIN\\s+(\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?", Pattern.CASE_INSENSITIVE);
-
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();

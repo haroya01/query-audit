@@ -30,17 +30,24 @@ import java.util.regex.Pattern;
  */
 public class MissingIndexDetector implements DetectionRule {
 
+  // A single identifier segment: bare \w+, backtick-quoted, or double-quoted.
+  // Hibernate emits backtick- or double-quoted identifiers under
+  // hibernate.globally_quoted_identifiers=true or for reserved-word table names.
+  private static final String IDENT_SEGMENT = "(?:\\w+|`[^`]+`|\"[^\"]+\")";
+
   // Matches "FROM <table>" with optional schema/database prefixes (e.g. "myschema.users",
-  // "db.schema.users") and an optional alias.
+  // "db.schema.users", "`messages`", "\"users\"") and an optional bare alias.
   private static final Pattern FROM_ALIAS =
       Pattern.compile(
-          "\\bFROM\\s+((?:\\w+\\.){0,2}\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?",
+          "\\bFROM\\s+((?:" + IDENT_SEGMENT + "\\.){0,2}" + IDENT_SEGMENT + ")(?:\\s+(?:AS\\s+)?(\\w+))?",
           Pattern.CASE_INSENSITIVE);
 
   private static final Pattern JOIN_ALIAS =
       Pattern.compile(
-          "\\bJOIN\\s+((?:\\w+\\.){0,2}\\w+)(?:\\s+(?:AS\\s+)?(\\w+))?",
+          "\\bJOIN\\s+((?:" + IDENT_SEGMENT + "\\.){0,2}" + IDENT_SEGMENT + ")(?:\\s+(?:AS\\s+)?(\\w+))?",
           Pattern.CASE_INSENSITIVE);
+
+  private static final Pattern QUOTED_IDENT = Pattern.compile("`([^`]+)`|\"([^\"]+)\"");
 
   // ── Improvement 1: Low cardinality column name patterns ──────────
   private static final Set<String> LOW_CARDINALITY_EXACT_NAMES =
@@ -675,17 +682,19 @@ public class MissingIndexDetector implements DetectionRule {
     if (tableToken == null) {
       return;
     }
+    // Strip backticks / double-quotes from each segment so the canonical key matches the
+    // bare names produced by the WHERE-column extractor (JSqlParser already unquotes).
+    String normalized = unquoteSegments(tableToken).toLowerCase();
     // The token may be schema-qualified ("myschema.users", "db.schema.users"). Drop the prefix so
     // detectors look up metadata under the canonical bare name; preserve the qualified form too so
     // `WHERE myschema.users.col` resolves through the same map.
-    String unqualified = stripSchemaPrefix(tableToken).toLowerCase();
+    String unqualified = stripSchemaPrefix(normalized);
     if (isKeyword(unqualified)) {
       return;
     }
     aliasToTable.put(unqualified, unqualified);
-    String qualified = tableToken.toLowerCase();
-    if (!qualified.equals(unqualified)) {
-      aliasToTable.put(qualified, unqualified);
+    if (!normalized.equals(unqualified)) {
+      aliasToTable.put(normalized, unqualified);
     }
     if (aliasToken != null && !isKeyword(aliasToken)) {
       aliasToTable.put(aliasToken.toLowerCase(), unqualified);
@@ -695,6 +704,20 @@ public class MissingIndexDetector implements DetectionRule {
   private static String stripSchemaPrefix(String token) {
     int lastDot = token.lastIndexOf('.');
     return lastDot < 0 ? token : token.substring(lastDot + 1);
+  }
+
+  private static String unquoteSegments(String token) {
+    if (token == null || token.indexOf('`') < 0 && token.indexOf('"') < 0) {
+      return token;
+    }
+    Matcher m = QUOTED_IDENT.matcher(token);
+    StringBuilder out = new StringBuilder();
+    while (m.find()) {
+      String inner = m.group(1) != null ? m.group(1) : m.group(2);
+      m.appendReplacement(out, Matcher.quoteReplacement(inner));
+    }
+    m.appendTail(out);
+    return out.toString();
   }
 
   /**
