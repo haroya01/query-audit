@@ -3,6 +3,15 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Version label for the Summary section. The actual version that gets
+          published is always whatever gradle.properties reads from the latest
+          main commit at run time.
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -18,6 +27,7 @@ jobs:
     steps:
       - uses: googleapis/release-please-action@v4
         id: release
+        if: github.event_name == 'push'
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           config-file: release-please-config.json
@@ -25,7 +35,9 @@ jobs:
 
   publish:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: >-
+      needs.release-please.outputs.release_created == 'true'
+      || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,13 +62,17 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Release ${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          VERSION="${{ needs.release-please.outputs.version || inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION=$(grep -E '^version=' gradle.properties | head -n 1 | sed 's/^version=//; s/ *#.*//')
+          fi
+          echo "## Release ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Published to Maven Central:" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-core:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-junit5:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-mysql:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-postgresql:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-spring-boot-starter:${{ needs.release-please.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "io.github.haroya01:query-audit-core:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "io.github.haroya01:query-audit-junit5:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "io.github.haroya01:query-audit-mysql:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "io.github.haroya01:query-audit-postgresql:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
+          echo "io.github.haroya01:query-audit-spring-boot-starter:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
