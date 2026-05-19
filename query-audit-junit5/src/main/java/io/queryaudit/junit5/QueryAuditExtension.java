@@ -61,6 +61,7 @@ public class QueryAuditExtension
   private static final String KEY_CURRENT_COUNTS = "currentCounts";
   private static final String KEY_DATASOURCE = "dataSource";
   private static final String KEY_RETURN_TYPE_RESOLVER = "returnTypeResolver";
+  private static final String KEY_DATASOURCE_HOOK_CLEANUP = "dataSourceHookCleanup";
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
@@ -85,7 +86,8 @@ public class QueryAuditExtension
     DataSource dataSource = dataSourceResolver.resolve(context);
     if (dataSource != null) {
       store.put(KEY_DATASOURCE, dataSource);
-      dataSourceResolver.hookInterceptor(dataSource, interceptor);
+      Runnable hookCleanup = dataSourceResolver.hookInterceptor(dataSource, interceptor);
+      store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
 
       IndexMetadata metadata = metadataCollector.collect(dataSource);
       if (metadata != null) {
@@ -341,6 +343,11 @@ public class QueryAuditExtension
     LazyLoadTracker tracker = getLazyLoadTracker(context);
     if (tracker != null) {
       hibernateIntegration.unregisterTracker(context, tracker);
+    }
+    Runnable hookCleanup =
+        context.getStore(NAMESPACE).get(KEY_DATASOURCE_HOOK_CLEANUP, Runnable.class);
+    if (hookCleanup != null) {
+      hookCleanup.run();
     }
     QueryAuditDataSourceStore.clear();
 

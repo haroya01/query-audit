@@ -11,6 +11,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import javax.sql.DataSource;
+import net.ttddyy.dsproxy.listener.ChainListener;
+import net.ttddyy.dsproxy.listener.QueryExecutionListener;
 import net.ttddyy.dsproxy.support.ProxyDataSource;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
@@ -55,21 +57,38 @@ class DataSourceResolver {
   }
 
   /**
-   * Hooks the QueryInterceptor into the DataSource. If the DataSource is already a ProxyDataSource,
-   * adds the interceptor as a listener. Otherwise, wraps with a new ProxyDataSource and replaces
-   * the original where possible.
+   * Hooks the QueryInterceptor into the DataSource and returns a cleanup callback that must be
+   * invoked from {@code afterAll} so that listeners do not accumulate on a shared proxy across
+   * test classes. If the DataSource is already a {@link ProxyDataSource}, the interceptor is added
+   * as a listener (Strategy 1). Otherwise, a fresh proxy is created via {@link
+   * DataSourceProxyFactory} and stored in {@link QueryAuditDataSourceStore} (Strategy 2).
+   *
+   * @return a cleanup callback that detaches the interceptor; never {@code null}
    */
-  void hookInterceptor(DataSource dataSource, QueryInterceptor interceptor) {
+  Runnable hookInterceptor(DataSource dataSource, QueryInterceptor interceptor) {
     // Strategy 1: DataSource is already a ProxyDataSource (e.g., gavlyukovskiy)
     ProxyDataSource proxy = findProxyDataSource(dataSource);
     if (proxy != null) {
       proxy.addListener(interceptor);
-      return;
+      ChainListener chain = proxy.getProxyConfig().getQueryListener();
+      return () -> detachListener(chain, interceptor);
     }
 
     // Strategy 2: Wrap with our own proxy via DataSourceProxyFactory
     QueryAuditDataSourceStore.set(
         dataSource, DataSourceProxyFactory.wrap(dataSource, interceptor), interceptor);
+    return QueryAuditDataSourceStore::clear;
+  }
+
+  /**
+   * Removes a previously-added listener from a {@link ChainListener}. {@code ChainListener} does
+   * not expose a {@code removeListener} API directly, so we copy → filter → reinstall.
+   */
+  private static void detachListener(ChainListener chain, QueryExecutionListener target) {
+    List<QueryExecutionListener> remaining = new ArrayList<>(chain.getListeners());
+    if (remaining.remove(target)) {
+      chain.setListeners(remaining);
+    }
   }
 
   private DataSource resolveFromSpringContext(ExtensionContext context) {
