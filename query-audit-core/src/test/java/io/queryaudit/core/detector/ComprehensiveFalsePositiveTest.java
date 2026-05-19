@@ -455,6 +455,26 @@ class ComprehensiveFalsePositiveTest {
 
       assertThat(issuesOfType(issues, IssueType.SELECT_ALL)).isEmpty();
     }
+
+    @Test
+    @DisplayName("TN: 'SELECT *' inside a string literal should not detect")
+    void tn_selectStarInsideStringLiteral() {
+      String sql =
+          "SELECT message FROM audit_logs WHERE error_log LIKE '%SELECT * FROM users%'";
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      assertThat(issuesOfType(issues, IssueType.SELECT_ALL)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("TN: stored SQL template containing 'SELECT *' should not detect")
+    void tn_selectStarInStoredTemplate() {
+      String sql =
+          "INSERT INTO query_templates (sql_text) VALUES ('SELECT * FROM users WHERE id = ?')";
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      assertThat(issuesOfType(issues, IssueType.SELECT_ALL)).isEmpty();
+    }
   }
 
   // =====================================================================

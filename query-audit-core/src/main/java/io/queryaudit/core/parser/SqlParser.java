@@ -449,6 +449,9 @@ public final class SqlParser {
       return false;
     }
     sql = stripComments(sql);
+    // Mask string literals so 'SELECT *' inside a literal (e.g. an audit-log row or stored
+    // SQL template) does not produce a false positive.
+    sql = replaceStringLiterals(sql);
     // Neutralise EXISTS(SELECT * ...) — it is idiomatic SQL and not a real SELECT *
     String sanitized = EXISTS_SELECT_STAR.matcher(sql).replaceAll("EXISTS(SELECT 1");
     return SELECT_ALL.matcher(sanitized).find();
