@@ -23,6 +23,11 @@ public class PostgreSqlIndexMetadataProvider implements IndexMetadataProvider {
   private static final String LIST_TABLES_SQL =
       "SELECT tablename FROM pg_tables WHERE schemaname = current_schema()";
 
+  // Both queries scope by current_schema() to avoid cross-schema name collisions: pg_class is
+  // database-wide and pg_class.relname is unique only per-namespace. Without the join, a same-
+  // named table in another schema (e.g. public.orders + staging.orders) would silently leak its
+  // indexes / cardinality into the result for the table actually iterated from
+  // pg_tables WHERE schemaname = current_schema(). See issue #147.
   private static final String INDEX_QUERY =
       """
             SELECT
@@ -31,16 +36,22 @@ public class PostgreSqlIndexMetadataProvider implements IndexMetadataProvider {
                 ix.indisunique AS is_unique,
                 array_position(ix.indkey, a.attnum) AS seq_in_index
             FROM pg_class t
+            JOIN pg_namespace n ON n.oid = t.relnamespace
             JOIN pg_index ix ON t.oid = ix.indrelid
             JOIN pg_class i  ON i.oid = ix.indexrelid
             JOIN pg_attribute a ON a.attrelid = t.oid
                 AND a.attnum = ANY(ix.indkey)
-            WHERE t.relname = ? AND t.relkind = 'r'
+            WHERE t.relname = ? AND t.relkind = 'r' AND n.nspname = current_schema()
             ORDER BY i.relname, array_position(ix.indkey, a.attnum)
             """;
 
   private static final String CARDINALITY_QUERY =
-      "SELECT reltuples FROM pg_class WHERE relname = ?";
+      """
+            SELECT c.reltuples
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE c.relname = ? AND n.nspname = current_schema()
+            """;
 
   @Override
   public String supportedDatabase() {
