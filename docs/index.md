@@ -83,9 +83,9 @@ Catches N+1 queries, missing indexes, `SELECT *`, DML anti-patterns, batch inser
 
 <div class="qg-feature" markdown>
 
-### :material-check-decagram: 100% Reliable
+### :material-check-decagram: Structural Detection
 
-Confirmed detections are **structural** -- they inspect SQL text and index metadata, not runtime data. No flaky heuristics. No false positives. If QueryAudit flags it, it is a real problem.
+Confirmed detections are **structural** -- they inspect SQL text and index metadata, not runtime data. Heuristics live in the INFO tier so the WARNING/ERROR tier stays high-signal. False positives are tracked as bugs and fixed -- the goal is "if QueryAudit flags it as confirmed, it is a real problem worth investigating."
 
 </div>
 
