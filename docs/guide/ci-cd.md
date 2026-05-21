@@ -108,10 +108,13 @@ the JSON report with a `github-script` step:
         with:
           script: |
             const fs = require('fs');
-            const path = 'build/reports/query-audit/query-audit.json';
+            const path = 'build/reports/query-audit/report.json';
             if (!fs.existsSync(path)) return;
-            const json = JSON.parse(fs.readFileSync(path, 'utf8'));
-            const body = `**QueryAudit**: ${json.summary.confirmedIssues} confirmed, ${json.summary.infoIssues} info`;
+            // report.json is an array of per-test reports — sum across them.
+            const tests = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const confirmed = tests.reduce((s, t) => s + (t.summary?.confirmedIssues || 0), 0);
+            const info = tests.reduce((s, t) => s + (t.summary?.infoIssues || 0), 0);
+            const body = `**QueryAudit**: ${confirmed} confirmed, ${info} info across ${tests.length} test method(s).`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -119,6 +122,14 @@ the JSON report with a `github-script` step:
               body,
             });
 ```
+
+!!! info "Report file layout"
+    QueryAudit writes a single aggregate `report.json` at the configured
+    `report.output-dir` (default `build/reports/query-audit/`). The top-level value is a
+    **JSON array** with one entry per test method — each entry has a `summary` object
+    (`confirmedIssues`, `infoIssues`, `acknowledgedIssues`, ...) plus `confirmedIssues` /
+    `infoIssues` arrays of individual findings. Per-test HTML files (`<TestClass>.html`)
+    and an `index.html` aggregate sit alongside.
 
 ### With PostgreSQL
 
@@ -210,20 +221,19 @@ Post a summary of QueryAudit findings as a PR comment:
         with:
           script: |
             const fs = require('fs');
-            const glob = require('glob');
-            const files = glob.sync('build/reports/query-audit/**/*.json');
-            let totalErrors = 0;
-            let totalWarnings = 0;
-            for (const file of files) {
-              const report = JSON.parse(fs.readFileSync(file, 'utf8'));
-              totalErrors += report.summary?.confirmedIssues || 0;
-            }
-            if (totalErrors > 0) {
+            const path = 'build/reports/query-audit/report.json';
+            if (!fs.existsSync(path)) return;
+            // report.json is an array — one entry per test method. Sum the per-test summaries.
+            const tests = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const totalConfirmed = tests.reduce((s, t) => s + (t.summary?.confirmedIssues || 0), 0);
+            const totalInfo = tests.reduce((s, t) => s + (t.summary?.infoIssues || 0), 0);
+            if (totalConfirmed > 0 || totalInfo > 0) {
+              const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: `**QueryAudit Report**: ${totalErrors} issue(s) detected. Check the [build artifacts](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}) for details.`
+                body: `**QueryAudit Report**: ${totalConfirmed} confirmed, ${totalInfo} info. See the [build artifacts](${runUrl}) for the per-test HTML reports.`
               });
             }
 ```
