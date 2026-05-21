@@ -1,28 +1,33 @@
 # Detection Rules Overview
 
-QueryAudit ships with **57 active detection rules** that catch SQL performance issues,
-logic bugs, and anti-patterns during your test runs. These 57 rules emit **60 distinct
-issue types** (because `MissingIndexDetector` alone emits 4 different issue types).
-Rules are organized by severity and confidence model to help you prioritize fixes.
+QueryAudit ships with **active detection rules** that catch SQL performance issues, logic
+bugs, and anti-patterns during your test runs. The rules are organized by severity and
+confidence model to help you prioritize fixes.
 
-!!! info "IssueType enum vs active rules"
-    The `IssueType` enum contains **64** entries. Of those, **60** are actively emitted by
-    **57 detection rules**. The remaining 4 are [disabled or reserved](#disabled-reserved-rules).
+!!! info "IssueType enum"
+    The `IssueType` enum currently contains **66** entries. **62** are actively emitted by
+    detection rules (one rule can emit multiple issue types — `MissingIndexDetector` alone
+    emits 4). The remaining 4 are [disabled or reserved](#disabled-reserved-rules).
+    The full canonical list is in
+    [`IssueType.java`](https://github.com/haroya01/query-audit/blob/main/query-audit-core/src/main/java/io/queryaudit/core/model/IssueType.java).
 
 ---
 
 ## Confidence Model
 
-### Confirmed (100% Reliable)
+### Confirmed (Structural / Pattern-based)
 
 These rules analyze **SQL structure and database schema** -- things that do not change with data
-volume. If QueryAudit reports a Confirmed issue, it is a real problem regardless of whether you
-are running against 5 test rows or 5 million production rows.
+volume. The detection logic examines the SQL text, repetition patterns, or cross-references the
+actual index metadata via `SHOW INDEX` / `pg_catalog`. Heuristics that depend on data distribution
+live in the INFO tier instead.
 
-!!! success "Confirmed = Structural / Pattern-based"
-    The detection logic examines the SQL text, repetition patterns, or cross-references the
-    actual index metadata via `SHOW INDEX`. None of these depend on row counts or data
-    distribution.
+!!! success "High-signal tier"
+    Findings here are not gated by row counts or data distribution. False positives are tracked
+    as bugs and fixed -- the design intent is that a confirmed flag is a real problem worth
+    investigating. The most recent false-positive fixes are listed in
+    [CHANGELOG](https://github.com/haroya01/query-audit/blob/main/CHANGELOG.md); please report
+    any new one you hit.
 
 ### Info (Data-Dependent / Heuristic)
 
@@ -48,7 +53,8 @@ Production: 1M rows --> MySQL: "Use index"           --> Index scan
 
 ## Quick Reference Table
 
-The complete searchable reference of all 60 issue types emitted by 57 active detection rules.
+The complete searchable reference of issue types emitted by the active detection rules.
+(The full canonical list, including the newest additions, is the `IssueType` enum.)
 
 | # | Rule Name | Code | Severity | Category | Description |
 |---|-----------|------|----------|----------|-------------|
@@ -240,7 +246,7 @@ Important issues that should be reviewed and typically fixed.
 
 ---
 
-### INFO Severity (11 issue types)
+### INFO Severity (12 issue types)
 
 Best-practice suggestions and heuristic checks. These won't fail your build by default
 but are worth reviewing.
@@ -249,7 +255,7 @@ but are worth reviewing.
 |------|-------------|-----------------|
 | `select-all` | SELECT * usage | Regex match on parsed SQL |
 | `redundant-filter` | Redundant duplicate WHERE condition | Detect duplicate predicates in WHERE clause |
-| `count-instead-of-exists` | COUNT used where EXISTS is better | Detect `COUNT(*)` in conditional context |
+| `count-instead-of-exists` | COUNT used where EXISTS is better | Detect `COUNT(*)` in conditional context. Off by default; enable via `query-audit.count-instead-of-exists.enabled: true`. |
 | `union-without-all` | UNION without ALL forces dedup sort | Detect UNION without ALL keyword |
 | `covering-index-opportunity` | Query could benefit from covering index | Analyze SELECT columns vs available indexes |
 | `count-star-no-where` | COUNT(*) without WHERE scans full table | Detect `COUNT(*)` without WHERE clause |
@@ -258,6 +264,7 @@ but are worth reviewing.
 | `mergeable-queries` | Multiple queries could be merged | Detect multiple simple SELECTs to same table |
 | `non-deterministic-pagination` | ORDER BY+LIMIT on non-unique column | Detect ORDER BY + LIMIT on non-unique columns |
 | `force-index-hint` | FORCE/USE/IGNORE INDEX overrides optimizer | Detect index hint keywords in query |
+| `find-by-id-for-association` | `findById()` used only for FK association — consider `getReferenceById()` to skip the SELECT | Spring Data return-type and call-site analysis |
 
 !!! info "Info rules are still useful"
     Even though they can produce false positives with small test data, they serve as early
@@ -268,8 +275,8 @@ but are worth reviewing.
 
 ## Disabled & Reserved Rules
 
-The `IssueType` enum has **64 entries**, but only **60 are actively emitted** by **57 detection
-rules**. The remaining 4 entries fall into two categories:
+The `IssueType` enum currently has **66 entries**. **62 are actively emitted** by detection
+rules. The remaining 4 entries fall into two categories:
 
 ### Disabled Rules (1 entry)
 
@@ -297,17 +304,17 @@ for a planned EXPLAIN-based detection phase.
 
 | Category | Count |
 |----------|-------|
-| Active detection rules (detectors) in `QueryAuditAnalyzer` | **57** |
-| Active issue types emitted by those rules | **60** |
+| Active issue types emitted by detectors | **62** |
 | Disabled (DuplicateQueryDetector) | 1 |
 | Reserved EXPLAIN-based (full-scan, filesort, temporary-table) | 3 |
-| **Total IssueType enum entries** | **64** |
+| **Total IssueType enum entries** | **66** |
 
-!!! note "Why 57 rules but 60 issue types?"
-    The `MissingIndexDetector` is registered as a **single detection rule** but emits **4
-    different IssueTypes** (`missing-where-index`, `missing-join-index`, `missing-order-by-index`,
-    `missing-group-by-index`), one for each SQL clause it analyzes. This accounts for the
-    difference: 57 rules + 3 extra IssueTypes from MissingIndexDetector = 60 active IssueTypes.
+!!! note "Why 57 detection rules but 62 active issue types?"
+    A single detector can emit multiple issue types. The biggest example is
+    `MissingIndexDetector`, which is registered as one detection rule but emits 4 different
+    `IssueType`s (`missing-where-index`, `missing-join-index`, `missing-order-by-index`,
+    `missing-group-by-index`) -- one per SQL clause it analyzes. That accounts for the
+    bulk of the difference between detector count and active issue-type count.
 
 ---
 
@@ -401,10 +408,10 @@ for a planned EXPLAIN-based detection phase.
 |----------|-------------|--------|
 | ERROR | 11 | Must fix -- logic bugs or guaranteed performance degradation |
 | WARNING | 38 | Should fix -- important issues that typically need attention |
-| INFO | 11 | Review -- best-practice suggestions, may have false positives |
-| **Active Total** | **60 issue types** | **Emitted by 57 detection rules** |
+| INFO | 12 | Review -- best-practice suggestions, may have false positives |
+| **Active Total** | **62 issue types** | Emitted by the active detector set |
 | Disabled | 1 | DuplicateQueryDetector (awaiting parameter tracking) |
-| Reserved | 3 | EXPLAIN-based detectors (planned) |
+| Reserved | 3 | EXPLAIN-based placeholders (planned) |
 
 ---
 

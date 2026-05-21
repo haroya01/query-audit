@@ -18,14 +18,22 @@ QueryAudit provides four annotations for different use cases. All annotations tr
 
 | Attribute | Annotation | Type | Default | Description |
 |---|---|---|---|---|
-| `failOnDetection` | `@QueryAudit` | `boolean` | `true` | Fail the test on confirmed issues |
-| `nPlusOneThreshold` | `@QueryAudit` | `int` | `-1` (use default: 3) | Override N+1 threshold |
+| `failOnDetection` | `@QueryAudit` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Fail the test on confirmed issues |
+| `nPlusOneThreshold` | `@QueryAudit` | `int` | `-1` (use yml/default: 3) | Override N+1 threshold |
 | `suppress` | `@QueryAudit` | `String[]` | `{}` | Issue codes to suppress |
 | `failOn` | `@QueryAudit` | `IssueType[]` | `{}` (all confirmed) | Only fail on specific issue types |
 | `baselinePath` | `@QueryAudit` | `String` | `""` (default path) | Path to baseline file |
-| `autoOpenReport` | `@QueryAudit` | `boolean` | `false` | Open HTML report in browser after tests |
+| `autoOpenReport` | `@QueryAudit` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests |
+| `includeSetupQueries` | `@QueryAudit` | `boolean` | `false` | Include `@BeforeEach`/`@AfterEach` queries in analysis |
 | `threshold` | `@DetectNPlusOne` | `int` | `3` | Repeated query count to consider N+1 |
 | `value` | `@ExpectMaxQueryCount` | `int` | *(required)* | Maximum number of queries allowed |
+
+!!! info "Why `BooleanOverride` instead of `boolean`?"
+    Java annotation attributes cannot distinguish between "explicitly set to default" and
+    "not specified" with a `boolean` type. `BooleanOverride` is a tri-state enum
+    (`INHERIT`/`TRUE`/`FALSE`) that lets a method-level annotation cleanly fall back to the
+    class-level or `application.yml` value when left as `INHERIT`. Pass `BooleanOverride.TRUE`
+    or `BooleanOverride.FALSE` to explicitly override.
 
 ---
 
@@ -51,12 +59,13 @@ class OrderServiceTest {
 
 | Attribute | Type | Default | Description |
 |---|---|---|---|
-| `failOnDetection` | `boolean` | `true` | Fail the test on confirmed issues |
-| `nPlusOneThreshold` | `int` | `-1` (use default: 3) | Override N+1 threshold |
+| `failOnDetection` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Fail the test on confirmed issues. Use `BooleanOverride.TRUE`/`FALSE` to override. |
+| `nPlusOneThreshold` | `int` | `-1` (use yml/default: 3) | Override N+1 threshold |
 | `suppress` | `String[]` | `{}` | Issue codes to suppress |
 | `failOn` | `IssueType[]` | `{}` (all confirmed) | Only fail on specific issue types |
 | `baselinePath` | `String` | `""` (default path) | Path to baseline file |
-| `autoOpenReport` | `boolean` | `false` | Open HTML report in browser after tests |
+| `autoOpenReport` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests |
+| `includeSetupQueries` | `boolean` | `false` | Include queries from `@BeforeEach`/`@AfterEach` lifecycle methods in analysis. Default analyzes only `@Test` body queries. |
 
 ### Usage Patterns
 

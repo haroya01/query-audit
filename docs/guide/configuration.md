@@ -16,8 +16,11 @@ All properties are optional. The table below lists every supported key under the
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `enabled` | `boolean` | `true` | Master switch. When `false`, the `BeanPostProcessor` that wraps DataSources is not created. |
+| `enabled` | `boolean` | `true` | Master switch for the entire auto-configuration. When `false`, the `QueryInterceptor` bean and the wrapping `BeanPostProcessor` are both skipped — the `@QueryAudit` annotation will not work either. Use `wrap-data-source.enabled: false` instead if you want to keep the interceptor active but skip the auto-wrap. |
+| `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
 | `fail-on-detection` | `boolean` | `true` | Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`. |
+| `count-instead-of-exists.enabled` | `boolean` | `false` | Enable the `count-instead-of-exists` INFO detector. Off by default because it can fire on legitimate aggregate counts. |
+| `repeated-insert.exclude-tables` | `List<String>` | `["temp_*", "staging_*", "*_temp", "*_staging"]` | Table-name globs (case-insensitive, `*` wildcard) treated as deliberate staging targets — repeated single-row inserts into these tables are not flagged. |
 | `n-plus-one.threshold` | `int` | `3` | Number of times a structurally identical query must repeat before it is flagged as N+1. |
 | `offset-pagination.threshold` | `int` | `1000` | The OFFSET value that triggers a warning. |
 | `or-clause.threshold` | `int` | `3` | Number of OR conditions in a single WHERE clause before flagging. |
@@ -212,10 +215,11 @@ See the [Annotations Guide](annotations.md) for detailed usage patterns.
 |---|---|---|---|
 | `suppress` | `String[]` | `{}` | Issue codes or qualified patterns to suppress. |
 | `failOn` | `IssueType[]` | `{}` (all confirmed) | Restrict which issue types cause a test failure. |
-| `nPlusOneThreshold` | `int` | `-1` (use default) | Override the N+1 detection threshold. |
-| `failOnDetection` | `boolean` | `true` | Whether to fail the test when confirmed issues are detected. |
+| `nPlusOneThreshold` | `int` | `-1` (use yml/default) | Override the N+1 detection threshold. |
+| `failOnDetection` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Whether to fail the test when confirmed issues are detected. Use `BooleanOverride.TRUE`/`FALSE` to override. |
 | `baselinePath` | `String` | `""` (default) | Path to the baseline file. |
-| `autoOpenReport` | `boolean` | `false` | Open HTML report in browser after tests. |
+| `autoOpenReport` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests. Use `BooleanOverride.TRUE`/`FALSE` to override. |
+| `includeSetupQueries` | `boolean` | `false` | Include queries from `@BeforeEach`/`@AfterEach` in analysis. |
 
 ### Annotation-Based Configuration Examples
 
@@ -329,8 +333,9 @@ These can be passed via `-D` flags on the command line:
 
 ## Issue Types Reference
 
-All 64 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
-Of these, 60 are actively emitted by 57 detection rules. The remaining 4 are disabled or reserved.
+All 66 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
+Of these, 62 are actively emitted; the remaining 4 are disabled or reserved (see
+[Detection Rules Overview](../detections/overview.md#disabled-reserved-rules)).
 
 ### ERROR Severity (11 issue types)
 
@@ -411,6 +416,7 @@ Of these, 60 are actively emitted by 57 detection rules. The remaining 4 are dis
 | `mergeable-queries` | `MERGEABLE_QUERIES` | Multiple queries to same table could be merged |
 | `non-deterministic-pagination` | `NON_DETERMINISTIC_PAGINATION` | ORDER BY + LIMIT on non-unique column gives inconsistent results |
 | `force-index-hint` | `FORCE_INDEX_HINT` | FORCE/USE/IGNORE INDEX hint overrides optimizer decisions |
+| `find-by-id-for-association` | `FIND_BY_ID_FOR_ASSOCIATION` | `findById()` used only for FK association — consider `getReferenceById()` to avoid the SELECT |
 
 ---
 

@@ -4,6 +4,40 @@ Common issues and solutions when using QueryAudit.
 
 ---
 
+## "HikariDataSource has been closed" on Spring Boot 4.x
+
+**Symptom:** Tests fail with
+
+```
+org.springframework.transaction.CannotCreateTransactionException: Could not open JPA EntityManager
+Caused by: java.sql.SQLException: HikariDataSource (HikariPool-N) has been closed.
+  at net.ttddyy.dsproxy.support.ProxyDataSource.performProxyLogic(...)
+```
+
+after sweeping `@QueryAudit` across many `@SpringBootTest` classes.
+
+**Cause:** In query-audit 0.3.1 and earlier on Spring Boot 4.x with 30+ test contexts, Spring's
+destroy-method inference attached `close()` to the `ProxyDataSource` post-BPP instance, which then
+cascade-closed the underlying `HikariDataSource` of a still-cached sibling context. See
+[issue #153](https://github.com/haroya01/query-audit/issues/153) for the full analysis.
+
+**Fix:** **Upgrade to 0.3.2.** The post-BPP `DataSource` is now wrapped in a `NonClosingDataSource`
+decorator that does not implement `Closeable`/`AutoCloseable`, so Spring's destroy inference no
+longer cascades. Boot 3.x was never affected and continues to work unchanged.
+
+If you can't upgrade yet, the surgical escape hatch from #134/#142 still works:
+
+```yaml
+# application-test.yml
+query-audit:
+  wrap-data-source:
+    enabled: false   # Skip the auto-wrap. Note: @QueryAudit annotation still
+                     # triggers the same wrap path internally, so this only helps
+                     # if you don't use the annotation.
+```
+
+---
+
 ## QueryAudit Not Detecting Any Queries
 
 **Symptom:** Report shows `0 queries analyzed` even though your test executes SQL.

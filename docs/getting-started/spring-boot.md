@@ -43,8 +43,8 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
 
     ```kotlin
     dependencies {
-        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.3.0")
-        testImplementation("io.github.haroya01:query-audit-mysql:0.3.0")
+        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.3.2")
+        testImplementation("io.github.haroya01:query-audit-mysql:0.3.2")
     }
     ```
 
@@ -52,8 +52,8 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.0'
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.0'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.2'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.2'
     }
     ```
 
@@ -63,13 +63,13 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.3.0</version>
+        <version>0.3.2</version>
         <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-mysql</artifactId>
-        <version>0.3.0</version>
+        <version>0.3.2</version>
         <scope>test</scope>
     </dependency>
     ```
@@ -207,10 +207,10 @@ class QueryAuditTestConfig {
             public Object postProcessAfterInitialization(Object bean, String beanName)
                     throws BeansException {
                 if (bean instanceof ProxyDataSource proxyDs) {
-                    // Add QueryInterceptor to the existing proxy's listener chain
-                    proxyDs.getProxyConfig()
-                           .getMethodListener()
-                           .addListener(interceptor);
+                    // Attach QueryInterceptor to the existing proxy's query listener chain.
+                    // ProxyDataSource.addListener(QueryExecutionListener) appends to the
+                    // chain returned by getProxyConfig().getQueryListener().
+                    proxyDs.addListener(interceptor);
                 }
                 return bean;
             }
@@ -219,19 +219,22 @@ class QueryAuditTestConfig {
 }
 ```
 
-Then disable QueryAudit's built-in proxy in your test configuration:
+Then disable only QueryAudit's auto-wrap `BeanPostProcessor` -- **not** the whole library --
+so the `QueryInterceptor` bean stays available for the `@QueryAudit` annotation:
 
 ```yaml
 # application-test.yml
 query-audit:
-  enabled: false          # Disable the auto BeanPostProcessor
+  wrap-data-source:
+    enabled: false        # Disable ONLY the auto BPP (issue #134 escape hatch)
   fail-on-detection: true # Still used by @QueryAudit annotation
 ```
 
 !!! note
-    With this approach, QueryAudit's auto-configuration `BeanPostProcessor` is disabled.
-    The `@QueryAudit` annotation and JUnit extension still work normally because they
-    read the `QueryInterceptor` bean from the application context.
+    Use `wrap-data-source.enabled: false`, not `query-audit.enabled: false`. The latter
+    disables the entire auto-configuration including the `QueryInterceptor` bean, which
+    would also break the `@QueryAudit` annotation. `wrap-data-source.enabled: false` is the
+    surgical escape hatch added in 0.3.0+.
 
 ### Approach 2: Accept the double proxy
 
