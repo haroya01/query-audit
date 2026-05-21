@@ -7,6 +7,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -37,7 +38,12 @@ public class MySqlIndexMetadataProvider implements IndexMetadataProvider {
     for (String tableName : tableNames) {
       List<IndexInfo> indexes = collectIndexes(connection, tableName);
       if (!indexes.isEmpty()) {
-        indexesByTable.put(tableName, indexes);
+        // Detectors lowercase the table name extracted from SQL before consulting IndexMetadata,
+        // but MySQL with lower_case_table_names=0 (Linux default on case-sensitive filesystems)
+        // returns table names in their original case. Normalising the map key on the provider
+        // side keeps the lookup contract symmetric. IndexInfo retains the raw case for reporting.
+        // See issue #148.
+        indexesByTable.put(tableName.toLowerCase(Locale.ROOT), indexes);
       }
     }
 

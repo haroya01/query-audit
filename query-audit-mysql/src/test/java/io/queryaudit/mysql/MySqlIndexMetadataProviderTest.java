@@ -156,6 +156,41 @@ class MySqlIndexMetadataProviderTest {
     }
 
     @Test
+    @DisplayName(
+        "[#148] case-sensitive lookup misses metadata when MySQL returns mixed-case table names")
+    void issue148_caseSensitiveLookupMissesMetadataOnLinuxStyleMySQL() throws SQLException {
+      // Simulate MySQL on Linux with lower_case_table_names=0 — TABLES query returns raw case.
+      // Detectors (CompositeIndexDetector, MissingIndexDetector, ...) extract the table name from
+      // the SQL via SqlParser and then call `.toLowerCase()` before consulting IndexMetadata.
+      // If the provider keeps the raw-case key, the lookup misses and detectors silently treat
+      // the table as having no metadata.
+      Statement tableStatement = mock(Statement.class);
+      when(connection.createStatement()).thenReturn(tableStatement).thenReturn(statement);
+
+      when(tableStatement.executeQuery(contains("INFORMATION_SCHEMA.TABLES")))
+          .thenReturn(tableResultSet);
+      when(tableResultSet.next()).thenReturn(true, false);
+      when(tableResultSet.getString("TABLE_NAME")).thenReturn("Users");
+
+      when(statement.executeQuery(contains("SHOW INDEX"))).thenReturn(indexResultSet);
+      when(indexResultSet.next()).thenReturn(true, false);
+      when(indexResultSet.getString("Table")).thenReturn("Users");
+      when(indexResultSet.getString("Key_name")).thenReturn("PRIMARY");
+      when(indexResultSet.getInt("Seq_in_index")).thenReturn(1);
+      when(indexResultSet.getString("Column_name")).thenReturn("id");
+      when(indexResultSet.getInt("Non_unique")).thenReturn(0);
+      when(indexResultSet.getLong("Cardinality")).thenReturn(1000L);
+
+      IndexMetadata metadata = provider.getIndexMetadata(connection);
+
+      assertThat(metadata.hasTable("users"))
+          .as(
+              "detector-side lowercase lookup must find metadata for a table that MySQL"
+                  + " reported as 'Users' (lower_case_table_names=0)")
+          .isTrue();
+    }
+
+    @Test
     @DisplayName("skips tables that have no indexes")
     void skipsTablesWithNoIndexes() throws SQLException {
       Statement stmt1 = mock(Statement.class);
