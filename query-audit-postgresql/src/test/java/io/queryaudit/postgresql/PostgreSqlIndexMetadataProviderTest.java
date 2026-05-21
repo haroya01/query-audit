@@ -7,11 +7,13 @@ import static org.mockito.Mockito.*;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import java.sql.*;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -163,6 +165,58 @@ class PostgreSqlIndexMetadataProviderTest {
       assertThat(metadata.hasTable("products")).isTrue();
       assertThat(metadata.getIndexesForTable("orders")).hasSize(1);
       assertThat(metadata.getIndexesForTable("products")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName(
+        "[#147] CARDINALITY_QUERY must scope by current_schema to avoid cross-schema collision")
+    void issue147_cardinalityQueryMustBeSchemaScoped() throws SQLException {
+      // listUserTables IS schema-scoped (pg_tables WHERE schemaname = current_schema()),
+      // but CARDINALITY_QUERY just does `WHERE relname = ?` against pg_class. When the same
+      // table name exists in multiple schemas (e.g. public.orders + staging.orders), pg_class
+      // returns whichever row PostgreSQL surfaces first by OID — silently mismatching the
+      // table that was actually iterated.
+      when(connection.createStatement()).thenReturn(statement);
+      when(statement.executeQuery(contains("pg_tables"))).thenReturn(tableResultSet);
+      when(tableResultSet.next()).thenReturn(true, false);
+      when(tableResultSet.getString("tablename")).thenReturn("orders");
+
+      PreparedStatement cardPstmt = mock(PreparedStatement.class);
+      ResultSet cardRs = mock(ResultSet.class);
+      PreparedStatement indexPstmt = mock(PreparedStatement.class);
+      ResultSet indexRs = mock(ResultSet.class);
+
+      ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+      when(connection.prepareStatement(sqlCaptor.capture()))
+          .thenAnswer(
+              inv -> {
+                String sql = inv.getArgument(0);
+                if (sql.contains("reltuples")) return cardPstmt;
+                if (sql.contains("pg_index")) return indexPstmt;
+                throw new IllegalArgumentException("unexpected SQL: " + sql);
+              });
+      when(cardPstmt.executeQuery()).thenReturn(cardRs);
+      when(cardRs.next()).thenReturn(true);
+      when(cardRs.getFloat("reltuples")).thenReturn(0.0f);
+      when(indexPstmt.executeQuery()).thenReturn(indexRs);
+      when(indexRs.next()).thenReturn(false);
+
+      provider.getIndexMetadata(connection);
+
+      List<String> cardinalitySqls = new ArrayList<>();
+      for (String sql : sqlCaptor.getAllValues()) {
+        if (sql.contains("reltuples")) cardinalitySqls.add(sql);
+      }
+      assertThat(cardinalitySqls)
+          .as("cardinality query must be sent at least once")
+          .isNotEmpty();
+
+      assertThat(cardinalitySqls.get(0))
+          .as(
+              "CARDINALITY_QUERY must include a schema constraint "
+                  + "(current_schema(), pg_namespace, or nspname). "
+                  + "Without it, same-named tables in other schemas overwrite the result.")
+          .containsAnyOf("current_schema", "pg_namespace", "nspname");
     }
 
     @Test
