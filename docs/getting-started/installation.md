@@ -18,7 +18,7 @@ description: Add QueryAudit to your Java project with Gradle or Maven.
 | **JUnit** | 5.9+ |
 | **MySQL** | 5.7+ / 8.0+ |
 | **PostgreSQL** | 12+ |
-| **Spring Boot** *(optional)* | 3.0+ |
+| **Spring Boot** *(optional)* | 3.x or 4.x (4.x requires query-audit 0.3.2+) |
 
 !!! note "Database requirement"
     You need either MySQL **or** PostgreSQL -- not both. Pick the tab that matches your database below.
@@ -37,8 +37,8 @@ Choose the tab that matches your database and build tool:
 
     ```gradle
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.0'
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.0'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.2'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.2'
     }
     ```
 
@@ -49,7 +49,7 @@ Choose the tab that matches your database and build tool:
 
     ```gradle
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.0'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.2'
     }
     ```
 
@@ -59,8 +59,8 @@ Choose the tab that matches your database and build tool:
 
     ```gradle
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.0'
-        testImplementation 'io.github.haroya01:query-audit-postgresql:0.3.0'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.2'
+        testImplementation 'io.github.haroya01:query-audit-postgresql:0.3.2'
     }
     ```
 
@@ -71,7 +71,7 @@ Choose the tab that matches your database and build tool:
 
     ```gradle
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-postgresql:0.3.0'
+        testImplementation 'io.github.haroya01:query-audit-postgresql:0.3.2'
     }
     ```
 
@@ -84,13 +84,13 @@ Choose the tab that matches your database and build tool:
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-spring-boot-starter</artifactId>
-            <version>0.3.0</version>
+            <version>0.3.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-mysql</artifactId>
-            <version>0.3.0</version>
+            <version>0.3.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -103,7 +103,7 @@ Choose the tab that matches your database and build tool:
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-mysql</artifactId>
-            <version>0.3.0</version>
+            <version>0.3.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -116,13 +116,13 @@ Choose the tab that matches your database and build tool:
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-spring-boot-starter</artifactId>
-            <version>0.3.0</version>
+            <version>0.3.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-postgresql</artifactId>
-            <version>0.3.0</version>
+            <version>0.3.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -135,7 +135,7 @@ Choose the tab that matches your database and build tool:
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-postgresql</artifactId>
-            <version>0.3.0</version>
+            <version>0.3.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
