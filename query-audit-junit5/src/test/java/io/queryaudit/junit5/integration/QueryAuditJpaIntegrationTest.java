@@ -10,9 +10,11 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import io.queryaudit.junit5.EnableQueryInspector;
 import io.queryaudit.junit5.ExpectMaxQueryCount;
+import io.queryaudit.junit5.ExpectQueries;
 import io.queryaudit.junit5.integration.entity.Member;
 import io.queryaudit.junit5.integration.entity.Team;
 import io.queryaudit.junit5.integration.repository.MemberRepository;
@@ -183,6 +185,37 @@ class QueryAuditJpaIntegrationTest {
       queryInterceptor.stop();
 
       assertThat(queryInterceptor.getRecordedQueries().size()).isGreaterThan(1);
+    }
+  }
+
+  // ── @ExpectQueries ──────────────────────────────────────────────────
+
+  @Nested
+  @DisplayName("@ExpectQueries")
+  class ExpectQueriesTests {
+
+    @Test
+    @ExpectQueries(select = 50, update = 0, delete = 0)
+    @DisplayName("Passes when per-type query counts stay within their budgets")
+    void passesWithinBudgets() {
+      memberRepository.findByStatus("ACTIVE");
+      teamRepository.findAll();
+    }
+
+    @Test
+    @DisplayName("Programmatic verification that real captured queries classify by type")
+    void classifiesRealQueriesByType() {
+      queryInterceptor.start();
+      memberRepository.findByStatus("ACTIVE");
+      teamRepository.findAll();
+      queryInterceptor.stop();
+
+      List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
+      long selects = queries.stream().filter(q -> SqlParser.isSelectQuery(q.sql())).count();
+      long deletes = queries.stream().filter(q -> SqlParser.isDeleteQuery(q.sql())).count();
+
+      assertThat(selects).isGreaterThanOrEqualTo(2);
+      assertThat(deletes).isZero();
     }
   }
 

@@ -10,6 +10,7 @@ import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
 import io.queryaudit.core.model.LifecyclePhase;
+import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCountRegressionDetector;
 import io.queryaudit.core.regression.QueryCounts;
@@ -25,6 +26,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.extension.*;
 
@@ -228,6 +230,9 @@ public class QueryAuditExtension
 
     // --- @ExpectMaxQueryCount ---
     checkMaxQueryCount(context, queries, testName);
+
+    // --- @ExpectQueries ---
+    checkExpectQueries(context, queries, testName);
 
     // --- @DetectNPlusOne ---
     checkDetectNPlusOne(context, report, testName);
@@ -453,6 +458,78 @@ public class QueryAuditExtension
                   + "Tip: Check the Query Patterns section in the report above to identify which queries to optimize.",
               testName, actual, max));
     }
+  }
+
+  private void checkExpectQueries(
+      ExtensionContext context, List<QueryRecord> queries, String testName) {
+    ExpectQueries annotation = context.getRequiredTestMethod().getAnnotation(ExpectQueries.class);
+    if (annotation == null) return;
+
+    String failure = buildExpectQueriesFailureMessage(annotation, queries, testName);
+    if (failure != null) {
+      throw new AssertionError(failure);
+    }
+  }
+
+  /**
+   * Builds the failure message for {@link ExpectQueries}, or returns {@code null} when every
+   * declared budget is respected. Package-private for testing.
+   */
+  static String buildExpectQueriesFailureMessage(
+      ExpectQueries annotation, List<QueryRecord> queries, String testName) {
+    StringBuilder violations = new StringBuilder();
+    appendBudgetViolation(
+        violations, "SELECT", annotation.select(), queries, SqlParser::isSelectQuery);
+    appendBudgetViolation(
+        violations, "INSERT", annotation.insert(), queries, SqlParser::isInsertQuery);
+    appendBudgetViolation(
+        violations, "UPDATE", annotation.update(), queries, SqlParser::isUpdateQuery);
+    appendBudgetViolation(
+        violations, "DELETE", annotation.delete(), queries, SqlParser::isDeleteQuery);
+
+    if (violations.length() == 0) {
+      return null;
+    }
+    return "QueryAudit: " + testName + " exceeded its query budget.\n" + violations;
+  }
+
+  /**
+   * Appends one violation block when the given type exceeds its budget: a summary line followed by
+   * every query of that type with its call site. A negative budget means "not verified".
+   */
+  private static void appendBudgetViolation(
+      StringBuilder sb,
+      String type,
+      int max,
+      List<QueryRecord> queries,
+      Predicate<String> typeMatcher) {
+    if (max < 0) {
+      return;
+    }
+    List<QueryRecord> matched = queries.stream().filter(q -> typeMatcher.test(q.sql())).toList();
+    if (matched.size() <= max) {
+      return;
+    }
+
+    sb.append(String.format("%s: executed %d, expected at most %d.\n", type, matched.size(), max));
+    for (QueryRecord query : matched) {
+      String sql = query.sql();
+      sb.append("  ").append(sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
+      String callSite = firstStackFrame(query.stackTrace());
+      if (callSite != null) {
+        sb.append("\n    at ").append(callSite);
+      }
+      sb.append('\n');
+    }
+  }
+
+  /** Returns the first (innermost application) frame of a recorded stack trace. */
+  private static String firstStackFrame(String stackTrace) {
+    if (stackTrace == null || stackTrace.isEmpty()) {
+      return null;
+    }
+    int newline = stackTrace.indexOf('\n');
+    return newline < 0 ? stackTrace : stackTrace.substring(0, newline);
   }
 
   private void checkDetectNPlusOne(

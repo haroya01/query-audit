@@ -215,6 +215,7 @@ See the [Detection Rules Overview](https://haroya01.github.io/query-audit/detect
 | `@EnableQueryInspector` | Report-only mode -- runs all detections but never fails the test |
 | `@DetectNPlusOne` | Focused check -- fails only if N+1 query patterns are detected |
 | `@ExpectMaxQueryCount(n)` | Query budget -- fails if more than `n` queries are executed |
+| `@ExpectQueries(select=n, ...)` | Per-type query budget -- fails when a SELECT/INSERT/UPDATE/DELETE budget is exceeded |
 
 ---
 
