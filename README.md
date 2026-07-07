@@ -32,6 +32,7 @@ QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes
 
 - **57 detection rules** covering N+1 queries, missing indexes, DML safety, locking risks, ORM anti-patterns, and more
 - **Zero configuration** -- add one annotation and go
+- **Per-type query budgets** -- `@ExpectQueries(select = 2, insert = 1)` fails the test when a SELECT / INSERT / UPDATE / DELETE budget is exceeded
 - **Actionable reports** -- every issue includes the SQL, table, column, and a concrete fix suggestion
 - **No production overhead** -- runs only in your test suite
 
@@ -215,6 +216,18 @@ See the [Detection Rules Overview](https://haroya01.github.io/query-audit/detect
 | `@EnableQueryInspector` | Report-only mode -- runs all detections but never fails the test |
 | `@DetectNPlusOne` | Focused check -- fails only if N+1 query patterns are detected |
 | `@ExpectMaxQueryCount(n)` | Query budget -- fails if more than `n` queries are executed |
+| `@ExpectQueries(select=n, ...)` | Per-type query budget -- fails when a SELECT/INSERT/UPDATE/DELETE budget is exceeded |
+
+Query budgets make per-test contracts explicit -- and `@ExpectQueries(insert = 0, update = 0, delete = 0)` turns a test into a read-only contract:
+
+```java
+@Test
+@ExpectQueries(select = 2, insert = 1)  // per-type budgets
+@ExpectMaxQueryCount(5)                 // total cap
+void createOrder() {
+    orderService.createOrder(request);
+}
+```
 
 ---
 

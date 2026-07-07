@@ -24,6 +24,11 @@ OrderServiceTest > findRecentOrders_shouldUseIndex FAILED
         Suggestion: CREATE INDEX idx_orders_user_id ON orders (user_id);
 ```
 
+Per-test query contracts fail the build the same way: `@ExpectMaxQueryCount` caps the
+total query count, and `@ExpectQueries` sets independent SELECT / INSERT / UPDATE / DELETE
+budgets -- catching a silently growing SELECT count or an accidental write on a read-only
+path in CI. See the [Annotations Guide](annotations.md#expectqueries) for details.
+
 ---
 
 ## GitHub Actions

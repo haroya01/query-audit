@@ -13,6 +13,7 @@ QueryAudit provides four annotations for different use cases. All annotations tr
 | `@EnableQueryInspector` | Class | Report-only mode, never fails | No |
 | `@DetectNPlusOne` | Class / Method | N+1 detection only | Yes (on N+1 only) |
 | `@ExpectMaxQueryCount` | Method | Assert max query count | Yes (on count exceeded) |
+| `@ExpectQueries` | Method | Assert per-type query budgets (SELECT/INSERT/UPDATE/DELETE) | Yes (on budget exceeded) |
 
 ### Annotation Attributes at a Glance
 
@@ -27,6 +28,10 @@ QueryAudit provides four annotations for different use cases. All annotations tr
 | `includeSetupQueries` | `@QueryAudit` | `boolean` | `false` | Include `@BeforeEach`/`@AfterEach` queries in analysis |
 | `threshold` | `@DetectNPlusOne` | `int` | `3` | Repeated query count to consider N+1 |
 | `value` | `@ExpectMaxQueryCount` | `int` | *(required)* | Maximum number of queries allowed |
+| `select` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum SELECT queries allowed |
+| `insert` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum INSERT queries allowed |
+| `update` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum UPDATE queries allowed |
+| `delete` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum DELETE queries allowed |
 
 !!! info "Why `BooleanOverride` instead of `boolean`?"
     Java annotation attributes cannot distinguish between "explicitly set to default" and
@@ -311,6 +316,68 @@ Tip: Check the Query Patterns section in the report above to identify which quer
     `@ExpectMaxQueryCount` counts all query types, including INSERTs from test data setup.
     If you use `@BeforeEach` to seed data, those INSERTs are included in the count.
     Consider using a higher limit or moving setup to `@BeforeAll`.
+
+---
+
+## @ExpectQueries
+
+Asserts per-type query budgets for a test method. Each attribute limits one query type
+(SELECT / INSERT / UPDATE / DELETE) independently; attributes left at `-1` are not verified.
+
+```java
+@SpringBootTest
+@QueryAudit
+class OrderServiceTest {
+
+    @Test
+    @ExpectQueries(select = 2, insert = 1)
+    void createOrder() {
+        orderService.createOrder(request);
+        // Fails if more than 2 SELECTs or more than 1 INSERT are executed
+    }
+
+    @Test
+    @ExpectQueries(insert = 0, update = 0, delete = 0)
+    void findOrderById() {
+        orderService.findById(1L);
+        // A read-only contract: any write query fails the test
+    }
+}
+```
+
+### Attributes
+
+| Attribute | Type | Default | Description |
+|---|---|---|---|
+| `select` | `int` | `-1` (not verified) | Maximum SELECT queries allowed |
+| `insert` | `int` | `-1` (not verified) | Maximum INSERT queries allowed |
+| `update` | `int` | `-1` (not verified) | Maximum UPDATE queries allowed |
+| `delete` | `int` | `-1` (not verified) | Maximum DELETE queries allowed |
+
+### Failure Message
+
+When a budget is exceeded, every query of the violated type is listed with its call site:
+
+```
+QueryAudit: createOrder() exceeded its query budget.
+SELECT: executed 3, expected at most 2.
+  select * from orders where customer_id = ?
+    at com.example.OrderService.createOrder:42
+  select * from members where id = ?
+    at com.example.OrderService.loadCustomer:57
+  ...
+```
+
+!!! tip "Use `0` to forbid a query type"
+    `@ExpectQueries(insert = 0, update = 0, delete = 0)` turns a test into a read-only
+    contract -- useful for guarding query-only endpoints against accidental writes.
+
+!!! warning "Counts ALL queries"
+    Like `@ExpectMaxQueryCount`, budgets count queries from the whole test lifecycle,
+    including INSERTs from `@BeforeEach` data setup.
+
+`@ExpectQueries` can be combined with `@ExpectMaxQueryCount`: the latter caps the total
+while the former constrains individual types.
 
 ---
 
