@@ -217,6 +217,15 @@ class QueryAuditJpaIntegrationTest {
       assertThat(selects).isGreaterThanOrEqualTo(2);
       assertThat(deletes).isZero();
     }
+
+    @Test
+    @ExpectQueries(select = 50, delete = 0)
+    @ExpectMaxQueryCount(50)
+    @DisplayName("Combines with @ExpectMaxQueryCount on the same test method")
+    void combinesWithMaxQueryCount() {
+      memberRepository.findByStatus("ACTIVE");
+      teamRepository.findAll();
+    }
   }
 
   // ── @DetectNPlusOne ─────────────────────────────────────────────────
