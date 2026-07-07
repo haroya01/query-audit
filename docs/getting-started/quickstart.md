@@ -45,8 +45,8 @@ No configuration. No extra beans. No proxy setup. Just the annotation.
 
     ```gradle
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.2'
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.2'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.4.0'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.4.0'
     }
     ```
 
@@ -56,13 +56,13 @@ No configuration. No extra beans. No proxy setup. Just the annotation.
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.3.2</version>
+        <version>0.4.0</version>
         <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-mysql</artifactId>
-        <version>0.3.2</version>
+        <version>0.4.0</version>
         <scope>test</scope>
     </dependency>
     ```
@@ -111,7 +111,7 @@ QueryAudit automatically:
 
 1. **Intercepts** every SQL query (SELECT, INSERT, UPDATE, DELETE) executed during the test
 2. **Collects index metadata** via `SHOW INDEX` (MySQL) or `pg_catalog` (PostgreSQL) from your test database
-3. **Applies 57 detection rules** to the captured queries
+3. **Applies 64 detection rules** to the captured queries
 4. **Prints a report** to the console output
 5. **Fails the test** if confirmed issues are found (configurable)
 
@@ -240,4 +240,4 @@ Once you're comfortable with `@QueryAudit`, explore the 4 annotations:
 - :material-arrow-right: [Spring Boot Integration](spring-boot.md) -- Auto-configuration details and `application.yml` options
 - :material-arrow-right: [Annotations Guide](../guide/annotations.md) -- All 4 annotations and when to use each
 - :material-arrow-right: [Configuration](../guide/configuration.md) -- Tune thresholds, suppress issues
-- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 57 detection rules explained
+- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 64 detection rules explained

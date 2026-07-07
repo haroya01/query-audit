@@ -43,7 +43,7 @@ and the full lifecycle of a query from execution to report.
       |
       +-  7. interceptor.stop()
       +-  8. QueryAuditAnalyzer.analyze()
-      |       +- Run 57 DetectionRules against recorded queries
+      |       +- Run the registered DetectionRules against recorded queries
       |       +- Cross-reference index metadata
       |       +- Filter suppressed issues
       |       +- Split into CONFIRMED / INFO / ACKNOWLEDGED
@@ -70,7 +70,7 @@ and the full lifecycle of a query from execution to report.
 ```
 query-audit/
 +-- query-audit-core                   Core engine (no framework dependencies)
-|   +-- detector/                      57 detection rules
+|   +-- detector/                      DetectionRule implementations
 |   +-- interceptor/                   QueryInterceptor, DataSourceProxyFactory
 |   +-- parser/                        SQL parser (regex-based)
 |   +-- model/                         Issue, QueryRecord, IssueType, Severity
@@ -201,7 +201,7 @@ QueryAuditAnalyzer.analyze(testName, queries, indexMetadata)
        |
        +- 1. Filter suppressed queries
        |
-       +- 2. Run 57 DetectionRules
+       +- 2. Run the registered DetectionRules
        |      +- NPlusOneDetector
        |      +- SelectAllDetector
        |      +- MissingIndexDetector
@@ -321,7 +321,7 @@ public class SlackReporter implements Reporter {
 
 ---
 
-## Detection Rules (57 Active Rules)
+## Detection Rules (64 active issue types)
 
 ### SELECT-Focused Rules
 

@@ -5,7 +5,7 @@
 [![Build](https://github.com/haroya01/query-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/haroya01/query-audit/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.haroya01/query-audit-core)](https://search.maven.org/search?q=g:io.github.haroya01)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-query--guard.github.io-blue)](https://haroya01.github.io/query-audit)
+[![Documentation](https://img.shields.io/badge/docs-haroya01.github.io-blue)](https://haroya01.github.io/query-audit)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://openjdk.org/)
 
 ---
@@ -28,9 +28,9 @@ Most SQL performance problems -- N+1 queries, missing indexes, unsafe DML -- are
 
 ## What It Does
 
-QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes each one against **57 detection rules**, cross-references index metadata from your database, and fails your build when it finds performance anti-patterns.
+QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes each one against **64 detection rules**, cross-references index metadata from your database, and fails your build when it finds performance anti-patterns.
 
-- **57 detection rules** covering N+1 queries, missing indexes, DML safety, locking risks, ORM anti-patterns, and more
+- **64 detection rules** covering N+1 queries, missing indexes, DML safety, locking risks, ORM anti-patterns, and more
 - **Zero configuration** -- add one annotation and go
 - **Per-type query budgets** -- `@ExpectQueries(select = 2, insert = 1)` fails the test when a SELECT / INSERT / UPDATE / DELETE budget is exceeded
 - **Actionable reports** -- every issue includes the SQL, table, column, and a concrete fix suggestion
@@ -53,8 +53,8 @@ QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.2'
-    testImplementation 'io.github.haroya01:query-audit-mysql:0.3.2'
+    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.4.0'
+    testImplementation 'io.github.haroya01:query-audit-mysql:0.4.0'
 }
 ```
 
@@ -62,8 +62,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.2'
-    testImplementation 'io.github.haroya01:query-audit-postgresql:0.3.2'
+    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.4.0'
+    testImplementation 'io.github.haroya01:query-audit-postgresql:0.4.0'
 }
 ```
 
@@ -76,13 +76,13 @@ dependencies {
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-spring-boot-starter</artifactId>
-    <version>0.3.2</version>
+    <version>0.4.0</version>
     <scope>test</scope>
 </dependency>
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-mysql</artifactId>
-    <version>0.3.2</version>
+    <version>0.4.0</version>
     <scope>test</scope>
 </dependency>
 ```
@@ -93,13 +93,13 @@ dependencies {
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-spring-boot-starter</artifactId>
-    <version>0.3.2</version>
+    <version>0.4.0</version>
     <scope>test</scope>
 </dependency>
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-postgresql</artifactId>
-    <version>0.3.2</version>
+    <version>0.4.0</version>
     <scope>test</scope>
 </dependency>
 ```
@@ -110,8 +110,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-junit5:0.3.2'
-    testRuntimeOnly 'io.github.haroya01:query-audit-mysql:0.3.2'  // or query-audit-postgresql
+    testImplementation 'io.github.haroya01:query-audit-junit5:0.4.0'
+    testRuntimeOnly 'io.github.haroya01:query-audit-mysql:0.4.0'  // or query-audit-postgresql
 }
 ```
 
@@ -181,9 +181,9 @@ INFO (for review)
 
 ---
 
-## 57 Detection Rules
+## 64 Detection Rules
 
-QueryAudit ships with 57 detection rules organized into two confidence tiers:
+QueryAudit ships with 64 detection rules organized into two confidence tiers:
 
 **Confirmed (ERROR / WARNING)** -- structural and schema-based checks that are reliable regardless of test data size. These inspect SQL text, repetition patterns, and cross-reference actual index metadata from your database.
 
@@ -212,7 +212,7 @@ See the [Detection Rules Overview](https://haroya01.github.io/query-audit/detect
 
 | Annotation | Description |
 |---|---|
-| `@QueryAudit` | Full analysis -- intercepts queries, runs all 57 detection rules, fails on confirmed issues |
+| `@QueryAudit` | Full analysis -- intercepts queries, runs all 64 detection rules, fails on confirmed issues |
 | `@EnableQueryInspector` | Report-only mode -- runs all detections but never fails the test |
 | `@DetectNPlusOne` | Focused check -- fails only if N+1 query patterns are detected |
 | `@ExpectMaxQueryCount(n)` | Query budget -- fails if more than `n` queries are executed |

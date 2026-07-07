@@ -95,4 +95,4 @@ peer-reviewed academic research, and established technical literature.
 ## See Also
 
 - [Architecture Overview](architecture/overview.md) -- How detection rules use these references
-- [Configuration Reference](guide/configuration.md) -- All 57 detection rules and their codes
+- [Configuration Reference](guide/configuration.md) -- All 64 detection rules and their codes

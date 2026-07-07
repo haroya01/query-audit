@@ -138,7 +138,7 @@ cd query-audit
 query-audit/
 ├── query-audit-core/                Core analysis engine
 │   └── io/queryaudit/core/
-│       ├── detector/                DetectionRule implementations (64+ rules)
+│       ├── detector/                DetectionRule implementations
 │       ├── parser/                  SqlParser & EnhancedSqlParser
 │       ├── model/                   Issue, QueryRecord, Severity, IssueType
 │       ├── config/                  QueryAuditConfig

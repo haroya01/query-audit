@@ -171,7 +171,7 @@ discover the provider. No configuration or annotation is needed.
     This step is optional. The `ExplainAnalyzer` interface is designed for
     EXPLAIN-based analysis that can detect additional issues beyond SQL parsing
     and index metadata. You can skip this step and still get full detection
-    from the 57 SQL-parsing and index-metadata rules.
+    from the SQL-parsing and index-metadata rules.
 
 When ready, implement the `ExplainAnalyzer` interface:
 

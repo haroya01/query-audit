@@ -334,7 +334,7 @@ These can be passed via `-D` flags on the command line:
 ## Issue Types Reference
 
 All 66 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
-Of these, 62 are actively emitted; the remaining 4 are disabled or reserved (see
+Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 [Detection Rules Overview](../detections/overview.md#disabled-reserved-rules)).
 
 ### ERROR Severity (11 issue types)

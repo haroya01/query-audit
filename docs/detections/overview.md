@@ -5,9 +5,9 @@ bugs, and anti-patterns during your test runs. The rules are organized by severi
 confidence model to help you prioritize fixes.
 
 !!! info "IssueType enum"
-    The `IssueType` enum currently contains **66** entries. **62** are actively emitted by
+    The `IssueType` enum currently contains **66** entries. **64** are actively emitted by
     detection rules (one rule can emit multiple issue types — `MissingIndexDetector` alone
-    emits 4). The remaining 4 are [disabled or reserved](#disabled-reserved-rules).
+    emits 4). The remaining 2 are [disabled or reserved](#disabled-reserved-rules).
     The full canonical list is in
     [`IssueType.java`](https://github.com/haroya01/query-audit/blob/main/query-audit-core/src/main/java/io/queryaudit/core/model/IssueType.java).
 
@@ -118,6 +118,10 @@ The complete searchable reference of issue types emitted by the active detection
 | 58 | Mergeable Queries | `mergeable-queries` | INFO | Query Patterns | Multiple queries to same table could be merged |
 | 59 | Non-Deterministic Pagination | `non-deterministic-pagination` | INFO | SQL Anti-Patterns | ORDER BY+LIMIT on non-unique column |
 | 60 | Force Index Hint | `force-index-hint` | INFO | SQL Anti-Patterns | FORCE/USE/IGNORE INDEX hint overrides optimizer |
+| 61 | N+1 Suspect | `n-plus-one-suspect` | INFO | Query Patterns | N+1 Query suspected (SQL-level heuristic) |
+| 62 | findById for Association | `find-by-id-for-association` | INFO | Hibernate/ORM | findById() used only for FK association; consider getReferenceById() |
+| 63 | Filesort | `filesort` | INFO | EXPLAIN-Based | Filesort detected in EXPLAIN output |
+| 64 | Temporary Table | `temporary-table` | INFO | EXPLAIN-Based | Temporary table usage in EXPLAIN output |
 
 !!! note "Rule numbering"
     Rules 50-60 are INFO severity. The table numbers are for reference only and do not correspond
@@ -246,7 +250,7 @@ Important issues that should be reviewed and typically fixed.
 
 ---
 
-### INFO Severity (12 issue types)
+### INFO Severity (15 issue types)
 
 Best-practice suggestions and heuristic checks. These won't fail your build by default
 but are worth reviewing.
@@ -265,6 +269,9 @@ but are worth reviewing.
 | `non-deterministic-pagination` | ORDER BY+LIMIT on non-unique column | Detect ORDER BY + LIMIT on non-unique columns |
 | `force-index-hint` | FORCE/USE/IGNORE INDEX overrides optimizer | Detect index hint keywords in query |
 | `find-by-id-for-association` | `findById()` used only for FK association — consider `getReferenceById()` to skip the SELECT | Spring Data return-type and call-site analysis |
+| `n-plus-one-suspect` | Same-structure query repeated at the SQL level — suspect only; the Hibernate-level tracker is authoritative | SQL pattern repetition heuristic |
+| `filesort` | Filesort detected in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
+| `temporary-table` | Temporary table usage in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
 
 !!! info "Info rules are still useful"
     Even though they can produce false positives with small test data, they serve as early
@@ -275,8 +282,8 @@ but are worth reviewing.
 
 ## Disabled & Reserved Rules
 
-The `IssueType` enum currently has **66 entries**. **62 are actively emitted** by detection
-rules. The remaining 4 entries fall into two categories:
+The `IssueType` enum currently has **66 entries**. **64 are actively emitted** by detection
+rules. The remaining 2 entries fall into two categories:
 
 ### Disabled Rules (1 entry)
 
@@ -289,32 +296,32 @@ rules. The remaining 4 entries fall into two categories:
     `QueryAuditAnalyzer.createRules()`. The `DUPLICATE_QUERY` IssueType remains in the enum
     for forward compatibility.
 
-### Reserved for Future EXPLAIN-based Detection (3 entries)
+### Reserved for Future EXPLAIN-based Detection (1 entry)
 
 | Code | Description | Status |
 |------|-------------|--------|
-| `full-scan` | Full table scan detected | Reserved -- requires EXPLAIN integration |
-| `filesort` | Filesort detected | Reserved -- requires EXPLAIN integration |
-| `temporary-table` | Temporary table usage | Reserved -- requires EXPLAIN integration |
+| `full-scan` | Full table scan detected | Reserved -- not yet emitted by the EXPLAIN analyzers |
 
-These three IssueTypes exist in the enum but no active detector emits them. They are placeholders
-for a planned EXPLAIN-based detection phase.
+This IssueType exists in the enum but is not emitted yet. It is a placeholder
+for full-table-scan detection in the EXPLAIN analyzers.
 
 ### Accounting
 
 | Category | Count |
 |----------|-------|
-| Active issue types emitted by detectors | **62** |
+| Active issue types emitted by detectors | **64** |
 | Disabled (DuplicateQueryDetector) | 1 |
-| Reserved EXPLAIN-based (full-scan, filesort, temporary-table) | 3 |
+| Reserved (full-scan) | 1 |
 | **Total IssueType enum entries** | **66** |
 
-!!! note "Why 57 detection rules but 62 active issue types?"
+!!! note "Why fewer detector classes than active issue types?"
     A single detector can emit multiple issue types. The biggest example is
     `MissingIndexDetector`, which is registered as one detection rule but emits 4 different
     `IssueType`s (`missing-where-index`, `missing-join-index`, `missing-order-by-index`,
-    `missing-group-by-index`) -- one per SQL clause it analyzes. That accounts for the
-    bulk of the difference between detector count and active issue-type count.
+    `missing-group-by-index`) -- one per SQL clause it analyzes. On top of the core rules,
+    the MySQL/PostgreSQL EXPLAIN analyzers emit `filesort` and `temporary-table`, and the
+    Hibernate-level trackers emit `find-by-id-for-association` and the authoritative N+1
+    signal -- these run outside `QueryAuditAnalyzer.createRules()`.
 
 ---
 
@@ -322,6 +329,7 @@ for a planned EXPLAIN-based detection phase.
 
 ### Query Patterns
 - [`n-plus-one`](n-plus-one.md) -- N+1 Query detection (ERROR)
+- `n-plus-one-suspect` -- SQL-level N+1 heuristic; Hibernate-level tracking is authoritative (INFO)
 - `slow-query` -- Slow query detection (WARNING)
 - `query-count-regression` -- Query count regression (WARNING)
 - `mergeable-queries` -- Mergeable queries detection (INFO)
@@ -395,10 +403,15 @@ for a planned EXPLAIN-based detection phase.
 ### Hibernate / ORM Patterns
 - [`collection-delete-reinsert`](dml-anti-patterns.md) -- DELETE-all + re-INSERT (WARNING)
 - [`derived-delete-loads-entities`](dml-anti-patterns.md) -- Derived delete loads entities (WARNING)
+- `find-by-id-for-association` -- findById() used only for FK association (INFO)
 
 ### Query Structure
 - `limit-without-order-by` -- LIMIT without ORDER BY (WARNING)
 - `window-no-partition` -- Window function without PARTITION BY (WARNING)
+
+### EXPLAIN-Based
+- `filesort` -- Filesort detected in EXPLAIN output (INFO)
+- `temporary-table` -- Temporary table usage in EXPLAIN output (INFO)
 
 ---
 
@@ -408,10 +421,10 @@ for a planned EXPLAIN-based detection phase.
 |----------|-------------|--------|
 | ERROR | 11 | Must fix -- logic bugs or guaranteed performance degradation |
 | WARNING | 38 | Should fix -- important issues that typically need attention |
-| INFO | 12 | Review -- best-practice suggestions, may have false positives |
-| **Active Total** | **62 issue types** | Emitted by the active detector set |
+| INFO | 15 | Review -- best-practice suggestions, may have false positives |
+| **Active Total** | **64 issue types** | Emitted by the active detector set |
 | Disabled | 1 | DuplicateQueryDetector (awaiting parameter tracking) |
-| Reserved | 3 | EXPLAIN-based placeholders (planned) |
+| Reserved | 1 | full-scan (EXPLAIN full-table-scan detection planned) |
 
 ---
 
