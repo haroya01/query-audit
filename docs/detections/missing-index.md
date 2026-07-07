@@ -11,8 +11,8 @@ targeting a specific SQL clause where a missing index causes performance degrada
 
 !!! note "One rule, four issue types"
     Although `MissingIndexDetector` is registered as a single detection rule in
-    `QueryAuditAnalyzer`, it produces 4 separate issue types. This is why QueryAudit has
-    57 active rules but 60 active issue types. See the
+    `QueryAuditAnalyzer`, it produces 4 separate issue types. This is why there are fewer detector classes than the
+    64 active issue types. See the
     [Detection Rules Overview](overview.md#accounting) for the full accounting.
 
 ---

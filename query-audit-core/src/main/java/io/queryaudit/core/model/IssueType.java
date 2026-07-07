@@ -41,11 +41,11 @@ public enum IssueType {
       "count-instead-of-exists", "COUNT used where EXISTS would be more efficient", INFO),
   UNBOUNDED_RESULT_SET(
       "unbounded-result-set", "SELECT without LIMIT could return unbounded rows", WARNING),
-  /** Reserved for future EXPLAIN-based detection. Not currently emitted by any detector. */
+  /** Emitted by the MySQL and PostgreSQL EXPLAIN analyzers. */
   FULL_TABLE_SCAN("full-scan", "Full table scan detected", INFO),
-  /** Reserved for future EXPLAIN-based detection. Not currently emitted by any detector. */
+  /** Emitted by the MySQL and PostgreSQL EXPLAIN analyzers. */
   FILESORT("filesort", "Filesort detected", INFO),
-  /** Reserved for future EXPLAIN-based detection. Not currently emitted by any detector. */
+  /** Emitted by the MySQL and PostgreSQL EXPLAIN analyzers. */
   TEMPORARY_TABLE("temporary-table", "Temporary table usage", INFO),
   WRITE_AMPLIFICATION("write-amplification", "Too many indexes cause write amplification", WARNING),
   IMPLICIT_TYPE_CONVERSION(

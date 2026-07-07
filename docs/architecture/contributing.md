@@ -90,7 +90,7 @@ query-audit/
 │   └── src/main/java/io/queryaudit/core/
 │       ├── analyzer/                   ExplainAnalyzer, IndexMetadataProvider
 │       ├── config/                     QueryAuditConfig (builder pattern)
-│       ├── detector/                   DetectionRule interface + all 57 detectors
+│       ├── detector/                   DetectionRule interface + implementations
 │       ├── interceptor/                DataSourceProxyFactory, QueryInterceptor
 │       ├── model/                      Issue, IssueType, Severity, QueryRecord, etc.
 │       ├── parser/                     SqlParser, ColumnReference, JoinColumnPair

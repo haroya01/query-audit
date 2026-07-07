@@ -161,7 +161,7 @@ query-audit-spring-boot-starter  <-- Add this too if using Spring Boot
 
 | Module | Artifact ID | Description |
 |---|---|---|
-| **Core** | `query-audit-core` | Detection engine (57 rules), SQL parser, report generator. Always required (pulled transitively). |
+| **Core** | `query-audit-core` | Detection engine (64 rules), SQL parser, report generator. Always required (pulled transitively). |
 | **MySQL** | `query-audit-mysql` | MySQL `IndexMetadataProvider` via `SHOW INDEX`. Includes core + junit5 transitively. |
 | **PostgreSQL** | `query-audit-postgresql` | PostgreSQL `IndexMetadataProvider` via `pg_catalog`. Includes core + junit5 transitively. |
 | **JUnit 5** | `query-audit-junit5` | JUnit 5 extension, `@QueryAudit` / `@DetectNPlusOne` / `@ExpectMaxQueryCount` annotations. |

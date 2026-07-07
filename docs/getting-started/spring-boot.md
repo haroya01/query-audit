@@ -43,8 +43,8 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
 
     ```kotlin
     dependencies {
-        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.3.2")
-        testImplementation("io.github.haroya01:query-audit-mysql:0.3.2")
+        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.4.0")
+        testImplementation("io.github.haroya01:query-audit-mysql:0.4.0")
     }
     ```
 
@@ -52,8 +52,8 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.3.2'
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.3.2'
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.4.0'
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.4.0'
     }
     ```
 
@@ -63,13 +63,13 @@ any connection pool (HikariCP, Tomcat, etc.) and any JPA provider (Hibernate, Ec
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.3.2</version>
+        <version>0.4.0</version>
         <scope>test</scope>
     </dependency>
     <dependency>
         <groupId>io.github.haroya01</groupId>
         <artifactId>query-audit-mysql</artifactId>
-        <version>0.3.2</version>
+        <version>0.4.0</version>
         <scope>test</scope>
     </dependency>
     ```
@@ -285,4 +285,4 @@ Or per-test:
 
 - :material-arrow-right: [Configuration Reference](../guide/configuration.md) -- Full list of `application.yml` properties
 - :material-arrow-right: [Annotations Guide](../guide/annotations.md) -- All 4 annotations explained
-- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 57 detection rules
+- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 64 detection rules
