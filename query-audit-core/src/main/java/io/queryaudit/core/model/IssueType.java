@@ -66,6 +66,8 @@ public enum IssueType {
       WARNING),
   READ_MODIFY_WRITE(
       "read-modify-write", "Read-modify-write without lock or unique-constraint backing", INFO),
+  CONNECTION_HELD_IDLE(
+      "connection-held-idle", "Connection held while non-database work runs", INFO),
   QUERY_COUNT_REGRESSION("query-count-regression", "Query count regression detected", WARNING),
   UPDATE_WITHOUT_WHERE(
       "update-without-where", "UPDATE/DELETE without WHERE clause affects all rows", ERROR),

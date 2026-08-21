@@ -77,6 +77,14 @@ public class QueryInterceptor implements QueryExecutionListener {
   // so their stack traces are identical. Pooling avoids redundant String objects.
   private final Map<String, String> stackTracePool = new ConcurrentHashMap<>();
 
+  // Connection lifecycle tracking for the connection-held-idle rule (issue #168).
+  private final ConnectionUsageTracker connectionTracker = new ConnectionUsageTracker();
+
+  /** Returns the connection lifecycle tracker registered alongside this interceptor. */
+  public ConnectionUsageTracker getConnectionTracker() {
+    return connectionTracker;
+  }
+
   @Override
   public void beforeQuery(ExecutionInfo execInfo, List<QueryInfo> queryInfoList) {
     // no-op
@@ -137,12 +145,14 @@ public class QueryInterceptor implements QueryExecutionListener {
     sqlPool.clear();
     stackTracePool.clear();
     capacityWarningLogged = false;
+    connectionTracker.start();
     currentPhase = LifecyclePhase.TEST;
     active = true;
   }
 
   public void stop() {
     active = false;
+    connectionTracker.stop();
   }
 
   public List<QueryRecord> getRecordedQueries() {

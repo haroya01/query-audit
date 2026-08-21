@@ -19,8 +19,8 @@ public final class DataSourceProxyFactory {
   /**
    * Wraps the given {@code DataSource} in a proxy that delegates query lifecycle events to the
    * supplied {@link QueryInterceptor}. The proxy is itself wrapped in a {@link
-   * NonClosingDataSource} so Spring does not auto-infer a destroy method on the post-BPP instance
-   * — see issue #153 for the cascade-close regression this prevents.
+   * NonClosingDataSource} so Spring does not auto-infer a destroy method on the post-BPP instance —
+   * see issue #153 for the cascade-close regression this prevents.
    *
    * @param original the real data source to wrap
    * @param interceptor the interceptor that will record queries
@@ -31,6 +31,7 @@ public final class DataSourceProxyFactory {
         ProxyDataSourceBuilder.create(original)
             .name("query-audit")
             .listener(interceptor)
+            .methodListener(interceptor.getConnectionTracker())
             .build();
     return new NonClosingDataSource(proxy);
   }
