@@ -1,3 +1,19 @@
+// Issue #134 is reported against Spring Boot 4.x while this module compiles and tests
+// against the 3.4.x baseline. The boot4Test source set runs the reported multi-context
+// scenario on an actual Boot 4.x classpath, isolated from the regular test task so the
+// baseline toolchain and the verification toolchain never mix.
+sourceSets {
+    boot4Test {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    boot4TestImplementation.extendsFrom implementation
+    boot4TestRuntimeOnly.extendsFrom runtimeOnly
+}
+
 dependencies {
     api project(':query-audit-core')
     api project(':query-audit-junit5')
@@ -14,4 +30,25 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-jdbc:3.4.1'
     testImplementation 'com.zaxxer:HikariCP:5.1.0'
     testImplementation 'com.h2database:h2:2.3.232'
+
+    boot4TestImplementation 'org.springframework.boot:spring-boot-starter-data-jpa:4.0.6'
+    boot4TestImplementation 'org.springframework.boot:spring-boot-starter-web:4.0.6'
+    boot4TestImplementation 'org.springframework.boot:spring-boot-starter-test:4.0.6'
+    // Boot 4.x split MockMvc test support out of spring-boot-test-autoconfigure
+    boot4TestImplementation 'org.springframework.boot:spring-boot-webmvc-test:4.0.6'
+    boot4TestImplementation 'com.h2database:h2:2.3.232'
+    boot4TestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.register('boot4Test', Test) {
+    description = 'Runs the issue #134 multi-context lifecycle scenario against Spring Boot 4.x.'
+    group = 'verification'
+    testClassesDirs = sourceSets.boot4Test.output.classesDirs
+    classpath = sourceSets.boot4Test.runtimeClasspath
+    useJUnitPlatform()
+    // Cache size 1 forces TestContext eviction between every signature switch — the
+    // cache pressure the #134 report only reached at 49 test classes against the
+    // default cache size of 32. (Pool creation count confirms contexts are rebuilt.)
+    systemProperty 'spring.test.context.cache.maxSize', '1'
+    shouldRunAfter tasks.named('test')
 }
