@@ -7,6 +7,7 @@ import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
+import io.queryaudit.core.interceptor.ConnectionUsageTracker;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
@@ -259,6 +260,9 @@ public class QueryAuditExtension
     // --- EXPLAIN-based detection ---
     report = runExplainAnalysis(context, report, queries);
 
+    // --- Connection-held-idle detection (issue #168) ---
+    report = mergeConnectionHeldIdleIssues(report, interceptor, config);
+
     List<BaselineEntry> baseline = analyzer.getBaseline();
     ConsoleReporter reporter =
         new ConsoleReporter(System.out, ConsoleReporter.detectColorSupport(), baseline);
@@ -496,6 +500,66 @@ public class QueryAuditExtension
         System.err.println("[QueryAudit] Failed to write HTML report: " + e.getMessage());
       }
     }
+  }
+
+  // ── Connection-held-idle (issue #168) ──────────────────────────────
+
+  /**
+   * Flags connection checkouts whose held time exceeded their database-work time by more than the
+   * configured threshold — the pool-exhaustion shape: a transaction holding its connection while
+   * slow non-DB work (HTTP call, push send, file I/O) runs. Sessions never released by the end of
+   * the test are the worst offenders and are flagged with their full held time.
+   */
+  private QueryAuditReport mergeConnectionHeldIdleIssues(
+      QueryAuditReport report, QueryInterceptor interceptor, QueryAuditConfig config) {
+    if (config.isRuleExcluded(IssueType.CONNECTION_HELD_IDLE.getCode())) {
+      return report;
+    }
+    List<Issue> idleIssues = new ArrayList<>();
+    for (ConnectionUsageTracker.ConnectionSession session :
+        interceptor.getConnectionTracker().getCompletedSessions()) {
+      long idleMillis = session.idleMillis();
+      if (idleMillis < config.getConnectionHeldIdleThresholdMs()) {
+        continue;
+      }
+      idleIssues.add(
+          new Issue(
+              IssueType.CONNECTION_HELD_IDLE,
+              Severity.INFO,
+              null,
+              null,
+              null,
+              "Connection "
+                  + session.connectionId()
+                  + " held "
+                  + session.heldMillis()
+                  + "ms but executed database work for only "
+                  + session.databaseWorkMillis()
+                  + "ms ("
+                  + idleMillis
+                  + "ms idle"
+                  + (session.released() ? "" : ", never released in the test window")
+                  + ") — under load this shape exhausts the pool",
+              "Release the connection before slow non-database work: move external calls (HTTP,"
+                  + " push, file I/O) out of the transaction, or split the transaction around"
+                  + " them",
+              session.acquireCallSite()));
+    }
+    if (idleIssues.isEmpty()) {
+      return report;
+    }
+    List<Issue> mergedInfo = new ArrayList<>(report.getInfoIssues());
+    mergedInfo.addAll(idleIssues);
+    return new QueryAuditReport(
+        report.getTestClass(),
+        report.getTestName(),
+        report.getConfirmedIssues(),
+        mergedInfo,
+        report.getAcknowledgedIssues(),
+        report.getAllQueries(),
+        report.getUniquePatternCount(),
+        report.getTotalQueryCount(),
+        report.getTotalExecutionTimeNanos());
   }
 
   // ── Query snapshot contracts (issue #166) ─────────────────────────

@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Set;
 import javax.sql.DataSource;
 import net.ttddyy.dsproxy.listener.ChainListener;
+import net.ttddyy.dsproxy.listener.CompositeMethodListener;
+import net.ttddyy.dsproxy.listener.MethodExecutionListener;
 import net.ttddyy.dsproxy.listener.QueryExecutionListener;
 import net.ttddyy.dsproxy.support.ProxyDataSource;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -58,10 +60,10 @@ class DataSourceResolver {
 
   /**
    * Hooks the QueryInterceptor into the DataSource and returns a cleanup callback that must be
-   * invoked from {@code afterAll} so that listeners do not accumulate on a shared proxy across
-   * test classes. If the DataSource is already a {@link ProxyDataSource}, the interceptor is added
-   * as a listener (Strategy 1). Otherwise, a fresh proxy is created via {@link
-   * DataSourceProxyFactory} and stored in {@link QueryAuditDataSourceStore} (Strategy 2).
+   * invoked from {@code afterAll} so that listeners do not accumulate on a shared proxy across test
+   * classes. If the DataSource is already a {@link ProxyDataSource}, the interceptor is added as a
+   * listener (Strategy 1). Otherwise, a fresh proxy is created via {@link DataSourceProxyFactory}
+   * and stored in {@link QueryAuditDataSourceStore} (Strategy 2).
    *
    * @return a cleanup callback that detaches the interceptor; never {@code null}
    */
@@ -71,7 +73,12 @@ class DataSourceResolver {
     if (proxy != null) {
       proxy.addListener(interceptor);
       ChainListener chain = proxy.getProxyConfig().getQueryListener();
-      return () -> detachListener(chain, interceptor);
+      CompositeMethodListener methodChain = proxy.getProxyConfig().getMethodListener();
+      methodChain.addListener(interceptor.getConnectionTracker());
+      return () -> {
+        detachListener(chain, interceptor);
+        detachMethodListener(methodChain, interceptor.getConnectionTracker());
+      };
     }
 
     // Strategy 2: Wrap with our own proxy via DataSourceProxyFactory
@@ -84,6 +91,14 @@ class DataSourceResolver {
    * Removes a previously-added listener from a {@link ChainListener}. {@code ChainListener} does
    * not expose a {@code removeListener} API directly, so we copy → filter → reinstall.
    */
+  private static void detachMethodListener(
+      CompositeMethodListener chain, MethodExecutionListener target) {
+    List<MethodExecutionListener> remaining = new ArrayList<>(chain.getListeners());
+    if (remaining.remove(target)) {
+      chain.setListeners(remaining);
+    }
+  }
+
   private static void detachListener(ChainListener chain, QueryExecutionListener target) {
     List<QueryExecutionListener> remaining = new ArrayList<>(chain.getListeners());
     if (remaining.remove(target)) {

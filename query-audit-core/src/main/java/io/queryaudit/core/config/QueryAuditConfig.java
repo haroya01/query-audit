@@ -49,6 +49,7 @@ public class QueryAuditConfig {
   private final boolean includeSetupQueries;
   private final boolean countInsteadOfExistsEnabled;
   private final AuditMode auditMode;
+  private final long connectionHeldIdleThresholdMs;
   private final RuleProfile ruleProfile;
   private final Set<String> enabledRules;
 
@@ -79,6 +80,7 @@ public class QueryAuditConfig {
     this.includeSetupQueries = builder.includeSetupQueries;
     this.countInsteadOfExistsEnabled = builder.countInsteadOfExistsEnabled;
     this.auditMode = builder.auditMode;
+    this.connectionHeldIdleThresholdMs = builder.connectionHeldIdleThresholdMs;
     this.ruleProfile = builder.ruleProfile;
     this.enabledRules = Collections.unmodifiableSet(new HashSet<>(builder.enabledRules));
   }
@@ -271,6 +273,16 @@ public class QueryAuditConfig {
   }
 
   /**
+   * Minimum idle time (connection held minus database work, in milliseconds) before the
+   * connection-held-idle rule fires. Conservative default: 200ms.
+   *
+   * @since 0.5.0
+   */
+  public long getConnectionHeldIdleThresholdMs() {
+    return connectionHeldIdleThresholdMs;
+  }
+
+  /**
    * Returns the active rule profile tier. Defaults to {@link RuleProfile#STRICT} (all rules).
    *
    * @since 0.5.0
@@ -364,6 +376,7 @@ public class QueryAuditConfig {
     private boolean includeSetupQueries = false;
     private boolean countInsteadOfExistsEnabled = false;
     private AuditMode auditMode = AuditMode.ANNOTATED;
+    private long connectionHeldIdleThresholdMs = 200;
     private RuleProfile ruleProfile = RuleProfile.STRICT;
     private Set<String> enabledRules = new HashSet<>();
 
@@ -398,6 +411,7 @@ public class QueryAuditConfig {
       b.repositoryReturnTypeResolver = source.repositoryReturnTypeResolver;
       b.countInsteadOfExistsEnabled = source.countInsteadOfExistsEnabled;
       b.auditMode = source.auditMode;
+      b.connectionHeldIdleThresholdMs = source.connectionHeldIdleThresholdMs;
       b.ruleProfile = source.ruleProfile;
       b.enabledRules = new HashSet<>(source.enabledRules);
       return b;
@@ -597,6 +611,16 @@ public class QueryAuditConfig {
     /** Adds a single rule code to run even when the profile tier excludes it. */
     public Builder addEnabledRule(String ruleCode) {
       this.enabledRules.add(ruleCode);
+      return this;
+    }
+
+    /**
+     * Sets the connection-held-idle threshold in milliseconds.
+     *
+     * @since 0.5.0
+     */
+    public Builder connectionHeldIdleThresholdMs(long thresholdMs) {
+      this.connectionHeldIdleThresholdMs = thresholdMs;
       return this;
     }
 

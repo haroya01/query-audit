@@ -54,7 +54,8 @@ public enum RuleProfile {
           "n-plus-one-suspect", // SQL-level heuristic; the confirmed rule stays
           "mergeable-queries", // advice, not a defect
           "for-update-no-timeout", // environment-dependent
-          "window-no-partition" // often deliberate over the full result
+          "window-no-partition", // often deliberate over the full result
+          "connection-held-idle" // wall-clock heuristic; needs realistic latency in tests
           );
 
   /**

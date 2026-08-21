@@ -55,6 +55,7 @@ public class QueryAuditProperties {
   private WriteAmplification writeAmplification = new WriteAmplification();
   private SlowQuery slowQuery = new SlowQuery();
   private CountInsteadOfExists countInsteadOfExists = new CountInsteadOfExists();
+  private ConnectionHeldIdle connectionHeldIdle = new ConnectionHeldIdle();
   private WrapDataSource wrapDataSource = new WrapDataSource();
 
   // ── Top-level getters & setters ────────────────────────────────────
@@ -233,6 +234,14 @@ public class QueryAuditProperties {
 
   public void setSlowQuery(SlowQuery slowQuery) {
     this.slowQuery = slowQuery;
+  }
+
+  public ConnectionHeldIdle getConnectionHeldIdle() {
+    return connectionHeldIdle;
+  }
+
+  public void setConnectionHeldIdle(ConnectionHeldIdle connectionHeldIdle) {
+    this.connectionHeldIdle = connectionHeldIdle;
   }
 
   public CountInsteadOfExists getCountInsteadOfExists() {
@@ -425,6 +434,19 @@ public class QueryAuditProperties {
   /**
    * @since 0.4.0
    */
+  public static class ConnectionHeldIdle {
+    /** Minimum idle time (held minus database work, ms) before the rule fires. */
+    private long thresholdMs = 200;
+
+    public long getThresholdMs() {
+      return thresholdMs;
+    }
+
+    public void setThresholdMs(long thresholdMs) {
+      this.thresholdMs = thresholdMs;
+    }
+  }
+
   public static class CountInsteadOfExists {
     private boolean enabled = false;
 

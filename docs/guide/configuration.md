@@ -23,6 +23,7 @@ All properties are optional. The table below lists every supported key under the
 | `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
 | `fail-on-detection` | `boolean` | `true` | Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`. |
 | `count-instead-of-exists.enabled` | `boolean` | `false` | Enable the `count-instead-of-exists` INFO detector. Off by default because it can fire on legitimate aggregate counts. |
+| `connection-held-idle.threshold-ms` | `long` | `200` | Minimum idle time (connection held minus database work) before the `connection-held-idle` rule fires. Requires the non-DB work to actually take time in tests — zero-latency mocks never reproduce the gap. |
 | `repeated-insert.exclude-tables` | `List<String>` | `["temp_*", "staging_*", "*_temp", "*_staging"]` | Table-name globs (case-insensitive, `*` wildcard) treated as deliberate staging targets — repeated single-row inserts into these tables are not flagged. |
 | `n-plus-one.threshold` | `int` | `3` | Number of times a structurally identical query must repeat before it is flagged as N+1. |
 | `offset-pagination.threshold` | `int` | `1000` | The OFFSET value that triggers a warning. |
@@ -417,7 +418,7 @@ These can be passed via `-D` flags on the command line:
 
 ## Issue Types Reference
 
-All 67 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
+All 68 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
 Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 [Detection Rules Overview](../detections/overview.md#disabled-reserved-rules)).
 
@@ -459,6 +460,7 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `distinct-misuse` | `DISTINCT_MISUSE` | Unnecessary DISTINCT |
 | `having-misuse` | `HAVING_MISUSE` | HAVING on non-aggregate column |
 | `range-lock-risk` | `RANGE_LOCK_RISK` | Range + FOR UPDATE on unindexed column |
+| `connection-held-idle` | `CONNECTION_HELD_IDLE` | Connection held while non-database work runs — the pool-exhaustion shape |
 | `query-count-regression` | `QUERY_COUNT_REGRESSION` | Query count regression vs baseline |
 | `dml-without-index` | `DML_WITHOUT_INDEX` | UPDATE/DELETE WHERE without index |
 | `repeated-single-insert` | `REPEATED_SINGLE_INSERT` | Repeated single-row INSERT |

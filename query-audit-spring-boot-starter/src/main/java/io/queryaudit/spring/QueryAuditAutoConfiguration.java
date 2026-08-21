@@ -66,6 +66,7 @@ public class QueryAuditAutoConfiguration {
         .slowQueryWarningMs(properties.getSlowQuery().getWarningMs())
         .slowQueryErrorMs(properties.getSlowQuery().getErrorMs())
         .countInsteadOfExistsEnabled(properties.getCountInsteadOfExists().isEnabled())
+        .connectionHeldIdleThresholdMs(properties.getConnectionHeldIdle().getThresholdMs())
         .build();
   }
 
