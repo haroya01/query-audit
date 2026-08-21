@@ -122,6 +122,8 @@ The complete searchable reference of issue types emitted by the active detection
 | 62 | findById for Association | `find-by-id-for-association` | INFO | Hibernate/ORM | findById() used only for FK association; consider getReferenceById() |
 | 63 | Filesort | `filesort` | INFO | EXPLAIN-Based | Filesort detected in EXPLAIN output |
 | 64 | Temporary Table | `temporary-table` | INFO | EXPLAIN-Based | Temporary table usage in EXPLAIN output |
+| 65 | Read-Modify-Write | `read-modify-write` | INFO | Locking Risks | SELECT without a lock followed by INSERT/UPDATE on the same table, with no unique-constraint backing, upsert, atomic SET, or version column |
+| 66 | Connection Held Idle | `connection-held-idle` | INFO | Connection Lifecycle | Connection held while non-database work runs -- the pool-exhaustion shape |
 
 !!! note "Rule numbering"
     Rules 50-60 are INFO severity. The table numbers are for reference only and do not correspond
@@ -269,6 +271,8 @@ but are worth reviewing.
 | `non-deterministic-pagination` | ORDER BY+LIMIT on non-unique column | Detect ORDER BY + LIMIT on non-unique columns |
 | `force-index-hint` | FORCE/USE/IGNORE INDEX overrides optimizer | Detect index hint keywords in query |
 | `find-by-id-for-association` | `findById()` used only for FK association — consider `getReferenceById()` to skip the SELECT | Spring Data return-type and call-site analysis |
+| `read-modify-write` | Check-then-act race: unlocked SELECT then INSERT/UPDATE on the same table | Sequence analysis + unique-index cross-check; exempts FOR UPDATE, upserts, @Version columns, atomic `SET col = col - ?`, non-overlapping predicates |
+| `connection-held-idle` | Connection held while non-database work runs | held − database-work time per connection checkout, from JDBC lifecycle events; threshold `connection-held-idle.threshold-ms` (200ms default) |
 | `n-plus-one-suspect` | Same-structure query repeated at the SQL level — suspect only; the Hibernate-level tracker is authoritative | SQL pattern repetition heuristic |
 | `filesort` | Filesort detected in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
 | `temporary-table` | Temporary table usage in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
@@ -282,7 +286,7 @@ but are worth reviewing.
 
 ## Disabled & Reserved Rules
 
-The `IssueType` enum currently has **66 entries**. **64 are actively emitted** by detection
+The `IssueType` enum currently has **68 entries**. **66 are actively emitted** by detection
 rules. The remaining 2 entries fall into two categories:
 
 ### Disabled Rules (1 entry)
@@ -309,19 +313,20 @@ for full-table-scan detection in the EXPLAIN analyzers.
 
 | Category | Count |
 |----------|-------|
-| Active issue types emitted by detectors | **64** |
+| Active issue types emitted by detectors | **66** |
 | Disabled (DuplicateQueryDetector) | 1 |
 | Reserved (full-scan) | 1 |
-| **Total IssueType enum entries** | **66** |
+| **Total IssueType enum entries** | **68** |
 
 !!! note "Why fewer detector classes than active issue types?"
     A single detector can emit multiple issue types. The biggest example is
     `MissingIndexDetector`, which is registered as one detection rule but emits 4 different
     `IssueType`s (`missing-where-index`, `missing-join-index`, `missing-order-by-index`,
     `missing-group-by-index`) -- one per SQL clause it analyzes. On top of the core rules,
-    the MySQL/PostgreSQL EXPLAIN analyzers emit `filesort` and `temporary-table`, and the
+    the MySQL/PostgreSQL EXPLAIN analyzers emit `filesort` and `temporary-table`, the
     Hibernate-level trackers emit `find-by-id-for-association` and the authoritative N+1
-    signal -- these run outside `QueryAuditAnalyzer.createRules()`.
+    signal, and the connection lifecycle tracker emits `connection-held-idle` -- these run
+    outside `QueryAuditAnalyzer.createRules()`.
 
 ---
 
@@ -393,6 +398,10 @@ for full-table-scan detection in the EXPLAIN analyzers.
 - `for-update-non-unique` -- FOR UPDATE on non-unique index (WARNING)
 - `range-lock-risk` -- Range lock risk (WARNING)
 - `for-update-no-timeout` -- FOR UPDATE without timeout (WARNING)
+- `read-modify-write` -- Check-then-act race without lock or unique-constraint backing (INFO)
+
+### Connection Lifecycle
+- `connection-held-idle` -- Connection held while non-database work runs, the pool-exhaustion shape (INFO)
 
 ### MySQL-Specific
 - `string-concat-where` -- String concatenation in WHERE (WARNING)
