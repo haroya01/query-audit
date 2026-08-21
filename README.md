@@ -58,8 +58,8 @@ QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.4.0' // x-release-please-version
-    testImplementation 'io.github.haroya01:query-audit-mysql:0.4.0' // x-release-please-version
+    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.5.0' // x-release-please-version
+    testImplementation 'io.github.haroya01:query-audit-mysql:0.5.0' // x-release-please-version
 }
 ```
 
@@ -67,8 +67,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.4.0' // x-release-please-version
-    testImplementation 'io.github.haroya01:query-audit-postgresql:0.4.0' // x-release-please-version
+    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.5.0' // x-release-please-version
+    testImplementation 'io.github.haroya01:query-audit-postgresql:0.5.0' // x-release-please-version
 }
 ```
 
@@ -81,13 +81,13 @@ dependencies {
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-spring-boot-starter</artifactId>
-    <version>0.4.0</version> <!-- x-release-please-version -->
+    <version>0.5.0</version> <!-- x-release-please-version -->
     <scope>test</scope>
 </dependency>
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-mysql</artifactId>
-    <version>0.4.0</version> <!-- x-release-please-version -->
+    <version>0.5.0</version> <!-- x-release-please-version -->
     <scope>test</scope>
 </dependency>
 ```
@@ -98,13 +98,13 @@ dependencies {
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-spring-boot-starter</artifactId>
-    <version>0.4.0</version> <!-- x-release-please-version -->
+    <version>0.5.0</version> <!-- x-release-please-version -->
     <scope>test</scope>
 </dependency>
 <dependency>
     <groupId>io.github.haroya01</groupId>
     <artifactId>query-audit-postgresql</artifactId>
-    <version>0.4.0</version> <!-- x-release-please-version -->
+    <version>0.5.0</version> <!-- x-release-please-version -->
     <scope>test</scope>
 </dependency>
 ```
@@ -115,8 +115,8 @@ dependencies {
 
 ```groovy
 dependencies {
-    testImplementation 'io.github.haroya01:query-audit-junit5:0.4.0' // x-release-please-version
-    testRuntimeOnly 'io.github.haroya01:query-audit-mysql:0.4.0'  // or query-audit-postgresql // x-release-please-version
+    testImplementation 'io.github.haroya01:query-audit-junit5:0.5.0' // x-release-please-version
+    testRuntimeOnly 'io.github.haroya01:query-audit-mysql:0.5.0'  // or query-audit-postgresql // x-release-please-version
 }
 ```
 
