@@ -188,10 +188,8 @@ public class QueryAuditAnalyzer {
       ruleList.add(rule);
     }
 
-    // Filter out disabled rules
-    if (!config.getDisabledRules().isEmpty()) {
-      ruleList.removeIf(rule -> isRuleDisabled(rule, config));
-    }
+    // Filter out rules excluded by the profile tier or explicit disables
+    ruleList.removeIf(rule -> isRuleDisabled(rule, config));
 
     return ruleList;
   }
@@ -201,10 +199,10 @@ public class QueryAuditAnalyzer {
    * codes for filtering.
    */
   private boolean isRuleDisabled(DetectionRule rule, QueryAuditConfig config) {
-    // Prefer the explicit rule code when available (exact match)
+    // Prefer the explicit rule code when available: profile-aware decision (exact match)
     String ruleCode = rule.getRuleCode();
     if (ruleCode != null) {
-      return config.getDisabledRules().contains(ruleCode);
+      return config.isRuleExcluded(ruleCode);
     }
 
     // Fallback: heuristic match based on class name for external/legacy rules
@@ -305,6 +303,12 @@ public class QueryAuditAnalyzer {
     List<Issue> acknowledgedIssues = new ArrayList<>();
 
     for (Issue issue : allIssues) {
+      // Profile tier / enabled-rules / disabled-rules decision on the exact issue code. This is
+      // the correctness net: rule-level filtering above can only exclude detectors that declare
+      // getRuleCode(), and most built-ins rely on the class-name heuristic instead.
+      if (config.isRuleExcluded(issue.type().getCode())) {
+        continue;
+      }
       if (config.isSuppressed(issue.type().getCode(), issue.table(), issue.column())) {
         continue;
       }

@@ -2,6 +2,7 @@ package io.queryaudit.spring;
 
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.interceptor.DataSourceProxyFactory;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Severity;
@@ -42,6 +43,8 @@ public class QueryAuditAutoConfiguration {
         .enabled(properties.isEnabled())
         .failOnDetection(properties.isFailOnDetection())
         .auditMode(AuditMode.parse(properties.getMode()))
+        .ruleProfile(RuleProfile.parse(properties.getProfile()))
+        .enabledRules(new HashSet<>(properties.getEnabledRules()))
         .nPlusOneThreshold(properties.getNPlusOne().getThreshold())
         .offsetPaginationThreshold(properties.getOffsetPagination().getThreshold())
         .orClauseThreshold(properties.getOrClause().getThreshold())

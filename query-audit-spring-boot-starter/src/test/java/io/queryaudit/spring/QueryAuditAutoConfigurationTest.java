@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +19,49 @@ class QueryAuditAutoConfigurationTest {
   private final ApplicationContextRunner contextRunner =
       new ApplicationContextRunner()
           .withConfiguration(AutoConfigurations.of(QueryAuditAutoConfiguration.class));
+
+  @Nested
+  @DisplayName("Rule profile properties (issue #164)")
+  class RuleProfileProperties {
+
+    @Test
+    @DisplayName("defaults to STRICT")
+    void defaultsToStrict() {
+      contextRunner.run(
+          context ->
+              assertThat(context.getBean(QueryAuditConfig.class).getRuleProfile())
+                  .isEqualTo(RuleProfile.STRICT));
+    }
+
+    @Test
+    @DisplayName("query-audit.profile=recommended binds, enabled-rules re-activates")
+    void bindsProfileAndEnabledRules() {
+      contextRunner
+          .withPropertyValues(
+              "query-audit.profile=recommended", "query-audit.enabled-rules=force-index-hint")
+          .run(
+              context -> {
+                QueryAuditConfig config = context.getBean(QueryAuditConfig.class);
+                assertThat(config.getRuleProfile()).isEqualTo(RuleProfile.RECOMMENDED);
+                assertThat(config.isRuleExcluded("force-index-hint")).isFalse();
+                assertThat(config.isRuleExcluded("offset-pagination")).isTrue();
+              });
+    }
+
+    @Test
+    @DisplayName("an invalid profile fails context startup instead of being silently ignored")
+    void invalidProfileFailsStartup() {
+      contextRunner
+          .withPropertyValues("query-audit.profile=paranoid")
+          .run(
+              context -> {
+                assertThat(context).hasFailed();
+                assertThat(context.getStartupFailure())
+                    .rootCause()
+                    .hasMessageContaining("paranoid");
+              });
+    }
+  }
 
   @Nested
   @DisplayName("Audit mode property (issue #163)")

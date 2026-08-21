@@ -27,6 +27,16 @@ public class QueryAuditProperties {
    */
   private String mode = "annotated";
 
+  /**
+   * Rule profile tier: {@code strict} (all rules, the default), {@code recommended} (opinionated
+   * rules off), or {@code minimal} (safety-critical only). {@code disabled-rules} / {@code
+   * enabled-rules} always win over the profile.
+   */
+  private String profile = "strict";
+
+  /** Rule codes to run even when the profile tier excludes them. */
+  private List<String> enabledRules = new ArrayList<>();
+
   private NPlusOne nPlusOne = new NPlusOne();
   private OffsetPagination offsetPagination = new OffsetPagination();
   private OrClause orClause = new OrClause();
@@ -71,6 +81,22 @@ public class QueryAuditProperties {
 
   public void setMode(String mode) {
     this.mode = mode;
+  }
+
+  public String getProfile() {
+    return profile;
+  }
+
+  public void setProfile(String profile) {
+    this.profile = profile;
+  }
+
+  public List<String> getEnabledRules() {
+    return enabledRules;
+  }
+
+  public void setEnabledRules(List<String> enabledRules) {
+    this.enabledRules = enabledRules;
   }
 
   public NPlusOne getNPlusOne() {

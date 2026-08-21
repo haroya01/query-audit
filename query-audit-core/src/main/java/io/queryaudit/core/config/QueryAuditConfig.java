@@ -49,6 +49,8 @@ public class QueryAuditConfig {
   private final boolean includeSetupQueries;
   private final boolean countInsteadOfExistsEnabled;
   private final AuditMode auditMode;
+  private final RuleProfile ruleProfile;
+  private final Set<String> enabledRules;
 
   private QueryAuditConfig(Builder builder) {
     this.enabled = builder.enabled;
@@ -77,6 +79,8 @@ public class QueryAuditConfig {
     this.includeSetupQueries = builder.includeSetupQueries;
     this.countInsteadOfExistsEnabled = builder.countInsteadOfExistsEnabled;
     this.auditMode = builder.auditMode;
+    this.ruleProfile = builder.ruleProfile;
+    this.enabledRules = Collections.unmodifiableSet(new HashSet<>(builder.enabledRules));
   }
 
   public static Builder builder() {
@@ -151,6 +155,23 @@ public class QueryAuditConfig {
    *
    * @param ruleCode the issue type code (e.g., "select-all", "n-plus-one")
    */
+  /**
+   * Returns whether the rule should not run, combining the profile with explicit overrides.
+   * Precedence: {@code disabled-rules} wins over {@code enabled-rules}, which wins over the profile
+   * tier.
+   *
+   * @since 0.5.0
+   */
+  public boolean isRuleExcluded(String issueCode) {
+    if (disabledRules.contains(issueCode)) {
+      return true;
+    }
+    if (enabledRules.contains(issueCode)) {
+      return false;
+    }
+    return !ruleProfile.includes(issueCode);
+  }
+
   public boolean isRuleDisabled(String ruleCode) {
     return disabledRules.contains(ruleCode);
   }
@@ -249,6 +270,24 @@ public class QueryAuditConfig {
     return auditMode;
   }
 
+  /**
+   * Returns the active rule profile tier. Defaults to {@link RuleProfile#STRICT} (all rules).
+   *
+   * @since 0.5.0
+   */
+  public RuleProfile getRuleProfile() {
+    return ruleProfile;
+  }
+
+  /**
+   * Returns rule codes explicitly re-enabled on top of the profile tier.
+   *
+   * @since 0.5.0
+   */
+  public Set<String> getEnabledRules() {
+    return enabledRules;
+  }
+
   public boolean isSuppressed(String issueCode, String table, String column) {
     if (suppressPatterns.isEmpty()) {
       return false;
@@ -325,6 +364,8 @@ public class QueryAuditConfig {
     private boolean includeSetupQueries = false;
     private boolean countInsteadOfExistsEnabled = false;
     private AuditMode auditMode = AuditMode.ANNOTATED;
+    private RuleProfile ruleProfile = RuleProfile.STRICT;
+    private Set<String> enabledRules = new HashSet<>();
 
     /**
      * Creates a new builder pre-populated with all values from the given config. Useful for
@@ -357,6 +398,8 @@ public class QueryAuditConfig {
       b.repositoryReturnTypeResolver = source.repositoryReturnTypeResolver;
       b.countInsteadOfExistsEnabled = source.countInsteadOfExistsEnabled;
       b.auditMode = source.auditMode;
+      b.ruleProfile = source.ruleProfile;
+      b.enabledRules = new HashSet<>(source.enabledRules);
       return b;
     }
 
@@ -529,6 +572,34 @@ public class QueryAuditConfig {
      *
      * @since 0.5.0
      */
+    /**
+     * Sets the rule profile tier. {@code null} keeps the default ({@link RuleProfile#STRICT}).
+     *
+     * @since 0.5.0
+     */
+    public Builder ruleProfile(RuleProfile ruleProfile) {
+      if (ruleProfile != null) {
+        this.ruleProfile = ruleProfile;
+      }
+      return this;
+    }
+
+    /**
+     * Rule codes to run even when the profile tier excludes them.
+     *
+     * @since 0.5.0
+     */
+    public Builder enabledRules(Set<String> enabledRules) {
+      this.enabledRules = new HashSet<>(enabledRules);
+      return this;
+    }
+
+    /** Adds a single rule code to run even when the profile tier excludes it. */
+    public Builder addEnabledRule(String ruleCode) {
+      this.enabledRules.add(ruleCode);
+      return this;
+    }
+
     public Builder auditMode(AuditMode auditMode) {
       if (auditMode != null) {
         this.auditMode = auditMode;
