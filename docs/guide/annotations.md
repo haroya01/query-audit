@@ -9,7 +9,7 @@ QueryAudit provides four annotations for different use cases. All annotations tr
 
 | Annotation | Target | Purpose | Test Failure |
 |---|---|---|---|
-| `@QueryAudit` | Class / Method | Full analysis with all 65 detection rules | Yes (configurable) |
+| `@QueryAudit` | Class / Method | Full analysis with all 66 detection rules | Yes (configurable) |
 | `@EnableQueryInspector` | Class | Report-only mode, never fails | No |
 | `@DetectNPlusOne` | Class / Method | N+1 detection only | Yes (on N+1 only) |
 | `@ExpectMaxQueryCount` | Method | Assert max query count | Yes (on count exceeded) |
@@ -45,7 +45,7 @@ QueryAudit provides four annotations for different use cases. All annotations tr
 
 ## @QueryAudit
 
-The primary annotation. Enables full query analysis with all 65 detection rules across
+The primary annotation. Enables full query analysis with all 66 detection rules across
 SELECT, INSERT, UPDATE, and DELETE statements.
 
 ```java

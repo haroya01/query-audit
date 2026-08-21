@@ -61,7 +61,7 @@ description: Catch N+1 queries, missing indexes, and SQL anti-patterns before th
 # QueryAudit
 
 <p class="qg-tagline">
-Stop shipping slow queries. Catch N+1, missing indexes, and dozens of other SQL anti-patterns automatically during your JUnit tests -- 65 detection rules in total.
+Stop shipping slow queries. Catch N+1, missing indexes, and dozens of other SQL anti-patterns automatically during your JUnit tests -- 66 detection rules in total.
 </p>
 
 [Get Started](getting-started/installation.md){ .md-button .md-button--primary }
@@ -118,7 +118,7 @@ Every issue includes the exact SQL statement, affected table, column, the detect
   <div class="qg-flow-arrow">:material-arrow-right:</div>
   <div class="qg-flow-step">:material-table-key: Fetch index metadata</div>
   <div class="qg-flow-arrow">:material-arrow-right:</div>
-  <div class="qg-flow-step">:material-magnify: Apply 65 rules</div>
+  <div class="qg-flow-step">:material-magnify: Apply 66 rules</div>
   <div class="qg-flow-arrow">:material-arrow-right:</div>
   <div class="qg-flow-step">:material-alert-circle: Report & fail</div>
 </div>
@@ -128,7 +128,7 @@ QueryAudit hooks into your test's `DataSource` via a lightweight proxy. During t
 1. **Parses** each query to identify tables, columns, joins, and clauses
 2. **Fetches index metadata** from your database (MySQL `SHOW INDEX` or PostgreSQL `pg_catalog`)
 3. **Cross-references** the query structure against actual indexes
-4. **Applies 65 detection rules** covering N+1, missing indexes, DML safety, locking risks, and more
+4. **Applies 66 detection rules** covering N+1, missing indexes, DML safety, locking risks, and more
 5. **Produces a structured report** with severity, root cause, and fix suggestions
 
 No runtime agents. No production overhead. Just add an annotation.
@@ -221,7 +221,7 @@ Existing tools help with **observability** -- they let you *see* your queries:
 | **p6spy** | Logs queries with bind parameters | Same -- logging only |
 | **Spring Hibernate statistics** | Counts queries per session | Counts, but doesn't analyze |
 
-**QueryAudit closes the gap.** It doesn't just log queries -- it applies 65 detection rules to every captured query, cross-references index metadata from your database (MySQL `SHOW INDEX` or PostgreSQL `pg_catalog`), and produces a structured report with concrete fix suggestions.
+**QueryAudit closes the gap.** It doesn't just log queries -- it applies 66 detection rules to every captured query, cross-references index metadata from your database (MySQL `SHOW INDEX` or PostgreSQL `pg_catalog`), and produces a structured report with concrete fix suggestions.
 
 | Capability | datasource-proxy | p6spy | QueryAudit |
 |---|:---:|:---:|:---:|

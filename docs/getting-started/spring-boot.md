@@ -285,4 +285,4 @@ Or per-test:
 
 - :material-arrow-right: [Configuration Reference](../guide/configuration.md) -- Full list of `application.yml` properties
 - :material-arrow-right: [Annotations Guide](../guide/annotations.md) -- All 4 annotations explained
-- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 65 detection rules
+- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 66 detection rules
