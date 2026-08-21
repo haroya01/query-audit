@@ -1075,6 +1075,6 @@ class SeverityAuditTest {
           .isNotNull();
     }
     // Verify the total count matches what we audited (56 issue types)
-    assertThat(IssueType.values().length).isEqualTo(66);
+    assertThat(IssueType.values().length).isEqualTo(67);
   }
 }
