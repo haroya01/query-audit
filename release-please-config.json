@@ -17,6 +17,16 @@
           "type": "generic",
           "path": "README.md",
           "glob": false
+        },
+        {
+          "type": "generic",
+          "path": "docs/getting-started/installation.md",
+          "glob": false
+        },
+        {
+          "type": "generic",
+          "path": "docs/getting-started/quickstart.md",
+          "glob": false
         }
       ],
       "changelog-sections": [
