@@ -17,6 +17,7 @@ All properties are optional. The table below lists every supported key under the
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Master switch for the entire auto-configuration. When `false`, the `QueryInterceptor` bean and the wrapping `BeanPostProcessor` are both skipped — the `@QueryAudit` annotation will not work either. Use `wrap-data-source.enabled: false` instead if you want to keep the interceptor active but skip the auto-wrap. |
+| `mode` | `String` | `"annotated"` | Which tests the JUnit extension audits: `annotated` (opt-in via `@QueryAudit`) or `all` (every test, opt-out via `@QueryAuditExclude`). `all` additionally requires JUnit extension autodetection — see [Audit Coverage Mode](#audit-coverage-mode). |
 | `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
 | `fail-on-detection` | `boolean` | `true` | Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`. |
 | `count-instead-of-exists.enabled` | `boolean` | `false` | Enable the `count-instead-of-exists` INFO detector. Off by default because it can fire on legitimate aggregate counts. |
@@ -84,6 +85,51 @@ query-audit:
     output-dir: build/reports/query-audit
     show-info: true
 ```
+
+---
+
+## Audit Coverage Mode
+
+By default only tests that opt in via `@QueryAudit` (or a related annotation) are audited
+(`mode: annotated`). This keeps adoption friction low, but every unannotated test is a blind
+spot — a regression in an uncovered domain merges silently.
+
+`mode: all` flips the coverage model: **every test is audited**, and individual tests opt
+*out* with `@QueryAuditExclude`.
+
+Two switches are required:
+
+1. Register the extension suite-wide via JUnit's extension autodetection. In
+   `src/test/resources/junit-platform.properties`:
+
+   ```properties
+   junit.jupiter.extensions.autodetection.enabled=true
+   ```
+
+2. Set the mode — in `application.yml` for Spring projects:
+
+   ```yaml
+   query-audit:
+     mode: all
+   ```
+
+   or as a system property for any project: `./gradlew test -DqueryAudit.mode=all`
+   (the system property wins over the yml value).
+
+Enabling autodetection alone does **not** widen coverage: in the default `annotated` mode the
+extension stays inactive for classes that never opted in, and a class that ends up registered
+twice (autodetection + `@QueryAudit`) is audited exactly once.
+
+### Brownfield onboarding
+
+Turning `mode: all` on for an existing suite usually surfaces a wall of findings at once. The
+supported adoption path pairs it with the baseline:
+
+1. Enable `mode: all` as above.
+2. Record the current findings once into the baseline (see [Suppressing Issues](suppressing.md)).
+3. From then on, existing findings are frozen — only **new** violations fail the build.
+
+Coverage first, cleanup incrementally — the audit becomes a ratchet instead of a wall.
 
 ---
 
@@ -321,6 +367,7 @@ These can be passed via `-D` flags on the command line:
 
 | Property | Description |
 |---|---|
+| `-DqueryAudit.mode=all` | Audit every test regardless of annotations — see [Audit Coverage Mode](#audit-coverage-mode) |
 | `-DqueryAudit.updateBaseline=true` | Update the query count baseline file after test run |
 | `-DqueryAudit.countBaselinePath=path` | Override the query count baseline file path |
 | `-Dqueryaudit.autoOpenReport=true` | Force open HTML report in browser |

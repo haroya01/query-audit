@@ -2,6 +2,7 @@ package io.queryaudit.junit5.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.junit5.BooleanOverride;
@@ -81,7 +82,7 @@ class AnnotationOverridesYmlReproductionTest {
     }
 
     @Test
-    @DisplayName("Builder.from() copies ALL 20 fields from source config")
+    @DisplayName("Builder.from() copies ALL fields from source config")
     void builderFromCopiesAllFields() {
       // Build a config with ALL non-default values
       QueryAuditConfig source =
@@ -109,6 +110,7 @@ class AnnotationOverridesYmlReproductionTest {
               .writeAmplificationThreshold(22)
               .slowQueryWarningMs(1234L)
               .slowQueryErrorMs(5678L)
+              .auditMode(AuditMode.ALL)
               .build();
 
       QueryAuditConfig copy = QueryAuditConfig.Builder.from(source).build();
@@ -162,6 +164,7 @@ class AnnotationOverridesYmlReproductionTest {
       assertThat(copy.getSlowQueryErrorMs())
           .as("slowQueryErrorMs")
           .isEqualTo(source.getSlowQueryErrorMs());
+      assertThat(copy.getAuditMode()).as("auditMode").isEqualTo(source.getAuditMode());
     }
   }
 

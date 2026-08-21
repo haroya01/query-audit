@@ -3,6 +3,7 @@ package io.queryaudit.spring;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
+import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import javax.sql.DataSource;
@@ -17,6 +18,43 @@ class QueryAuditAutoConfigurationTest {
   private final ApplicationContextRunner contextRunner =
       new ApplicationContextRunner()
           .withConfiguration(AutoConfigurations.of(QueryAuditAutoConfiguration.class));
+
+  @Nested
+  @DisplayName("Audit mode property (issue #163)")
+  class AuditModeProperty {
+
+    @Test
+    @DisplayName("defaults to ANNOTATED")
+    void defaultsToAnnotated() {
+      contextRunner.run(
+          context ->
+              assertThat(context.getBean(QueryAuditConfig.class).getAuditMode())
+                  .isEqualTo(AuditMode.ANNOTATED));
+    }
+
+    @Test
+    @DisplayName("query-audit.mode=all binds to ALL")
+    void bindsAll() {
+      contextRunner
+          .withPropertyValues("query-audit.mode=all")
+          .run(
+              context ->
+                  assertThat(context.getBean(QueryAuditConfig.class).getAuditMode())
+                      .isEqualTo(AuditMode.ALL));
+    }
+
+    @Test
+    @DisplayName("an invalid mode fails context startup instead of being silently ignored")
+    void invalidModeFailsStartup() {
+      contextRunner
+          .withPropertyValues("query-audit.mode=banana")
+          .run(
+              context -> {
+                assertThat(context).hasFailed();
+                assertThat(context.getStartupFailure()).rootCause().hasMessageContaining("banana");
+              });
+    }
+  }
 
   @Nested
   @DisplayName("QueryAuditProperties default values")
