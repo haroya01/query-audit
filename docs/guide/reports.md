@@ -216,6 +216,44 @@ The machine-readable contract lives at
 
 ---
 
+## Delta Verdict (compare two runs)
+
+Every fix loop ends with the same question: *did my change resolve the finding without
+introducing new ones?* The compare command answers it from two `report.json` files alone —
+no re-analysis, no database access:
+
+```bash
+java -cp query-audit-core-<version>.jar \
+    io.queryaudit.core.reporter.ReportComparator before.json after.json verdict.json
+```
+
+```
+[QueryAudit] compare: 0 new, 1 resolved, 0 persisting; queries 11 -> 7
+  RESOLVED n-plus-one (table: order_items) in OrderServiceTest.findOrders
+```
+
+- **Exit contract**: `0` when no new findings, `1` when new findings exist (the diff-aware CI
+  gate: fail a PR only on *new* issues), `2` on usage/parse errors.
+- **`verdict.json`**: `{newFindings, resolved, persisting, queryCountDelta, executionTimeMsDelta}` —
+  the termination condition for automated fix loops.
+- **Matching key**: `testClass|testName|type|normalized-pattern|sourceLocation`, so findings
+  survive unrelated refactors as long as the statement shape and call site are stable.
+- Only **confirmed** findings participate; INFO advisories don't gate fix loops.
+- Requires the versioned envelope (schema 1.x, QueryAudit 0.5.0+); pre-envelope reports are
+  rejected with a hint.
+
+As a Gradle task in the consuming project:
+
+```groovy
+tasks.register('queryAuditCompare', JavaExec) {
+    classpath = configurations.testRuntimeClasspath
+    mainClass = 'io.queryaudit.core.reporter.ReportComparator'
+    args 'baseline-report.json', 'build/reports/query-audit/report.json', 'build/verdict.json'
+}
+```
+
+---
+
 ## HTML Report
 
 The HTML report aggregator accumulates results across all test classes and produces a
