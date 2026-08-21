@@ -64,6 +64,8 @@ public enum IssueType {
       "range-lock-risk",
       "Range condition with FOR UPDATE on unindexed column may cause gap locks",
       WARNING),
+  READ_MODIFY_WRITE(
+      "read-modify-write", "Read-modify-write without lock or unique-constraint backing", INFO),
   QUERY_COUNT_REGRESSION("query-count-regression", "Query count regression detected", WARNING),
   UPDATE_WITHOUT_WHERE(
       "update-without-where", "UPDATE/DELETE without WHERE clause affects all rows", ERROR),

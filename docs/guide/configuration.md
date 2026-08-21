@@ -417,7 +417,7 @@ These can be passed via `-D` flags on the command line:
 
 ## Issue Types Reference
 
-All 66 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
+All 67 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
 Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 [Detection Rules Overview](../detections/overview.md#disabled-reserved-rules)).
 
@@ -471,6 +471,7 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `string-concat-where` | `STRING_CONCAT_IN_WHERE` | String concatenation in WHERE prevents index |
 | `unused-join` | `UNUSED_JOIN` | LEFT JOIN table never referenced in query |
 | `for-update-non-unique` | `FOR_UPDATE_NON_UNIQUE` | FOR UPDATE on non-unique index causes gap locks |
+| `read-modify-write` | `READ_MODIFY_WRITE` | SELECT without a lock followed by INSERT/UPDATE on the same table, with no unique-constraint backing, upsert, atomic SET, or version column |
 | `group-by-function` | `GROUP_BY_FUNCTION` | Function in GROUP BY prevents index usage |
 | `regexp-usage` | `REGEXP_INSTEAD_OF_LIKE` | REGEXP/RLIKE prevents index usage |
 | `find-in-set` | `FIND_IN_SET_USAGE` | FIND_IN_SET indicates comma-separated values violating 1NF |

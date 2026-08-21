@@ -148,6 +148,7 @@ public class QueryAuditAnalyzer {
     ruleList.add(new NullComparisonDetector());
     ruleList.add(new HavingMisuseDetector());
     ruleList.add(new RangeLockDetector());
+    ruleList.add(new ReadModifyWriteDetector());
     ruleList.add(new UpdateWithoutWhereDetector());
     ruleList.add(new DmlWithoutIndexDetector());
     ruleList.add(
