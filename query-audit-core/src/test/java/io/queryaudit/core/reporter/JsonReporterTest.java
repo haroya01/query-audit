@@ -2,12 +2,15 @@ package io.queryaudit.core.reporter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.model.IndexInfo;
+import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class JsonReporterTest {
@@ -244,8 +247,8 @@ class JsonReporterTest {
 
     // Count opening braces for issues
     long issueObjectCount = json.chars().filter(c -> c == '{').count();
-    // 1 root + 1 summary + 2 issues + 2 queries = 6
-    assertThat(issueObjectCount).isEqualTo(6);
+    // 1 root + 1 summary + 2 issues + 1 remediation (n-plus-one only) + 2 queries = 7
+    assertThat(issueObjectCount).isEqualTo(7);
 
     assertThat(json).contains("\"type\": \"n-plus-one\"");
     assertThat(json).contains("\"type\": \"or-abuse\"");
@@ -261,5 +264,118 @@ class JsonReporterTest {
     assertThat(json).startsWith("{");
     assertThat(json).endsWith("}");
     assertThat(json).contains("\"testClass\": \"TC\"");
+  }
+
+  // ------------------------------------------------------------------
+  // Schema contract (issue #165)
+  // ------------------------------------------------------------------
+
+  @Test
+  void sourceLocationIsSerialized() {
+    Issue withLocation =
+        new Issue(
+            IssueType.N_PLUS_ONE,
+            Severity.ERROR,
+            "sql",
+            "orders",
+            null,
+            "d",
+            "s",
+            "com.example.OrderService.load:42");
+    QueryAuditReport report =
+        new QueryAuditReport(
+            "TC", "tm", List.of(withLocation), List.of(), List.of(), List.of(), 1, 1, 0L);
+
+    assertThat(generateJson(report))
+        .contains("\"sourceLocation\": \"com.example.OrderService.load:42\"");
+  }
+
+  @Test
+  void remediationEmittedForMappedTypesOnly() {
+    Issue missingIndex =
+        new Issue(
+            IssueType.MISSING_WHERE_INDEX, Severity.ERROR, "sql", "orders", "user_id", "d", "s");
+    Issue unmapped =
+        new Issue(IssueType.WHERE_FUNCTION, Severity.ERROR, "sql", "orders", "email", "d", "s");
+    QueryAuditReport report =
+        new QueryAuditReport(
+            "TC", "tm", List.of(missingIndex, unmapped), List.of(), List.of(), List.of(), 2, 2, 0L);
+
+    String json = generateJson(report);
+
+    assertThat(json)
+        .contains(
+            "\"remediation\": {\"kind\": \"add-index\", \"table\": \"orders\","
+                + " \"columns\": [\"user_id\"]}");
+    assertThat(json.split("\"remediation\"", -1)).hasSize(2); // exactly one remediation
+  }
+
+  @Test
+  void indexMetadataNullWhenNotCollected() {
+    QueryAuditReport report =
+        new QueryAuditReport("TC", "tm", List.of(), List.of(), List.of(), List.of(), 0, 0, 0L);
+
+    assertThat(generateJson(report)).contains("\"indexMetadata\": null");
+  }
+
+  @Test
+  void indexMetadataTrimmedToFindingTablesAndGroupedByIndex() {
+    Issue onOrders =
+        new Issue(IssueType.MISSING_WHERE_INDEX, Severity.ERROR, "sql", "orders", "a", "d", "s");
+    IndexMetadata metadata =
+        new IndexMetadata(
+            Map.of(
+                "orders",
+                List.of(
+                    new IndexInfo("orders", "idx_ab", "a", 1, true, 10L),
+                    new IndexInfo("orders", "idx_ab", "b", 2, true, 500L)),
+                "users",
+                List.of(new IndexInfo("users", "pk", "id", 1, false, 99L))));
+    QueryAuditReport report =
+        new QueryAuditReport(
+                "TC", "tm", List.of(onOrders), List.of(), List.of(), List.of(), 1, 1, 0L)
+            .withIndexMetadata(metadata);
+
+    String json = generateJson(report);
+
+    assertThat(json)
+        .contains(
+            "\"orders\": [{\"name\": \"idx_ab\", \"unique\": false,"
+                + " \"columns\": [\"a\", \"b\"], \"cardinality\": 500}]");
+    assertThat(json).doesNotContain("\"users\""); // no finding references it
+  }
+
+  @Test
+  void envelopeCarriesSchemaVersionAndReports() {
+    QueryAuditReport r1 =
+        new QueryAuditReport("TC", "first", List.of(), List.of(), List.of(), List.of(), 0, 0, 0L);
+    QueryAuditReport r2 =
+        new QueryAuditReport("TC", "second", List.of(), List.of(), List.of(), List.of(), 0, 0, 0L);
+
+    String json = JsonReporter.toEnvelopeJson(List.of(r1, r2));
+
+    assertThat(json).startsWith("{");
+    assertThat(json).endsWith("}");
+    assertThat(json).contains("\"schemaVersion\": \"" + JsonReporter.SCHEMA_VERSION + "\"");
+    assertThat(json).contains("\"reports\": [");
+    assertThat(json).contains("\"testName\": \"first\"");
+    assertThat(json).contains("\"testName\": \"second\"");
+  }
+
+  @Test
+  void withIndexMetadataCopiesFieldsAndKeepsNullAsSameInstance() {
+    QueryAuditReport report =
+        new QueryAuditReport("TC", "tm", List.of(), List.of(), List.of(), List.of(), 3, 7, 42L);
+
+    assertThat(report.withIndexMetadata(null)).isSameAs(report);
+
+    IndexMetadata metadata = new IndexMetadata(Map.of());
+    QueryAuditReport copy = report.withIndexMetadata(metadata);
+    assertThat(copy.getIndexMetadata()).isSameAs(metadata);
+    assertThat(copy.getTestClass()).isEqualTo("TC");
+    assertThat(copy.getTestName()).isEqualTo("tm");
+    assertThat(copy.getUniquePatternCount()).isEqualTo(3);
+    assertThat(copy.getTotalQueryCount()).isEqualTo(7);
+    assertThat(copy.getTotalExecutionTimeNanos()).isEqualTo(42L);
   }
 }

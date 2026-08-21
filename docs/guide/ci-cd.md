@@ -115,8 +115,8 @@ the JSON report with a `github-script` step:
             const fs = require('fs');
             const path = 'build/reports/query-audit/report.json';
             if (!fs.existsSync(path)) return;
-            // report.json is an array of per-test reports — sum across them.
-            const tests = JSON.parse(fs.readFileSync(path, 'utf8'));
+            // report.json is a versioned envelope: { schemaVersion, reports: [...] }.
+            const tests = JSON.parse(fs.readFileSync(path, 'utf8')).reports;
             const confirmed = tests.reduce((s, t) => s + (t.summary?.confirmedIssues || 0), 0);
             const info = tests.reduce((s, t) => s + (t.summary?.infoIssues || 0), 0);
             const body = `**QueryAudit**: ${confirmed} confirmed, ${info} info across ${tests.length} test method(s).`;
@@ -131,10 +131,11 @@ the JSON report with a `github-script` step:
 !!! info "Report file layout"
     QueryAudit writes a single aggregate `report.json` at the configured
     `report.output-dir` (default `build/reports/query-audit/`). The top-level value is a
-    **JSON array** with one entry per test method — each entry has a `summary` object
-    (`confirmedIssues`, `infoIssues`, `acknowledgedIssues`, ...) plus `confirmedIssues` /
-    `infoIssues` arrays of individual findings. Per-test HTML files (`<TestClass>.html`)
-    and an `index.html` aggregate sit alongside.
+    **versioned envelope** — `schemaVersion` plus a `reports` array with one entry per test
+    method. Each entry has a `summary` object (`confirmedIssues`, `infoIssues`,
+    `acknowledgedIssues`, ...) plus `confirmedIssues` / `infoIssues` arrays of individual
+    findings. See [Reports — JSON schema](reports.md#json-schema) for the full contract.
+    Per-test HTML files (`<TestClass>.html`) and an `index.html` aggregate sit alongside.
 
 ### With PostgreSQL
 
@@ -228,8 +229,8 @@ Post a summary of QueryAudit findings as a PR comment:
             const fs = require('fs');
             const path = 'build/reports/query-audit/report.json';
             if (!fs.existsSync(path)) return;
-            // report.json is an array — one entry per test method. Sum the per-test summaries.
-            const tests = JSON.parse(fs.readFileSync(path, 'utf8'));
+            // report.json is a versioned envelope: { schemaVersion, reports: [...] }.
+            const tests = JSON.parse(fs.readFileSync(path, 'utf8')).reports;
             const totalConfirmed = tests.reduce((s, t) => s + (t.summary?.confirmedIssues || 0), 0);
             const totalInfo = tests.reduce((s, t) => s + (t.summary?.infoIssues || 0), 0);
             if (totalConfirmed > 0 || totalInfo > 0) {

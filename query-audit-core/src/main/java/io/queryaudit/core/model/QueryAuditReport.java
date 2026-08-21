@@ -87,6 +87,47 @@ public class QueryAuditReport {
         totalExecutionTimeNanos);
   }
 
+  // Attached via withIndexMetadata() after all analysis merges, not in the constructors — the
+  // report is rebuilt several times during afterEach (regression/EXPLAIN/Hibernate merges) and
+  // threading a tenth constructor argument through every rebuild site is worse than one late copy.
+  private IndexMetadata indexMetadata;
+
+  /**
+   * Returns a copy of this report carrying the index metadata collected for the test's DataSource,
+   * or {@code this} when {@code metadata} is {@code null}. The JSON reporter serializes the subset
+   * relevant to the findings so report consumers can act without separate database access.
+   *
+   * @since 0.5.0
+   */
+  public QueryAuditReport withIndexMetadata(IndexMetadata metadata) {
+    if (metadata == null) {
+      return this;
+    }
+    QueryAuditReport copy =
+        new QueryAuditReport(
+            testClass,
+            testName,
+            confirmedIssues,
+            infoIssues,
+            getAcknowledgedIssues(),
+            allQueries,
+            uniquePatternCount,
+            totalQueryCount,
+            totalExecutionTimeNanos);
+    copy.indexMetadata = metadata;
+    return copy;
+  }
+
+  /**
+   * Returns the index metadata attached to this report, or {@code null} when none was collected
+   * (non-database tests, or reports built before {@link #withIndexMetadata}).
+   *
+   * @since 0.5.0
+   */
+  public IndexMetadata getIndexMetadata() {
+    return indexMetadata;
+  }
+
   public boolean hasConfirmedIssues() {
     return confirmedIssues != null && !confirmedIssues.isEmpty();
   }

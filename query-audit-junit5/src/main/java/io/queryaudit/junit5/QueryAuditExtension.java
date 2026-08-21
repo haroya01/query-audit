@@ -264,7 +264,9 @@ public class QueryAuditExtension
       new GitHubActionsReporter().report(report);
     }
 
-    // Accumulate for HTML report
+    // Attach the collected index metadata so report.json can embed the index state behind each
+    // finding (issue #165), then accumulate for the aggregated report.
+    report = report.withIndexMetadata(indexMetadata);
     HtmlReportAggregator.getInstance().addReport(report);
 
     // --- @ExpectMaxQueryCount ---
@@ -861,18 +863,8 @@ public class QueryAuditExtension
   private void writeJsonReport(List<QueryAuditReport> reports, Path outputDir) {
     try {
       Files.createDirectories(outputDir);
-      StringBuilder sb = new StringBuilder();
-      sb.append("[\n");
-      for (int i = 0; i < reports.size(); i++) {
-        sb.append(JsonReporter.toJson(reports.get(i)));
-        if (i < reports.size() - 1) {
-          sb.append(",");
-        }
-        sb.append("\n");
-      }
-      sb.append("]");
       Path jsonPath = outputDir.resolve("report.json");
-      Files.writeString(jsonPath, sb.toString());
+      Files.writeString(jsonPath, JsonReporter.toEnvelopeJson(reports));
       System.out.println("[QueryAudit] JSON report: " + jsonPath.toAbsolutePath());
     } catch (Exception e) {
       System.err.println("[QueryAudit] Failed to write JSON report: " + e.getMessage());

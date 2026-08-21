@@ -1,9 +1,17 @@
 package io.queryaudit.core.reporter;
 
+import io.queryaudit.core.model.IndexInfo;
+import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Outputs a {@link QueryAuditReport} as structured JSON suitable for dashboards, PR comments, and
@@ -16,7 +24,37 @@ import java.util.List;
  */
 public class JsonReporter implements Reporter {
 
+  /**
+   * Version of the {@code report.json} envelope, bumped on any breaking shape change so consumers
+   * can detect incompatibilities instead of silently misparsing. Documented in the Reports guide.
+   *
+   * @since 0.5.0
+   */
+  public static final String SCHEMA_VERSION = "1.0.0";
+
   private String lastJson;
+
+  /**
+   * Wraps per-test reports in the versioned envelope written to {@code report.json}: {@code
+   * {"schemaVersion": "...", "reports": [...]}}.
+   *
+   * @since 0.5.0
+   */
+  public static String toEnvelopeJson(List<QueryAuditReport> reports) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{\n");
+    sb.append("  \"schemaVersion\": \"").append(SCHEMA_VERSION).append("\",\n");
+    sb.append("  \"reports\": [\n");
+    for (int i = 0; i < reports.size(); i++) {
+      sb.append(toJson(reports.get(i)).indent(4).stripTrailing());
+      if (i < reports.size() - 1) {
+        sb.append(",");
+      }
+      sb.append("\n");
+    }
+    sb.append("  ]\n}");
+    return sb.toString();
+  }
 
   @Override
   public void report(QueryAuditReport report) {
@@ -69,6 +107,12 @@ public class JsonReporter implements Reporter {
     appendIssueArray(sb, report.getAcknowledgedIssues(), "  ");
     sb.append(",\n");
 
+    // indexMetadata — only tables referenced by findings, so a consumer acting on the report
+    // (CI bot, remediation tooling) can see the actual index state without database access.
+    sb.append("  \"indexMetadata\": ");
+    appendIndexMetadata(sb, report, "  ");
+    sb.append(",\n");
+
     // queries
     sb.append("  \"queries\": ");
     appendQueryArray(sb, report.getAllQueries(), "  ");
@@ -106,6 +150,28 @@ public class JsonReporter implements Reporter {
       appendJsonString(sb, innerField, "detail", issue.detail());
       sb.append(",\n");
       appendJsonString(sb, innerField, "suggestion", issue.suggestion());
+      sb.append(",\n");
+      appendJsonString(sb, innerField, "sourceLocation", issue.sourceLocation());
+      RemediationHints.Remediation remediation = RemediationHints.forIssue(issue);
+      if (remediation != null) {
+        sb.append(",\n");
+        sb.append(innerField).append("\"remediation\": {");
+        sb.append("\"kind\": \"").append(escapeJson(remediation.kind())).append("\"");
+        if (remediation.table() != null) {
+          sb.append(", \"table\": \"").append(escapeJson(remediation.table())).append("\"");
+        }
+        if (!remediation.columns().isEmpty()) {
+          sb.append(", \"columns\": [");
+          for (int c = 0; c < remediation.columns().size(); c++) {
+            if (c > 0) {
+              sb.append(", ");
+            }
+            sb.append("\"").append(escapeJson(remediation.columns().get(c))).append("\"");
+          }
+          sb.append("]");
+        }
+        sb.append("}");
+      }
       sb.append("\n");
       sb.append(inner).append("}");
       if (i < issues.size() - 1) {
@@ -142,6 +208,84 @@ public class JsonReporter implements Reporter {
       sb.append("\n");
     }
     sb.append(indent).append("]");
+  }
+
+  /**
+   * Serializes the index state of every table referenced by a finding, grouped per index with
+   * columns in index order. {@code null} when no metadata was collected (non-database tests);
+   * {@code {}} when metadata exists but no finding references a known table. Cardinality is taken
+   * from the index's last column entry — the whole-index cardinality in {@code SHOW INDEX}
+   * semantics.
+   */
+  private static void appendIndexMetadata(
+      StringBuilder sb, QueryAuditReport report, String indent) {
+    IndexMetadata metadata = report.getIndexMetadata();
+    if (metadata == null) {
+      sb.append("null");
+      return;
+    }
+
+    Set<String> tables = new TreeSet<>();
+    collectIssueTables(tables, report.getConfirmedIssues());
+    collectIssueTables(tables, report.getInfoIssues());
+    collectIssueTables(tables, report.getAcknowledgedIssues());
+
+    StringBuilder body = new StringBuilder();
+    boolean firstTable = true;
+    for (String table : tables) {
+      List<IndexInfo> rows = metadata.getIndexesForTable(table);
+      if (rows == null || rows.isEmpty()) {
+        continue;
+      }
+      Map<String, List<IndexInfo>> byIndex = new LinkedHashMap<>();
+      rows.stream()
+          .sorted(Comparator.comparingInt(IndexInfo::seqInIndex))
+          .forEach(r -> byIndex.computeIfAbsent(r.indexName(), k -> new ArrayList<>()).add(r));
+
+      if (!firstTable) {
+        body.append(",\n");
+      }
+      firstTable = false;
+      body.append(indent).append("  \"").append(escapeJson(table)).append("\": [");
+      boolean firstIndex = true;
+      for (Map.Entry<String, List<IndexInfo>> entry : byIndex.entrySet()) {
+        if (!firstIndex) {
+          body.append(", ");
+        }
+        firstIndex = false;
+        List<IndexInfo> indexRows = entry.getValue();
+        body.append("{\"name\": \"").append(escapeJson(entry.getKey())).append("\", ");
+        body.append("\"unique\": ").append(!indexRows.get(0).nonUnique()).append(", ");
+        body.append("\"columns\": [");
+        for (int c = 0; c < indexRows.size(); c++) {
+          if (c > 0) {
+            body.append(", ");
+          }
+          body.append("\"").append(escapeJson(indexRows.get(c).columnName())).append("\"");
+        }
+        body.append("], \"cardinality\": ")
+            .append(indexRows.get(indexRows.size() - 1).cardinality())
+            .append("}");
+      }
+      body.append("]");
+    }
+
+    if (body.length() == 0) {
+      sb.append("{}");
+      return;
+    }
+    sb.append("{\n").append(body).append("\n").append(indent).append("}");
+  }
+
+  private static void collectIssueTables(Set<String> tables, List<Issue> issues) {
+    if (issues == null) {
+      return;
+    }
+    for (Issue issue : issues) {
+      if (issue.table() != null && !issue.table().isBlank()) {
+        tables.add(issue.table());
+      }
+    }
   }
 
   // ---------------------------------------------------------------------------

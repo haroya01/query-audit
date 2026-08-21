@@ -116,65 +116,102 @@ query-audit:
 
 ### Example Output
 
+The file is a **versioned envelope**: `schemaVersion` plus a `reports` array with one entry
+per test method.
+
 ```json
 {
-  "testClass": "com.example.OrderServiceTest",
-  "testName": "findRecentOrders_shouldUseIndex",
-  "summary": {
-    "confirmedIssues": 2,
-    "infoIssues": 1,
-    "acknowledgedIssues": 0,
-    "uniquePatterns": 4,
-    "totalQueries": 18,
-    "executionTimeMs": 342
-  },
-  "confirmedIssues": [
+  "schemaVersion": "1.0.0",
+  "reports": [
     {
-      "type": "n-plus-one",
-      "severity": "ERROR",
-      "query": "select * from order_items where order_id = ?",
-      "table": "order_items",
-      "column": null,
-      "detail": "Query repeated 12 times (threshold: 3)",
-      "suggestion": "Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)"
-    },
-    {
-      "type": "missing-where-index",
-      "severity": "ERROR",
-      "query": "select * from orders where user_id = ? order by created_at desc",
-      "table": "orders",
-      "column": "user_id",
-      "detail": "Column 'user_id' is used in WHERE clause but has no index",
-      "suggestion": "CREATE INDEX idx_orders_user_id ON orders (user_id);"
-    }
-  ],
-  "infoIssues": [],
-  "acknowledgedIssues": [],
-  "queries": [
-    {
-      "sql": "SELECT * FROM orders WHERE user_id = 42 ORDER BY created_at DESC",
-      "normalizedSql": "select * from orders where user_id = ? order by created_at desc",
-      "executionTimeNanos": 15234000,
-      "stackTrace": "com.example.OrderService.findOrders:42"
+      "testClass": "com.example.OrderServiceTest",
+      "testName": "findRecentOrders_shouldUseIndex",
+      "summary": {
+        "confirmedIssues": 2,
+        "infoIssues": 1,
+        "acknowledgedIssues": 0,
+        "uniquePatterns": 4,
+        "totalQueries": 18,
+        "executionTimeMs": 342
+      },
+      "confirmedIssues": [
+        {
+          "type": "n-plus-one",
+          "severity": "ERROR",
+          "query": "select * from order_items where order_id = ?",
+          "table": "order_items",
+          "column": null,
+          "detail": "Query repeated 12 times (threshold: 3)",
+          "suggestion": "Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)",
+          "sourceLocation": "com.example.OrderService.findOrders:42",
+          "remediation": {"kind": "batch-fetch", "table": "order_items"}
+        },
+        {
+          "type": "missing-where-index",
+          "severity": "ERROR",
+          "query": "select * from orders where user_id = ? order by created_at desc",
+          "table": "orders",
+          "column": "user_id",
+          "detail": "Column 'user_id' is used in WHERE clause but has no index",
+          "suggestion": "CREATE INDEX idx_orders_user_id ON orders (user_id);",
+          "sourceLocation": "com.example.OrderService.findOrders:42",
+          "remediation": {"kind": "add-index", "table": "orders", "columns": ["user_id"]}
+        }
+      ],
+      "infoIssues": [],
+      "acknowledgedIssues": [],
+      "indexMetadata": {
+        "orders": [
+          {"name": "PRIMARY", "unique": true, "columns": ["id"], "cardinality": 120000}
+        ]
+      },
+      "queries": [
+        {
+          "sql": "SELECT * FROM orders WHERE user_id = 42 ORDER BY created_at DESC",
+          "normalizedSql": "select * from orders where user_id = ? order by created_at desc",
+          "executionTimeNanos": 15234000,
+          "stackTrace": "com.example.OrderService.findOrders:42"
+        }
+      ]
     }
   ]
 }
 ```
+
+### JSON Schema
+
+The envelope carries `schemaVersion` (semver) so consumers can detect breaking shape changes
+instead of silently misparsing. The current version is **1.0.0**, introduced in QueryAudit
+0.5.0 — which also changed the top-level value from a bare array to this envelope (the one
+breaking change the version field exists to prevent going forward).
+
+Field notes for machine consumers:
+
+- Every finding carries `sourceLocation` (the innermost application stack frame of the
+  offending query) and, for high-precision rules, a structured `remediation` hint
+  (`kind` + `table` + `columns`) so tooling can act without parsing the prose `suggestion`.
+- `indexMetadata` embeds the actual index state (from `SHOW INDEX` / `pg_catalog`) of every
+  table referenced by a finding — grouped per index, columns in index order. A report
+  consumer can decide on and generate the correct fix without separate database access.
+  `null` means no metadata was collected (non-database test).
+
+The machine-readable contract lives at
+[`schema/report.schema.json`](https://github.com/haroya01/query-audit/blob/main/docs/schema/report.schema.json).
 
 !!! tip "CI artifact storage"
     Store JSON reports as CI artifacts for trend tracking across builds. Parse them
     with `jq` or feed them into monitoring dashboards.
 
     ```bash
-    # Extract issue count from JSON report
-    jq '.summary.confirmedIssues' build/reports/query-audit/report.json
+    # Total confirmed issues across all test methods
+    jq '[.reports[].summary.confirmedIssues] | add' build/reports/query-audit/report.json
 
     # List all detected issue types
-    jq '[.confirmedIssues[].type] | unique' build/reports/query-audit/report.json
+    jq '[.reports[].confirmedIssues[].type] | unique' build/reports/query-audit/report.json
 
     # Find tests with N+1 issues
-    jq 'select(.confirmedIssues[] | .type == "n-plus-one") | .testName' \
-        build/reports/query-audit/*.json
+    jq '.reports[] | select(.confirmedIssues[]? | .type == "n-plus-one") | .testName' \
+        build/reports/query-audit/report.json
     ```
 
 ---
