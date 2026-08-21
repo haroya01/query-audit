@@ -12,6 +12,11 @@
           "type": "generic",
           "path": "gradle.properties",
           "glob": false
+        },
+        {
+          "type": "generic",
+          "path": "README.md",
+          "glob": false
         }
       ],
       "changelog-sections": [
