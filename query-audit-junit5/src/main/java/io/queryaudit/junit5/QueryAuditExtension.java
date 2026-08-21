@@ -303,6 +303,13 @@ public class QueryAuditExtension
       for (ExplainAnalyzer explainAnalyzer : loader) {
         if (dbProduct.contains(explainAnalyzer.supportedDatabase())) {
           List<Issue> explainIssues = explainAnalyzer.analyze(connection, queries);
+          // EXPLAIN-based issues bypass the detector registry, so the profile/disabled-rules
+          // decision is applied here.
+          QueryAuditConfig explainConfig = buildConfig(context);
+          explainIssues =
+              explainIssues.stream()
+                  .filter(issue -> !explainConfig.isRuleExcluded(issue.type().getCode()))
+                  .toList();
           if (!explainIssues.isEmpty()) {
             List<Issue> mergedInfo = new ArrayList<>(report.getInfoIssues());
             mergedInfo.addAll(explainIssues);

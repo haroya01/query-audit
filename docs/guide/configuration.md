@@ -17,6 +17,8 @@ All properties are optional. The table below lists every supported key under the
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Master switch for the entire auto-configuration. When `false`, the `QueryInterceptor` bean and the wrapping `BeanPostProcessor` are both skipped — the `@QueryAudit` annotation will not work either. Use `wrap-data-source.enabled: false` instead if you want to keep the interceptor active but skip the auto-wrap. |
+| `profile` | `String` | `"strict"` | Rule tier: `strict` (all rules), `recommended` (opinionated rules off), or `minimal` (safety-critical only). See [Rule Profiles](#rule-profiles). |
+| `enabled-rules` | `List<String>` | `[]` | Rule codes to run even when the profile tier excludes them. `disabled-rules` still wins. |
 | `mode` | `String` | `"annotated"` | Which tests the JUnit extension audits: `annotated` (opt-in via `@QueryAudit`) or `all` (every test, opt-out via `@QueryAuditExclude`). `all` additionally requires JUnit extension autodetection — see [Audit Coverage Mode](#audit-coverage-mode). |
 | `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
 | `fail-on-detection` | `boolean` | `true` | Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`. |
@@ -85,6 +87,39 @@ query-audit:
     output-dir: build/reports/query-audit
     show-info: true
 ```
+
+---
+
+## Rule Profiles
+
+All rules enabled at once is the honest default, but on a first run against a real codebase it
+buries the high-precision findings under style opinions. Profiles are named tiers:
+
+| Profile | What runs | Use it for |
+|---|---|---|
+| `strict` (default) | Every rule — the pre-0.5.0 behavior | Maximum coverage, mature suppression setup |
+| `recommended` | Everything except ~20 opinionated / context-dependent rules | First adoption, day-to-day CI |
+| `minimal` | Safety-critical rules only (`n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query`) | A lean, non-negotiable gate |
+
+```yaml
+query-audit:
+  profile: recommended
+  enabled-rules:
+    - force-index-hint   # re-activate a rule the profile excludes
+```
+
+Precedence: `disabled-rules` > `enabled-rules` > profile tier.
+
+The `recommended` exclusions are rules that legitimately fire on correct SQL — index hints,
+offset pagination at small scale, leading LIKE wildcards, EXPLAIN advisories
+(`full-scan`/`filesort`/`temporary-table`), and style opinions such as `or-abuse` or
+`regexp-usage`. The full list with per-rule rationale lives in the `RuleProfile` source. The
+tier assignment is v1 and will be revised as per-rule false-positive statistics accumulate —
+[false-positive reports](https://github.com/haroya01/query-audit/issues) directly shape it.
+
+`recommended` is deny-list based: a newly added rule joins it automatically unless flagged as
+opinionated. External rules registered via `ServiceLoader` without a rule code are never
+filtered by profiles.
 
 ---
 

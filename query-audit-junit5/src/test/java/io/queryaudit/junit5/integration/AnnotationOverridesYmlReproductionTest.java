@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.junit5.BooleanOverride;
 import io.queryaudit.junit5.DetectNPlusOne;
@@ -111,6 +112,8 @@ class AnnotationOverridesYmlReproductionTest {
               .slowQueryWarningMs(1234L)
               .slowQueryErrorMs(5678L)
               .auditMode(AuditMode.ALL)
+              .ruleProfile(RuleProfile.RECOMMENDED)
+              .addEnabledRule("force-index-hint")
               .build();
 
       QueryAuditConfig copy = QueryAuditConfig.Builder.from(source).build();
@@ -165,6 +168,8 @@ class AnnotationOverridesYmlReproductionTest {
           .as("slowQueryErrorMs")
           .isEqualTo(source.getSlowQueryErrorMs());
       assertThat(copy.getAuditMode()).as("auditMode").isEqualTo(source.getAuditMode());
+      assertThat(copy.getRuleProfile()).as("ruleProfile").isEqualTo(source.getRuleProfile());
+      assertThat(copy.getEnabledRules()).as("enabledRules").isEqualTo(source.getEnabledRules());
     }
   }
 
