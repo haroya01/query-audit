@@ -99,6 +99,17 @@ public final class QueryCountBaseline {
    * @throws IOException if the file cannot be written
    */
   public static void save(Path file, Map<String, QueryCounts> counts) throws IOException {
+    save(file, counts, "Query Guard Count Baseline");
+  }
+
+  /**
+   * Writes the counts with a caller-supplied header title, so other stores reusing this format
+   * (e.g. the query contracts file) stay self-describing.
+   *
+   * @since 0.5.0
+   */
+  public static void save(Path file, Map<String, QueryCounts> counts, String headerTitle)
+      throws IOException {
     if (file.getParent() != null) {
       Files.createDirectories(file.getParent());
     }
@@ -107,7 +118,7 @@ public final class QueryCountBaseline {
     Map<String, QueryCounts> sorted = new TreeMap<>(counts);
 
     try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
-      writer.write("# Query Guard Count Baseline");
+      writer.write("# " + headerTitle);
       writer.newLine();
       writer.write(
           "# Format: testClass | testMethod | selectCount | insertCount | updateCount | deleteCount | totalCount");
