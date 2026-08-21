@@ -18,6 +18,15 @@ public class QueryAuditProperties {
 
   private boolean enabled = true;
   private boolean failOnDetection = true;
+
+  /**
+   * Which tests the JUnit extension audits: {@code annotated} (opt-in via {@code @QueryAudit}, the
+   * default) or {@code all} (every test, opt-out via {@code @QueryAuditExclude}). {@code all}
+   * additionally requires JUnit extension autodetection so the extension is registered for
+   * unannotated tests.
+   */
+  private String mode = "annotated";
+
   private NPlusOne nPlusOne = new NPlusOne();
   private OffsetPagination offsetPagination = new OffsetPagination();
   private OrClause orClause = new OrClause();
@@ -54,6 +63,14 @@ public class QueryAuditProperties {
 
   public void setFailOnDetection(boolean failOnDetection) {
     this.failOnDetection = failOnDetection;
+  }
+
+  public String getMode() {
+    return mode;
+  }
+
+  public void setMode(String mode) {
+    this.mode = mode;
   }
 
   public NPlusOne getNPlusOne() {
@@ -356,12 +373,11 @@ public class QueryAuditProperties {
   }
 
   /**
-   * Controls the autoconfigured {@link
-   * org.springframework.beans.factory.config.BeanPostProcessor} that wraps every {@code DataSource}
-   * bean. Set {@code query-audit.wrap-data-source.enabled: false} as the documented escape hatch
-   * for issue #134 — when 3+ {@code @SpringBootTest} cache signatures coexist, the wrap interacts
-   * badly with Spring TestContext caching and the underlying {@code HikariDataSource} can be
-   * closed prematurely. Disabling this leaves {@link
+   * Controls the autoconfigured {@link org.springframework.beans.factory.config.BeanPostProcessor}
+   * that wraps every {@code DataSource} bean. Set {@code query-audit.wrap-data-source.enabled:
+   * false} as the documented escape hatch for issue #134 — when 3+ {@code @SpringBootTest} cache
+   * signatures coexist, the wrap interacts badly with Spring TestContext caching and the underlying
+   * {@code HikariDataSource} can be closed prematurely. Disabling this leaves {@link
    * io.queryaudit.core.config.QueryAuditConfig} and {@link
    * io.queryaudit.core.interceptor.QueryInterceptor} active so {@code @QueryAudit} per-test still
    * works.

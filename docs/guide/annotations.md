@@ -14,6 +14,7 @@ QueryAudit provides four annotations for different use cases. All annotations tr
 | `@DetectNPlusOne` | Class / Method | N+1 detection only | Yes (on N+1 only) |
 | `@ExpectMaxQueryCount` | Method | Assert max query count | Yes (on count exceeded) |
 | `@ExpectQueries` | Method | Assert per-type query budgets (SELECT/INSERT/UPDATE/DELETE) | Yes (on budget exceeded) |
+| `@QueryAuditExclude` | Class / Method | Opt a test out of auditing (the `mode: all` escape hatch) | No |
 
 ### Annotation Attributes at a Glance
 
@@ -185,6 +186,37 @@ class OrderServiceTest {
 !!! tip "Use this for gradual adoption"
     Start with `@EnableQueryInspector` to see what QueryAudit finds without breaking
     your builds. Once you've reviewed the issues, switch to `@QueryAudit` to enforce them.
+
+---
+
+## @QueryAuditExclude
+
+Opts a test class or method out of auditing.
+
+Built for `mode: all` suites (see [Audit Coverage Mode](configuration.md#audit-coverage-mode)),
+where every test is audited by default and this is the escape hatch for tests that
+intentionally violate a rule — load-shape fixtures, migration replays, bulk seed helpers.
+
+```java
+@QueryAuditExclude   // intentionally replays thousands of single-row inserts
+class SeedDataReplayTest { ... }
+```
+
+Also honored in the default `annotated` mode: a method carrying `@QueryAuditExclude` is
+skipped even when its class is annotated with `@QueryAudit`.
+
+```java
+@QueryAudit
+class OrderServiceTest {
+
+    @Test
+    void findOrders() { ... }          // audited
+
+    @QueryAuditExclude
+    @Test
+    void bulkFixtureReplay() { ... }   // skipped
+}
+```
 
 ---
 

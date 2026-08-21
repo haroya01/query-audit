@@ -48,6 +48,7 @@ public class QueryAuditConfig {
   private final RepositoryReturnTypeResolver repositoryReturnTypeResolver;
   private final boolean includeSetupQueries;
   private final boolean countInsteadOfExistsEnabled;
+  private final AuditMode auditMode;
 
   private QueryAuditConfig(Builder builder) {
     this.enabled = builder.enabled;
@@ -75,6 +76,7 @@ public class QueryAuditConfig {
     this.repositoryReturnTypeResolver = builder.repositoryReturnTypeResolver;
     this.includeSetupQueries = builder.includeSetupQueries;
     this.countInsteadOfExistsEnabled = builder.countInsteadOfExistsEnabled;
+    this.auditMode = builder.auditMode;
   }
 
   public static Builder builder() {
@@ -237,6 +239,16 @@ public class QueryAuditConfig {
     return countInsteadOfExistsEnabled;
   }
 
+  /**
+   * Returns which tests the JUnit extension audits: {@link AuditMode#ANNOTATED} (opt-in, the
+   * default) or {@link AuditMode#ALL} (opt-out via {@code @QueryAuditExclude}).
+   *
+   * @since 0.5.0
+   */
+  public AuditMode getAuditMode() {
+    return auditMode;
+  }
+
   public boolean isSuppressed(String issueCode, String table, String column) {
     if (suppressPatterns.isEmpty()) {
       return false;
@@ -254,9 +266,9 @@ public class QueryAuditConfig {
   }
 
   /**
-   * Cache of compiled word-boundary regexes for {@link #suppressQueries} patterns. The patterns
-   * are user-supplied, immutable for the lifetime of this config, and small (one entry per
-   * suppression rule); a plain {@link ConcurrentHashMap} is sufficient.
+   * Cache of compiled word-boundary regexes for {@link #suppressQueries} patterns. The patterns are
+   * user-supplied, immutable for the lifetime of this config, and small (one entry per suppression
+   * rule); a plain {@link ConcurrentHashMap} is sufficient.
    */
   private static final Map<String, Pattern> SUPPRESS_PATTERN_CACHE = new ConcurrentHashMap<>();
 
@@ -312,6 +324,7 @@ public class QueryAuditConfig {
     private RepositoryReturnTypeResolver repositoryReturnTypeResolver = null;
     private boolean includeSetupQueries = false;
     private boolean countInsteadOfExistsEnabled = false;
+    private AuditMode auditMode = AuditMode.ANNOTATED;
 
     /**
      * Creates a new builder pre-populated with all values from the given config. Useful for
@@ -343,6 +356,7 @@ public class QueryAuditConfig {
       b.slowQueryErrorMs = source.slowQueryErrorMs;
       b.repositoryReturnTypeResolver = source.repositoryReturnTypeResolver;
       b.countInsteadOfExistsEnabled = source.countInsteadOfExistsEnabled;
+      b.auditMode = source.auditMode;
       return b;
     }
 
@@ -506,6 +520,19 @@ public class QueryAuditConfig {
      */
     public Builder countInsteadOfExistsEnabled(boolean enabled) {
       this.countInsteadOfExistsEnabled = enabled;
+      return this;
+    }
+
+    /**
+     * Sets which tests the JUnit extension audits. {@code null} keeps the default ({@link
+     * AuditMode#ANNOTATED}).
+     *
+     * @since 0.5.0
+     */
+    public Builder auditMode(AuditMode auditMode) {
+      if (auditMode != null) {
+        this.auditMode = auditMode;
+      }
       return this;
     }
 

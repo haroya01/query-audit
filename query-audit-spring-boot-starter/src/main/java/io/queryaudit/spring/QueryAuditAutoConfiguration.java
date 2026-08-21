@@ -1,5 +1,6 @@
 package io.queryaudit.spring;
 
+import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.interceptor.DataSourceProxyFactory;
 import io.queryaudit.core.interceptor.QueryInterceptor;
@@ -40,6 +41,7 @@ public class QueryAuditAutoConfiguration {
     return QueryAuditConfig.builder()
         .enabled(properties.isEnabled())
         .failOnDetection(properties.isFailOnDetection())
+        .auditMode(AuditMode.parse(properties.getMode()))
         .nPlusOneThreshold(properties.getNPlusOne().getThreshold())
         .offsetPaginationThreshold(properties.getOffsetPagination().getThreshold())
         .orClauseThreshold(properties.getOrClause().getThreshold())
@@ -76,8 +78,8 @@ public class QueryAuditAutoConfiguration {
    * query-audit.enabled} and {@code query-audit.wrap-data-source.enabled} default to {@code true};
    * either can be flipped to {@code false} to skip the wrap. {@code wrap-data-source.enabled =
    * false} is the documented escape hatch for issue #134 — it disables only the auto-wrap while
-   * keeping {@link QueryAuditConfig} and {@link QueryInterceptor} available, so {@code
-   * @QueryAudit} per-test wrapping still works.
+   * keeping {@link QueryAuditConfig} and {@link QueryInterceptor} available, so {@code @QueryAudit}
+   * per-test wrapping still works.
    */
   @Bean(name = {"queryAuditDataSourcePostProcessor", "queryGuardDataSourcePostProcessor"})
   @ConditionalOnProperty(

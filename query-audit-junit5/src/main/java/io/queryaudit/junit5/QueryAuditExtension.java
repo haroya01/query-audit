@@ -3,6 +3,7 @@ package io.queryaudit.junit5;
 import io.queryaudit.core.analyzer.ExplainAnalyzer;
 import io.queryaudit.core.baseline.Baseline;
 import io.queryaudit.core.baseline.BaselineEntry;
+import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
@@ -64,6 +65,8 @@ public class QueryAuditExtension
   private static final String KEY_DATASOURCE = "dataSource";
   private static final String KEY_RETURN_TYPE_RESOLVER = "returnTypeResolver";
   private static final String KEY_DATASOURCE_HOOK_CLEANUP = "dataSourceHookCleanup";
+  private static final String KEY_ACTIVE = "auditActive";
+  private static final String KEY_AFTER_EACH_DONE = "afterEachDone";
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
@@ -76,6 +79,22 @@ public class QueryAuditExtension
 
   @Override
   public void beforeAll(ExtensionContext context) throws Exception {
+    // With the ServiceLoader registration + JUnit extension autodetection, this callback runs for
+    // every test class in the suite. The activation decision (audit mode + annotations +
+    // @QueryAuditExclude) is made once per class and stored so the per-method callbacks can read
+    // it without re-resolving the Spring context.
+    ExtensionContext.Store activeStore = context.getStore(NAMESPACE);
+    boolean active = computeActive(context);
+    activeStore.put(KEY_ACTIVE, active);
+    if (!active) {
+      return;
+    }
+    if (activeStore.get(KEY_INTERCEPTOR) != null) {
+      // Extension registered twice for this class (autodetection + @ExtendWith/@QueryAudit) —
+      // the second instance must not re-wrap the DataSource or double-hook listeners.
+      return;
+    }
+
     QueryInterceptor interceptor = new QueryInterceptor();
 
     // Apply memory configuration from @QueryAudit or defaults
@@ -125,6 +144,9 @@ public class QueryAuditExtension
 
   @Override
   public void beforeEach(ExtensionContext context) {
+    if (!isAuditActive(context)) {
+      return;
+    }
     QueryInterceptor interceptor = getInterceptor(context);
     if (interceptor != null) {
       interceptor.start();
@@ -142,6 +164,9 @@ public class QueryAuditExtension
 
   @Override
   public void beforeTestExecution(ExtensionContext context) {
+    if (!isAuditActive(context)) {
+      return;
+    }
     QueryInterceptor interceptor = getInterceptor(context);
     if (interceptor != null) {
       interceptor.setPhase(LifecyclePhase.TEST);
@@ -153,6 +178,9 @@ public class QueryAuditExtension
 
   @Override
   public void afterTestExecution(ExtensionContext context) {
+    if (!isAuditActive(context)) {
+      return;
+    }
     QueryInterceptor interceptor = getInterceptor(context);
     if (interceptor != null) {
       interceptor.setPhase(LifecyclePhase.TEARDOWN);
@@ -163,6 +191,17 @@ public class QueryAuditExtension
 
   @Override
   public void afterEach(ExtensionContext context) {
+    if (!isAuditActive(context)) {
+      return;
+    }
+    // Method-level store: guards against double analysis when the extension is registered twice
+    // (autodetection + @ExtendWith/@QueryAudit).
+    ExtensionContext.Store methodStore = context.getStore(NAMESPACE);
+    if (methodStore.get(KEY_AFTER_EACH_DONE) != null) {
+      return;
+    }
+    methodStore.put(KEY_AFTER_EACH_DONE, Boolean.TRUE);
+
     QueryInterceptor interceptor = getInterceptor(context);
     if (interceptor == null) {
       return;
@@ -568,6 +607,94 @@ public class QueryAuditExtension
       }
       throw new AssertionError(sb.toString());
     }
+  }
+
+  // ── Audit activation (issue #163) ──────────────────────────────────
+
+  /**
+   * Decides whether this test class is audited. {@code @QueryAuditExclude} always wins. In {@link
+   * AuditMode#ALL} every non-excluded class is audited; in {@link AuditMode#ANNOTATED} (the
+   * default) only classes that opted in — via {@code @QueryAudit}, {@code @EnableQueryInspector},
+   * or a direct {@code @ExtendWith(QueryAuditExtension.class)} — are. The annotated-mode check
+   * exists because the ServiceLoader registration makes JUnit's extension autodetection register
+   * this extension suite-wide; without it, merely enabling autodetection would audit everything.
+   */
+  private boolean computeActive(ExtensionContext context) {
+    if (isClassExcluded(context.getRequiredTestClass())) {
+      return false;
+    }
+    if (resolveAuditMode(context) == AuditMode.ALL) {
+      return true;
+    }
+    return findAnnotation(context) != null
+        || hasEnableQueryInspector(context)
+        || hasDirectExtendWith(context);
+  }
+
+  /**
+   * Per-callback gate: the class-level decision cached by {@code beforeAll}, plus method-level
+   * {@code @QueryAuditExclude}. Falls back to computing when no cached flag exists — the case for
+   * method-level {@code @QueryAudit}, where the extension is registered for the method only and
+   * {@code beforeAll} never ran.
+   */
+  private boolean isAuditActive(ExtensionContext context) {
+    Optional<Method> method = context.getTestMethod();
+    if (method.isPresent() && method.get().isAnnotationPresent(QueryAuditExclude.class)) {
+      return false;
+    }
+
+    ExtensionContext current = context;
+    while (current != null) {
+      Boolean active = current.getStore(NAMESPACE).get(KEY_ACTIVE, Boolean.class);
+      if (active != null) {
+        return active;
+      }
+      current = current.getParent().orElse(null);
+    }
+    return computeActive(context);
+  }
+
+  private static boolean isClassExcluded(Class<?> testClass) {
+    Class<?> clazz = testClass;
+    while (clazz != null) {
+      if (clazz.isAnnotationPresent(QueryAuditExclude.class)) {
+        return true;
+      }
+      clazz = clazz.getEnclosingClass();
+    }
+    return false;
+  }
+
+  /**
+   * Resolves the audit mode: the {@code queryAudit.mode} system property wins, then the Spring
+   * {@code query-audit.mode} property (via the {@code QueryAuditConfig} bean), then the {@link
+   * AuditMode#ANNOTATED} default.
+   */
+  private AuditMode resolveAuditMode(ExtensionContext context) {
+    String sysProp = resolveSystemProperty("queryAudit.mode", "queryGuard.mode");
+    if (sysProp != null && !sysProp.isBlank()) {
+      return AuditMode.parse(sysProp);
+    }
+    QueryAuditConfig springConfig = resolveSpringConfig(context);
+    if (springConfig != null) {
+      return springConfig.getAuditMode();
+    }
+    return AuditMode.ANNOTATED;
+  }
+
+  private static boolean hasDirectExtendWith(ExtensionContext context) {
+    Class<?> clazz = context.getRequiredTestClass();
+    while (clazz != null) {
+      for (ExtendWith extendWith : clazz.getAnnotationsByType(ExtendWith.class)) {
+        for (Class<?> registered : extendWith.value()) {
+          if (registered == QueryAuditExtension.class) {
+            return true;
+          }
+        }
+      }
+      clazz = clazz.getEnclosingClass();
+    }
+    return false;
   }
 
   // ── Config building ────────────────────────────────────────────────
