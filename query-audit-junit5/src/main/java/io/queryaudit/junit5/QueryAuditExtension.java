@@ -12,6 +12,7 @@ import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
 import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.parser.SqlParser;
+import io.queryaudit.core.regression.QueryContracts;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCountRegressionDetector;
 import io.queryaudit.core.regression.QueryCounts;
@@ -67,6 +68,7 @@ public class QueryAuditExtension
   private static final String KEY_DATASOURCE_HOOK_CLEANUP = "dataSourceHookCleanup";
   private static final String KEY_ACTIVE = "auditActive";
   private static final String KEY_AFTER_EACH_DONE = "afterEachDone";
+  private static final String KEY_CONTRACTS = "queryContracts";
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
@@ -132,6 +134,9 @@ public class QueryAuditExtension
     Map<String, QueryCounts> countBaseline = QueryCountBaseline.load(countBaselinePath);
     store.put(KEY_COUNT_BASELINE, countBaseline);
     store.put(KEY_CURRENT_COUNTS, new ConcurrentHashMap<String, QueryCounts>());
+
+    // Load recorded query contracts for snapshot enforcement (issue #166)
+    store.put(KEY_CONTRACTS, QueryCountBaseline.load(resolveContractsPath()));
 
     // Register Hibernate LazyLoadTracker if Hibernate is on the classpath
     LazyLoadTracker tracker = hibernateIntegration.registerTracker(context, NAMESPACE);
@@ -275,6 +280,9 @@ public class QueryAuditExtension
     // --- @ExpectQueries ---
     checkExpectQueries(context, queries, testName);
 
+    // --- Query snapshot contracts (issue #166) ---
+    checkQueryContracts(context, queries, testClass, testName);
+
     // --- @DetectNPlusOne ---
     checkDetectNPlusOne(context, report, testName);
 
@@ -405,6 +413,7 @@ public class QueryAuditExtension
     QueryAuditDataSourceStore.clear();
 
     writeCountBaselineIfRequested(context);
+    writeContractsIfRequested(context);
 
     // Register a ReportFinalizer in the root context store so that
     // writeReport + openReportInBrowser runs exactly once after ALL test classes finish,
@@ -487,6 +496,85 @@ public class QueryAuditExtension
         System.err.println("[QueryAudit] Failed to write HTML report: " + e.getMessage());
       }
     }
+  }
+
+  // ── Query snapshot contracts (issue #166) ─────────────────────────
+
+  /**
+   * Enforces the recorded query contract for this test, if one exists. Skipped in record mode (a
+   * red suite must still be able to re-record) and when the method declares {@code @ExpectQueries}
+   * — the inline budget is the more specific contract and wins.
+   */
+  private void checkQueryContracts(
+      ExtensionContext context, List<QueryRecord> queries, String testClass, String testName) {
+    if (isContractRecordMode()) {
+      return;
+    }
+    Optional<Method> method = context.getTestMethod();
+    if (method.isPresent() && method.get().getAnnotation(ExpectQueries.class) != null) {
+      return;
+    }
+    Map<String, QueryCounts> contracts = getContracts(context);
+    if (contracts == null || contracts.isEmpty()) {
+      return;
+    }
+    String failure =
+        QueryContracts.verify(testClass, testName, QueryCounts.from(queries), contracts, queries);
+    if (failure != null) {
+      throw new AssertionError(failure);
+    }
+  }
+
+  /** Merge-writes the accumulated per-test counts into the contracts file in record mode. */
+  private void writeContractsIfRequested(ExtensionContext context) {
+    if (!isContractRecordMode()) {
+      return;
+    }
+    Map<String, QueryCounts> currentCounts = getCurrentCounts(context);
+    if (currentCounts == null || currentCounts.isEmpty()) {
+      return;
+    }
+    try {
+      Path contractsPath = resolveContractsPath();
+      Map<String, QueryCounts> merged = new LinkedHashMap<>(QueryCountBaseline.load(contractsPath));
+      merged.putAll(currentCounts);
+      QueryCountBaseline.save(contractsPath, merged, "QueryAudit Query Contracts");
+      System.out.println(
+          "[QueryAudit] Query contracts recorded: "
+              + contractsPath.toAbsolutePath()
+              + " ("
+              + currentCounts.size()
+              + " test(s))");
+    } catch (Exception e) {
+      System.err.println("[QueryAudit] Failed to write query contracts: " + e.getMessage());
+    }
+  }
+
+  private static boolean isContractRecordMode() {
+    return Boolean.parseBoolean(
+        resolveSystemProperty(
+            "queryAudit.contracts.record", "queryGuard.contracts.record", "false"));
+  }
+
+  private static Path resolveContractsPath() {
+    String sysProp = resolveSystemProperty("queryAudit.contractsPath", "queryGuard.contractsPath");
+    if (sysProp != null && !sysProp.isEmpty()) {
+      return Path.of(sysProp);
+    }
+    return Path.of(QueryContracts.DEFAULT_FILE_NAME);
+  }
+
+  @SuppressWarnings("unchecked")
+  private Map<String, QueryCounts> getContracts(ExtensionContext context) {
+    ExtensionContext current = context;
+    while (current != null) {
+      Object obj = current.getStore(NAMESPACE).get(KEY_CONTRACTS);
+      if (obj instanceof Map<?, ?> map) {
+        return (Map<String, QueryCounts>) map;
+      }
+      current = current.getParent().orElse(null);
+    }
+    return null;
   }
 
   // ── Annotation-specific checks ─────────────────────────────────────

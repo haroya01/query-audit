@@ -90,6 +90,7 @@ nav:
     - Configuration: guide/configuration.md
     - Reports: guide/reports.md
     - Suppressing Issues: guide/suppressing.md
+    - Query Contracts: guide/contracts.md
     - CI/CD Integration: guide/ci-cd.md
     - Troubleshooting: guide/troubleshooting.md
   - Architecture:

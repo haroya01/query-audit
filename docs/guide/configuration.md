@@ -404,6 +404,8 @@ These can be passed via `-D` flags on the command line:
 |---|---|
 | `-DqueryAudit.mode=all` | Audit every test regardless of annotations — see [Audit Coverage Mode](#audit-coverage-mode) |
 | `-DqueryAudit.updateBaseline=true` | Update the query count baseline file after test run |
+| `-DqueryAudit.contracts.record=true` | Record/refresh [query snapshot contracts](contracts.md) instead of enforcing them |
+| `-DqueryAudit.contractsPath=path` | Override the contracts file location |
 | `-DqueryAudit.countBaselinePath=path` | Override the query count baseline file path |
 | `-Dqueryaudit.autoOpenReport=true` | Force open HTML report in browser |
 
