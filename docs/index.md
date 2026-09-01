@@ -1,147 +1,86 @@
 ---
-title: QueryAudit -- Automatic Query Performance Analysis for JUnit Tests
-description: Catch N+1 queries, missing indexes, and SQL anti-patterns before they hit production.
+title: QueryAudit for JUnit 5
+description: Catch query problems, enforce query budgets, and review database behavior before merge.
+hide:
+  - navigation
+  - toc
 ---
 
-<style>
-.qg-hero {
-  text-align: center;
-  padding: 2rem 0 3rem;
-}
-.qg-hero h1 {
-  font-size: 3rem;
-  font-weight: 800;
-  margin-bottom: 0.5rem;
-}
-.qg-hero .qg-tagline {
-  font-size: 1.25rem;
-  color: var(--md-default-fg-color--light);
-  max-width: 640px;
-  margin: 0 auto 2rem;
-}
-.qg-features {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1.5rem;
-  margin: 2rem 0;
-}
-.qg-feature {
-  padding: 1.5rem;
-  border-radius: 8px;
-  border: 1px solid var(--md-default-fg-color--lightest);
-}
-.qg-feature h3 {
-  margin-top: 0;
-}
-.qg-flow {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 2rem 0;
-  font-size: 1.05rem;
-}
-.qg-flow-step {
-  padding: 0.75rem 1.25rem;
-  border-radius: 8px;
-  border: 1px solid var(--md-default-fg-color--lightest);
-  background: var(--md-code-bg-color);
-  text-align: center;
-  font-weight: 500;
-}
-.qg-flow-arrow {
-  font-size: 1.5rem;
-  color: var(--md-default-fg-color--light);
-}
-</style>
+<div class="qa-hero">
+  <div class="qa-hero__copy">
+    <p class="qa-eyebrow">QUERYAUDIT FOR JUNIT 5</p>
+    <h1>Make database behavior part of your test contract.</h1>
+    <p class="qa-hero__lead">
+      Catch N+1 queries, missing indexes, unsafe DML, and query-count drift before merge. Turn test SQL into findings, budgets, and reviewable contracts.
+    </p>
+    <div class="qa-hero__actions">
+      <a href="getting-started/installation/" class="md-button md-button--primary">Install QueryAudit</a>
+      <a href="#see-the-finding-where-it-started" class="md-button">See how it works</a>
+    </div>
+  </div>
+  <div class="qa-terminal" aria-label="Abbreviated QueryAudit test failure">
+    <div class="qa-terminal__bar">
+      <span class="qa-terminal__dots" aria-hidden="true">● ● ●</span>
+      <span>abbreviated test failure</span>
+    </div>
+    <pre><code>QueryAudit detected 1 issue(s)
+in findOrdersWithItems:
 
-<div class="qg-hero" markdown>
-
-# QueryAudit
-
-<p class="qg-tagline">
-Stop shipping slow queries. Catch N+1, missing indexes, and dozens of other SQL anti-patterns automatically during your JUnit tests -- 67 detection rules in total.
-</p>
-
-[Get Started](getting-started/installation.md){ .md-button .md-button--primary }
-[View on GitHub](https://github.com/haroya01/query-audit){ .md-button }
-
+<span class="qa-terminal__error">[ERROR] N+1 Query detected (table: items)</span>
+  Detail: Lazy collection 'items' on Order
+          initialized 5 times for 5 entities
+  Suggestion: Use @EntityGraph, JOIN FETCH,
+              or @BatchSize</code></pre>
+  </div>
 </div>
 
----
+<ul class="qa-facts" aria-label="Compatibility and project facts">
+  <li><strong>60+</strong><span>active finding types</span></li>
+  <li><strong>Java 17+</strong><span>CI on 17 and 21</span></li>
+  <li><strong>JUnit 5.9+</strong><span>test lifecycle integration</span></li>
+  <li><strong>Boot 3 &amp; 4</strong><span>auto-configuration</span></li>
+  <li><strong>MySQL + PostgreSQL</strong><span>index metadata</span></li>
+  <li><strong>Apache 2.0</strong><span>available on Maven Central</span></li>
+</ul>
 
-<div class="qg-features" markdown>
+## Two dependencies. One annotation.
 
-<div class="qg-feature" markdown>
+Add the Spring Boot starter and the database module to your test configuration.
 
-### :material-magnify-scan: 67 Detection Rules
+=== "Gradle"
 
-Catches N+1 queries, missing indexes, `SELECT *`, DML anti-patterns, batch insert and update opportunities, functions in `WHERE` clauses, implicit type conversions, locking risks, ORM inefficiencies, and more.
+    ```groovy
+    dependencies {
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.5.0' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.5.0' // x-release-please-version
+    }
+    ```
 
-</div>
+=== "Maven"
 
-<div class="qg-feature" markdown>
+    ```xml
+    <dependencies>
+        <dependency>
+            <groupId>io.github.haroya01</groupId>
+            <artifactId>query-audit-spring-boot-starter</artifactId>
+            <version>0.5.0</version> <!-- x-release-please-version -->
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.haroya01</groupId>
+            <artifactId>query-audit-mysql</artifactId>
+            <version>0.5.0</version> <!-- x-release-please-version -->
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    ```
 
-### :material-check-decagram: Structural Detection
-
-Confirmed detections are **structural** -- they inspect SQL text and index metadata, not runtime data. Heuristics live in the INFO tier so the WARNING/ERROR tier stays high-signal. False positives are tracked as bugs and fixed -- the goal is "if QueryAudit flags it as confirmed, it is a real problem worth investigating."
-
-</div>
-
-<div class="qg-feature" markdown>
-
-### :material-cog-off: Zero Config
-
-Add one annotation to your test class. That's it. QueryAudit auto-discovers your `DataSource`, intercepts queries, analyzes them, and reports issues. Works with JUnit 5 and Spring Boot. Supports **MySQL** and **PostgreSQL**.
-
-</div>
-
-<div class="qg-feature" markdown>
-
-### :material-file-document-check: Actionable Reports
-
-Every issue includes the exact SQL statement, affected table, column, the detection rule that fired, and a concrete fix suggestion you can apply immediately.
-
-</div>
-
-</div>
-
----
-
-## How It Works
-
-<div class="qg-flow">
-  <div class="qg-flow-step">:material-test-tube: Run JUnit test</div>
-  <div class="qg-flow-arrow">:material-arrow-right:</div>
-  <div class="qg-flow-step">:material-database-search: Intercept SQL queries</div>
-  <div class="qg-flow-arrow">:material-arrow-right:</div>
-  <div class="qg-flow-step">:material-table-key: Fetch index metadata</div>
-  <div class="qg-flow-arrow">:material-arrow-right:</div>
-  <div class="qg-flow-step">:material-magnify: Apply 67 rules</div>
-  <div class="qg-flow-arrow">:material-arrow-right:</div>
-  <div class="qg-flow-step">:material-alert-circle: Report & fail</div>
-</div>
-
-QueryAudit hooks into your test's `DataSource` via a lightweight proxy. During test execution, it captures every SQL statement. After the test completes, it:
-
-1. **Parses** each query to identify tables, columns, joins, and clauses
-2. **Fetches index metadata** from your database (MySQL `SHOW INDEX` or PostgreSQL `pg_catalog`)
-3. **Cross-references** the query structure against actual indexes
-4. **Applies 67 detection rules** covering N+1, missing indexes, DML safety, locking risks, and more
-5. **Produces a structured report** with severity, root cause, and fix suggestions
-
-No runtime agents. No production overhead. Just add an annotation.
-
----
-
-## See It in Action
-
-Add a single annotation to any test class:
+For PostgreSQL, replace `query-audit-mysql` with `query-audit-postgresql`. The
+[installation guide](getting-started/installation.md) has the full Gradle and Maven examples.
 
 ```java
 @SpringBootTest
-@QueryAudit // (1)!
+@QueryAudit
 class OrderServiceTest {
 
     @Autowired
@@ -150,95 +89,122 @@ class OrderServiceTest {
     @Test
     void findOrdersWithItems() {
         List<Order> orders = orderService.findAllWithItems();
+
         assertThat(orders).hasSize(5);
     }
 }
 ```
 
-1.  That's it. No configuration, no extra beans, no proxy wiring.
+With the Spring Boot starter, QueryAudit discovers the test `DataSource`, captures its SQL, and
+runs the checks selected by your profile. Configured findings fail the test that produced them.
+The [quick start](getting-started/quickstart.md) walks through a complete first run.
 
-Run your tests, and QueryAudit produces a report like this:
+## See the finding where it started
 
-```
-================================================================================
-                          QUERY AUDIT REPORT
-                    OrderServiceTest (8 queries analyzed)
-================================================================================
+Small test datasets hide query problems. QueryAudit captures SQL while the test runs, then
+evaluates query structure, repetition, Hibernate lazy loads, and available index metadata.
+Reports keep the finding attached to its test and include the relevant context that could be
+collected: SQL, application call site, table or column, index state, and a suggested next step.
 
-CONFIRMED ISSUES (action required)
-────────────────────────────────────────────────────────────────────────────────
+The console excerpt above is intentionally shortened. Use the
+[HTML and JSON reports](guide/reports.md) when you need the full test-suite view or a durable CI
+artifact.
 
-[ERROR] N+1 Query Detected
-  Repeated query: select * from order_items where order_id = ?
-  Executions:     5 times (threshold: 3)
-  Suggestion:     Use JOIN FETCH or @EntityGraph to load order_items
-                  with the parent query.
+<div class="qa-card-grid" markdown>
+  <div class="qa-card" markdown>
 
-[ERROR] Missing Index
-  Query:   select * from order_items where order_id = ?
-  Table:   order_items
-  Column:  order_id
-  Suggestion: CREATE INDEX idx_order_items_order_id
-              ON order_items (order_id);
+<p class="qa-card__kicker">DETECT</p>
 
-[WARNING] Repeated single-row INSERT should use batch insert
-  Query:   insert into orders (...) values (?, ?, ?)
-  Table:   orders
-  Detail:  Single-row INSERT executed 10 times. Each INSERT causes a
-           separate network round-trip and log flush.
-  Suggestion: Use batch INSERT (saveAll() in JPA with hibernate.jdbc.batch_size).
+### [Find query anti-patterns](detections/overview.md)
 
-────────────────────────────────────────────────────────────────────────────────
-INFO (for review)
-────────────────────────────────────────────────────────────────────────────────
+Cover N+1 access, unsafe DML, inefficient SQL shapes, locking risks, ORM behavior, and connection lifecycle problems.
 
-[WARNING] SELECT * Usage
-  Query:   select * from orders where user_id = ?
-  Table:   orders
-  Suggestion: List only the columns you need
+  </div>
+  <div class="qa-card" markdown>
 
-================================================================================
-  3 confirmed issues | 1 info | 8 queries
-================================================================================
-```
+<p class="qa-card__kicker">INDEXES</p>
 
-!!! success "CONFIRMED vs INFO"
-    **CONFIRMED** issues are structural problems -- missing indexes, N+1 patterns, unsafe DML. These will cause performance issues at scale and should be fixed.
+### [Check real index metadata](detections/missing-index.md)
 
-    **INFO** items are best-practice suggestions like avoiding `SELECT *`. They won't fail your build by default, but are worth reviewing.
+Cross-reference query columns with MySQL `SHOW INDEX` or PostgreSQL `pg_catalog` instead of guessing from SQL alone.
 
----
+  </div>
+  <div class="qa-card" markdown>
 
-## Why QueryAudit?
+<p class="qa-card__kicker">BUDGETS</p>
 
-Most teams discover query performance problems in one of two painful ways: a production incident, or a slow code review where someone manually checks SQL logs.
+### [Set per-test query limits](guide/annotations.md#expectqueries)
 
-Existing tools help with **observability** -- they let you *see* your queries:
+Cap total queries or set separate SELECT, INSERT, UPDATE, and DELETE budgets with JUnit annotations.
 
-| Tool | What it does | What it doesn't do |
-|---|---|---|
-| **datasource-proxy** | Logs queries and execution time | No analysis, no detection |
-| **p6spy** | Logs queries with bind parameters | Same -- logging only |
-| **Spring Hibernate statistics** | Counts queries per session | Counts, but doesn't analyze |
+  </div>
+  <div class="qa-card" markdown>
 
-**QueryAudit closes the gap.** It doesn't just log queries -- it applies 67 detection rules to every captured query, cross-references index metadata from your database (MySQL `SHOW INDEX` or PostgreSQL `pg_catalog`), and produces a structured report with concrete fix suggestions.
+<p class="qa-card__kicker">CONTRACTS</p>
 
-| Capability | datasource-proxy | p6spy | QueryAudit |
-|---|:---:|:---:|:---:|
-| Query logging | :material-check: | :material-check: | :material-check: |
-| Bind parameter capture | :material-close: | :material-check: | :material-check: |
-| N+1 detection | :material-close: | :material-close: | :material-check: |
-| Missing index detection | :material-close: | :material-close: | :material-check: |
-| DML anti-pattern detection | :material-close: | :material-close: | :material-check: |
-| SQL anti-pattern detection | :material-close: | :material-close: | :material-check: |
-| Query count regression | :material-close: | :material-close: | :material-check: |
-| Fix suggestions | :material-close: | :material-close: | :material-check: |
-| CI/CD fail-on-issue | :material-close: | :material-close: | :material-check: |
+### [Record statement-count snapshots](guide/contracts.md)
 
----
+Keep recorded tests' statement counts in a compact file and review intentional changes beside the code.
 
-## Getting Started
+  </div>
+  <div class="qa-card" markdown>
 
-Ready to add QueryAudit to your project? It takes about two minutes.
+<p class="qa-card__kicker">ADOPTION</p>
 
-[Installation Guide :material-arrow-right:](getting-started/installation.md){ .md-button .md-button--primary }
+### [Audit the full suite](guide/configuration.md#audit-coverage-mode)
+
+Enable JUnit extension autodetection, choose a profile, set `mode: all`, and baseline known findings.
+
+  </div>
+  <div class="qa-card" markdown>
+
+<p class="qa-card__kicker">REPORTS</p>
+
+### [Keep useful build artifacts](guide/reports.md)
+
+Produce console, HTML, versioned JSON, and GitHub Actions output for local work and CI review.
+
+  </div>
+</div>
+
+<div class="qa-loop-section" markdown>
+  <div class="qa-loop-section__copy" markdown>
+
+## A feedback loop your tools can verify
+
+A green unit test can still hide extra reads or writes. QueryAudit gives CI and automated
+development tools an objective way to check database-facing changes.
+
+  </div>
+  <ol class="qa-loop" role="list">
+    <li><strong>Capture</strong><span>Audited tests expose SQL statement templates and counts.</span></li>
+    <li><strong>Inspect</strong><span><code>report.json</code> stores findings and available source, index, and remediation context.</span></li>
+    <li><strong>Change</strong><span>Update the query, mapping, or schema with the evidence beside it.</span></li>
+    <li><strong>Verify</strong><span>Run the same tests and compare the two reports.</span></li>
+  </ol>
+</div>
+
+<div class="qa-verdict" aria-label="QueryAudit report comparison result">
+  <code>[QueryAudit] compare: 0 new, 1 resolved, 0 persisting; queries 11 -&gt; 7</code>
+</div>
+
+The comparator returns `0` when there are no new confirmed findings, `1` when new findings
+appear, and `2` when it cannot produce a verdict. Structured remediation is included for
+supported high-precision findings; other findings keep their human-readable suggestion.
+[Read the report and comparator contract](guide/reports.md#delta-verdict-compare-two-runs).
+
+For recorded tests with SQL in both runs, query snapshot contracts check SELECT, INSERT, UPDATE,
+and DELETE counts. Their file diff makes a recorded statement-count change visible beside the code.
+
+<div class="qa-cta" markdown>
+
+## Inspect findings before enforcing them
+
+Use `@EnableQueryInspector` to report detected findings without failing on those findings. Query
+budgets and recorded contracts continue to enforce their own limits. Review the first results,
+select a rule profile, then switch to `@QueryAudit` when the suite is ready to enforce findings.
+
+[Follow the quick start](getting-started/quickstart.md){ .md-button .md-button--primary }
+[Record query contracts](guide/contracts.md){ .md-button }
+
+</div>

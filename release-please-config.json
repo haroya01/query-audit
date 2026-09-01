@@ -20,6 +20,11 @@
         },
         {
           "type": "generic",
+          "path": "docs/index.md",
+          "glob": false
+        },
+        {
+          "type": "generic",
           "path": "docs/getting-started/installation.md",
           "glob": false
         },
