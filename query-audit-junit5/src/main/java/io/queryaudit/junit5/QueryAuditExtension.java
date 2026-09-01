@@ -75,6 +75,11 @@ public class QueryAuditExtension
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
 
+  private enum InitializationScope {
+    CLASS,
+    METHOD
+  }
+
   private final DataSourceResolver dataSourceResolver = new DataSourceResolver();
   private final IndexMetadataCollector metadataCollector = new IndexMetadataCollector();
   private final HibernateIntegration hibernateIntegration = new HibernateIntegration();
@@ -89,8 +94,8 @@ public class QueryAuditExtension
     // it without re-resolving the Spring context.
     ExtensionContext.Store activeStore = context.getStore(NAMESPACE);
     boolean active = computeActive(context);
-    QueryAuditConfig earlyConfig = active ? buildConfig(context) : null;
-    if (earlyConfig != null && !earlyConfig.isEnabled()) {
+    QueryAuditConfig auditConfig = active ? buildConfig(context) : null;
+    if (auditConfig != null && !auditConfig.isEnabled()) {
       active = false;
     }
     activeStore.put(KEY_ACTIVE, active);
@@ -105,14 +110,11 @@ public class QueryAuditExtension
 
     // A missing DataSource is reported from beforeEach, when method-level exclusions are known.
     // If a DataSource is already available, initialize once at class scope as before.
-    initializeAudit(context, earlyConfig, false, false);
+    initializeAudit(context, auditConfig, InitializationScope.CLASS);
   }
 
   private void initializeAudit(
-      ExtensionContext context,
-      QueryAuditConfig earlyConfig,
-      boolean dataSourceRequired,
-      boolean methodScoped)
+      ExtensionContext context, QueryAuditConfig auditConfig, InitializationScope scope)
       throws Exception {
     if (getInterceptor(context) != null) {
       return;
@@ -120,7 +122,7 @@ public class QueryAuditExtension
 
     DataSource dataSource = dataSourceResolver.resolve(context);
     if (dataSource == null) {
-      if (dataSourceRequired) {
+      if (scope == InitializationScope.METHOD) {
         throw new ExtensionConfigurationException(
             "QueryAudit: DataSource unavailable for active audit of "
                 + auditTarget(context)
@@ -131,7 +133,7 @@ public class QueryAuditExtension
     }
 
     QueryInterceptor interceptor = new QueryInterceptor();
-    interceptor.setMaxQueries(earlyConfig.getMaxQueries());
+    interceptor.setMaxQueries(auditConfig.getMaxQueries());
 
     ExtensionContext.Store store = context.getStore(NAMESPACE);
     store.put(KEY_INTERCEPTOR, interceptor);
@@ -169,7 +171,7 @@ public class QueryAuditExtension
     if (tracker != null) {
       store.put(KEY_LAZY_LOAD_TRACKER, tracker);
     }
-    if (methodScoped) {
+    if (scope == InitializationScope.METHOD) {
       store.put(
           KEY_METHOD_SCOPED_CLEANUP,
           (ExtensionContext.Store.CloseableResource)
@@ -201,12 +203,12 @@ public class QueryAuditExtension
     if (!isAuditActive(context)) {
       return;
     }
-    QueryAuditConfig earlyConfig = buildConfig(context);
-    if (!earlyConfig.isEnabled()) {
+    QueryAuditConfig auditConfig = buildConfig(context);
+    if (!auditConfig.isEnabled()) {
       context.getStore(NAMESPACE).put(KEY_ACTIVE, Boolean.FALSE);
       return;
     }
-    initializeAudit(context, earlyConfig, true, true);
+    initializeAudit(context, auditConfig, InitializationScope.METHOD);
 
     QueryInterceptor interceptor = getInterceptor(context);
     interceptor.start();
