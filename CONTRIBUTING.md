@@ -202,10 +202,10 @@ MY_NEW_ISSUE("my-new-issue", "Description of the issue", WARNING),
 
 ### 3. Register the detector
 
-In `QueryAuditAnalyzer.createRules()`:
+In `DetectionRuleRegistry.createBuiltInRules()`:
 
 ```java
-ruleList.add(new MyNewDetector());
+rules.add(new MyNewDetector());
 ```
 
 ### 4. Write tests
