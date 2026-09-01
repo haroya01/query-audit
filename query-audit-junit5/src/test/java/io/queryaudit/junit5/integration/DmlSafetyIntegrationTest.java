@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
+import io.queryaudit.core.model.IndexInfo;
+import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
@@ -14,8 +16,12 @@ import io.queryaudit.junit5.integration.entity.Team;
 import io.queryaudit.junit5.integration.repository.MemberRepository;
 import io.queryaudit.junit5.integration.repository.TeamRepository;
 import jakarta.persistence.EntityManager;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -33,6 +39,11 @@ class DmlSafetyIntegrationTest {
   @Autowired MemberRepository memberRepository;
   @Autowired QueryInterceptor queryInterceptor;
   @Autowired EntityManager entityManager;
+  @Autowired DataSource dataSource;
+
+  private static final IndexMetadata MEMBERS_PRIMARY_KEY =
+      new IndexMetadata(
+          Map.of("members", List.of(new IndexInfo("members", "PRIMARY", "id", 1, false, 9))));
 
   @BeforeEach
   void setUp() {
@@ -50,8 +61,13 @@ class DmlSafetyIntegrationTest {
   }
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries) {
+    return analyze(testName, queries, null);
+  }
+
+  private QueryAuditReport analyze(
+      String testName, List<QueryRecord> queries, IndexMetadata indexMetadata) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-    return analyzer.analyze("DmlSafetyIntegrationTest", testName, queries, null);
+    return analyzer.analyze("DmlSafetyIntegrationTest", testName, queries, indexMetadata);
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {
@@ -73,6 +89,7 @@ class DmlSafetyIntegrationTest {
       QueryAuditReport report =
           analyze("updateWithoutWhere", queryInterceptor.getRecordedQueries());
       assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.UPDATE_WITHOUT_WHERE);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_UPDATE);
     }
 
     @Test
@@ -187,6 +204,49 @@ class DmlSafetyIntegrationTest {
 
       QueryAuditReport report = analyze("repeatedInsert", queryInterceptor.getRecordedQueries());
       assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.REPEATED_SINGLE_INSERT);
+    }
+  }
+
+  @Nested
+  @DisplayName("RepeatedSingleUpdate")
+  class RepeatedSingleUpdateTests {
+
+    @Test
+    @DisplayName("Repeated single-row UPDATEs are detected (threshold >= 3)")
+    void detectsRepeatedUpdates() {
+      queryInterceptor.start();
+      for (int i = 1; i <= 5; i++) {
+        entityManager
+            .createNativeQuery("UPDATE members SET status = 'INACTIVE' WHERE id = " + i)
+            .executeUpdate();
+      }
+      queryInterceptor.stop();
+
+      QueryAuditReport report =
+          analyze("repeatedUpdate", queryInterceptor.getRecordedQueries(), MEMBERS_PRIMARY_KEY);
+      assertThat(allIssues(report)).anyMatch(i -> i.type() == IssueType.REPEATED_SINGLE_UPDATE);
+    }
+
+    @Test
+    @DisplayName("A prepared JDBC batch is not reported as repeated single-row UPDATEs")
+    void preparedBatchIsNotFlagged() throws Exception {
+      queryInterceptor.start();
+      try (Connection connection = dataSource.getConnection();
+          PreparedStatement statement =
+              connection.prepareStatement("UPDATE members SET status = ? WHERE id = ?")) {
+        for (long id = 1; id <= 5; id++) {
+          statement.setString(1, "INACTIVE");
+          statement.setLong(2, id);
+          statement.addBatch();
+        }
+        statement.executeBatch();
+      } finally {
+        queryInterceptor.stop();
+      }
+
+      QueryAuditReport report =
+          analyze("preparedBatch", queryInterceptor.getRecordedQueries(), MEMBERS_PRIMARY_KEY);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_UPDATE);
     }
   }
 

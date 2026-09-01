@@ -3,11 +3,15 @@ package io.queryaudit.core.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
+import io.queryaudit.core.detector.RepeatedSingleUpdateDetector;
+import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
+import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,6 +20,9 @@ import org.junit.jupiter.api.Test;
 class QueryAuditConfigExtendedTest {
 
   private static final IndexMetadata EMPTY_INDEX = new IndexMetadata(Map.of());
+  private static final IndexMetadata POSTS_PRIMARY_KEY =
+      new IndexMetadata(
+          Map.of("posts", List.of(new IndexInfo("posts", "PRIMARY", "id", 1, false, 100))));
 
   private static QueryRecord q(String sql) {
     return new QueryRecord(sql, 1000L, System.currentTimeMillis(), null);
@@ -110,8 +117,76 @@ class QueryAuditConfigExtendedTest {
     assertThat(config.getTooManyJoinsThreshold()).isEqualTo(5);
     assertThat(config.getExcessiveColumnThreshold()).isEqualTo(15);
     assertThat(config.getRepeatedInsertThreshold()).isEqualTo(3);
+    assertThat(config.getRepeatedUpdateThreshold()).isEqualTo(3);
+    assertThat(config.getRepeatedUpdateExcludeTables())
+        .containsExactlyInAnyOrderElementsOf(RepeatedSingleUpdateDetector.DEFAULT_EXCLUDE_TABLES);
     assertThat(config.getWriteAmplificationThreshold()).isEqualTo(6);
     assertThat(config.getSlowQueryWarningMs()).isEqualTo(500);
     assertThat(config.getSlowQueryErrorMs()).isEqualTo(3000);
+  }
+
+  @Test
+  void repeatedUpdateExclusionsAreDefensivelyCopied() {
+    Set<String> exclusions = new HashSet<>(Set.of("audit_*"));
+    QueryAuditConfig.Builder builder =
+        QueryAuditConfig.builder().repeatedUpdateExcludeTables(exclusions);
+    exclusions.add("changed_after_assignment");
+
+    QueryAuditConfig config = builder.addRepeatedUpdateExcludeTable("etl_*").build();
+
+    assertThat(config.getRepeatedUpdateExcludeTables())
+        .containsExactlyInAnyOrder("audit_*", "etl_*");
+  }
+
+  @Test
+  void ruleProfilesAndExplicitOverridesApplyToRepeatedUpdates() {
+    QueryAuditConfig recommended =
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.RECOMMENDED).build();
+    QueryAuditConfig minimal = QueryAuditConfig.builder().ruleProfile(RuleProfile.MINIMAL).build();
+    QueryAuditConfig enabled =
+        QueryAuditConfig.builder()
+            .ruleProfile(RuleProfile.MINIMAL)
+            .addEnabledRule("repeated-single-update")
+            .build();
+    QueryAuditConfig disabled =
+        QueryAuditConfig.builder()
+            .ruleProfile(RuleProfile.MINIMAL)
+            .addEnabledRule("repeated-single-update")
+            .addDisabledRule("repeated-single-update")
+            .build();
+
+    assertThat(repeatedUpdateIssues(recommended)).hasSize(1);
+    assertThat(repeatedUpdateIssues(minimal)).isEmpty();
+    assertThat(repeatedUpdateIssues(enabled)).hasSize(1);
+    assertThat(repeatedUpdateIssues(disabled)).isEmpty();
+  }
+
+  @Test
+  void severityOverrideAppliesToRepeatedUpdates() {
+    QueryAuditConfig config =
+        QueryAuditConfig.builder()
+            .addSeverityOverride("repeated-single-update", Severity.ERROR)
+            .build();
+
+    assertThat(repeatedUpdateIssues(config))
+        .singleElement()
+        .extracting(Issue::severity)
+        .isEqualTo(Severity.ERROR);
+  }
+
+  private static List<Issue> repeatedUpdateIssues(QueryAuditConfig config) {
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
+    QueryAuditReport report =
+        analyzer.analyze(
+            "test",
+            List.of(
+                q("UPDATE posts SET title = 'one' WHERE id = 1"),
+                q("UPDATE posts SET title = 'two' WHERE id = 2"),
+                q("UPDATE posts SET title = 'three' WHERE id = 3")),
+            POSTS_PRIMARY_KEY);
+    return java.util.stream.Stream.concat(
+            report.getConfirmedIssues().stream(), report.getInfoIssues().stream())
+        .filter(issue -> issue.type() == IssueType.REPEATED_SINGLE_UPDATE)
+        .toList();
   }
 }

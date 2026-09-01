@@ -111,7 +111,7 @@ QueryAudit automatically:
 
 1. **Intercepts** every SQL query (SELECT, INSERT, UPDATE, DELETE) executed during the test
 2. **Collects index metadata** via `SHOW INDEX` (MySQL) or `pg_catalog` (PostgreSQL) from your test database
-3. **Applies 64 detection rules** to the captured queries
+3. **Applies 67 detection rules** to the captured queries
 4. **Prints a report** to the console output
 5. **Fails the test** if confirmed issues are found (configurable)
 
@@ -220,6 +220,28 @@ spring:
 auditLogRepository.saveAll(auditLogs);
 ```
 
+#### Fix Repeated Single UPDATE
+
+When every row receives the same value, replace the per-entity loop with one set-based update:
+
+```java
+@Modifying
+@Query("UPDATE Order o SET o.status = :status WHERE o.id IN :ids")
+int updateStatus(@Param("ids") Collection<Long> ids, @Param("status") OrderStatus status);
+```
+
+If each row needs different values, enable Hibernate's JDBC update batching:
+
+```yaml
+spring:
+  jpa:
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 50
+        order_updates: true
+```
+
 ---
 
 ## More Annotations
@@ -240,4 +262,4 @@ Once you're comfortable with `@QueryAudit`, explore the 4 annotations:
 - :material-arrow-right: [Spring Boot Integration](spring-boot.md) -- Auto-configuration details and `application.yml` options
 - :material-arrow-right: [Annotations Guide](../guide/annotations.md) -- All 4 annotations and when to use each
 - :material-arrow-right: [Configuration](../guide/configuration.md) -- Tune thresholds, suppress issues
-- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 64 detection rules explained
+- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 67 active detection rules explained

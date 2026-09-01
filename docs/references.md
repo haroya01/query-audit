@@ -73,6 +73,7 @@ peer-reviewed academic research, and established technical literature.
 | UPDATE/DELETE without WHERE | mysql-tips, innodb-locks-set | -- | Dintyala et al. (2020) | Karwin (2010) |
 | DML without Index | innodb-locks-set, innodb-locking | explicit-locking | Shao et al. (2020) | Schwartz et al. (2012) |
 | Repeated Single INSERT | insert-optimization, bulk-data-loading, Connector/J | -- | -- | Mihalcea (2016) |
+| Repeated Single UPDATE | Connector/J | -- | -- | Mihalcea (2016) |
 | INSERT ... SELECT * | insert-select | -- | Alshemaimri & Elmasri (2021) | Karwin (2010) |
 | OFFSET Pagination | -- | -- | Shao et al. (2020) | Schwartz et al. (2012) |
 | OR Abuse | -- | -- | Dintyala et al. (2020) | -- |
@@ -95,4 +96,4 @@ peer-reviewed academic research, and established technical literature.
 ## See Also
 
 - [Architecture Overview](architecture/overview.md) -- How detection rules use these references
-- [Configuration Reference](guide/configuration.md) -- All 66 detection rules and their codes
+- [Configuration Reference](guide/configuration.md) -- All 67 active detection rules and their codes

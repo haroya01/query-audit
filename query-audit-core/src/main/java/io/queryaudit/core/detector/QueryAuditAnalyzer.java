@@ -14,14 +14,12 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.ServiceLoader;
 import java.util.Set;
 
 /**
- * Central analyzer that runs all detection rules against captured queries and produces a report. It
- * orchestrates the execution of built-in, ServiceLoader-discovered, and user-provided custom
- * detection rules, applies baseline filtering and severity overrides, and classifies issues into
- * confirmed, informational, and acknowledged categories.
+ * Runs configured detection rules against captured queries and produces a report. The analyzer
+ * applies baseline filtering and severity overrides, then classifies findings as confirmed,
+ * informational, or acknowledged.
  *
  * @author haroya
  * @since 0.2.0
@@ -45,7 +43,7 @@ public class QueryAuditAnalyzer {
    */
   public QueryAuditAnalyzer(QueryAuditConfig config, Path baselinePath) {
     this.config = config;
-    this.rules = createRules(config);
+    this.rules = new DetectionRuleRegistry(config).createRules();
 
     // Load baseline
     if (baselinePath != null) {
@@ -63,7 +61,7 @@ public class QueryAuditAnalyzer {
    */
   public QueryAuditAnalyzer(QueryAuditConfig config, List<BaselineEntry> baseline) {
     this.config = config;
-    this.rules = createRules(config);
+    this.rules = new DetectionRuleRegistry(config).createRules();
     this.baseline = baseline != null ? baseline : List.of();
   }
 
@@ -78,10 +76,7 @@ public class QueryAuditAnalyzer {
   public QueryAuditAnalyzer(
       QueryAuditConfig config, Path baselinePath, List<DetectionRule> additionalRules) {
     this.config = config;
-    this.rules = createRules(config);
-    if (additionalRules != null) {
-      this.rules.addAll(additionalRules);
-    }
+    this.rules = new DetectionRuleRegistry(config).createRules(additionalRules);
 
     if (baselinePath != null) {
       this.baseline = Baseline.load(baselinePath);
@@ -101,142 +96,8 @@ public class QueryAuditAnalyzer {
   public QueryAuditAnalyzer(
       QueryAuditConfig config, List<BaselineEntry> baseline, List<DetectionRule> additionalRules) {
     this.config = config;
-    this.rules = createRules(config);
-    if (additionalRules != null) {
-      this.rules.addAll(additionalRules);
-    }
+    this.rules = new DetectionRuleRegistry(config).createRules(additionalRules);
     this.baseline = baseline != null ? baseline : List.of();
-  }
-
-  /**
-   * Creates the full list of detection rules based on the given configuration.
-   *
-   * @param config query-audit configuration used for threshold values
-   * @return mutable list of all detection rules
-   */
-  private List<DetectionRule> createRules(QueryAuditConfig config) {
-    List<DetectionRule> ruleList = new ArrayList<>();
-    ruleList.add(new NPlusOneDetector(config.getNPlusOneThreshold()));
-    ruleList.add(new SelectAllDetector());
-    ruleList.add(new WhereFunctionDetector());
-    ruleList.add(new OrAbuseDetector(config.getOrClauseThreshold()));
-    ruleList.add(new OffsetPaginationDetector(config.getOffsetPaginationThreshold()));
-    ruleList.add(new MissingIndexDetector());
-    ruleList.add(new CompositeIndexDetector());
-    ruleList.add(new LikeWildcardDetector());
-    // DuplicateQueryDetector disabled: datasource-proxy provides SQL with '?' placeholders,
-    // so we can't distinguish "same query, same params" from "same query, different params".
-    // N+1 detector already covers repeated patterns. Re-enable when parameter tracking is added.
-    // ruleList.add(new DuplicateQueryDetector(config.getNPlusOneThreshold()));
-    ruleList.add(new CartesianJoinDetector());
-    ruleList.add(new CorrelatedSubqueryDetector());
-    ruleList.add(new ForUpdateWithoutIndexDetector());
-    ruleList.add(new RedundantFilterDetector());
-    ruleList.add(new SargabilityDetector());
-    ruleList.add(new IndexRedundancyDetector());
-    ruleList.add(
-        new SlowQueryDetector(config.getSlowQueryWarningMs(), config.getSlowQueryErrorMs()));
-    ruleList.add(new CountInsteadOfExistsDetector(config.isCountInsteadOfExistsEnabled()));
-    ruleList.add(new UnboundedResultSetDetector(config.getRepositoryReturnTypeResolver()));
-    ruleList.add(new WriteAmplificationDetector(config.getWriteAmplificationThreshold()));
-    ruleList.add(new ImplicitTypeConversionDetector());
-    ruleList.add(new UnionWithoutAllDetector());
-    ruleList.add(new CoveringIndexDetector());
-    ruleList.add(new OrderByLimitWithoutIndexDetector());
-    ruleList.add(new LargeInListDetector(config.getLargeInListThreshold()));
-    ruleList.add(new DistinctMisuseDetector());
-    ruleList.add(new NullComparisonDetector());
-    ruleList.add(new HavingMisuseDetector());
-    ruleList.add(new RangeLockDetector());
-    ruleList.add(new ReadModifyWriteDetector());
-    ruleList.add(new UpdateWithoutWhereDetector());
-    ruleList.add(new DmlWithoutIndexDetector());
-    ruleList.add(
-        new RepeatedSingleInsertDetector(
-            config.getRepeatedInsertThreshold(), config.getRepeatedInsertExcludeTables()));
-    ruleList.add(new InsertSelectAllDetector());
-    ruleList.add(new OrderByRandDetector());
-    ruleList.add(new NotInSubqueryDetector());
-    ruleList.add(new TooManyJoinsDetector(config.getTooManyJoinsThreshold()));
-    ruleList.add(new ImplicitJoinDetector());
-    ruleList.add(new StringConcatInWhereDetector());
-    ruleList.add(new SelectCountStarWithoutWhereDetector());
-    ruleList.add(new InsertOnDuplicateKeyDetector());
-    ruleList.add(new GroupByFunctionDetector());
-    ruleList.add(new ForUpdateNonUniqueIndexDetector());
-    ruleList.add(new SubqueryInDmlDetector());
-    ruleList.add(new InsertSelectLocksSourceDetector());
-    ruleList.add(new CollectionManagementDetector());
-    ruleList.add(new DerivedDeleteDetector());
-    ruleList.add(new ExcessiveColumnFetchDetector(config.getExcessiveColumnThreshold()));
-    ruleList.add(new ImplicitColumnsInsertDetector());
-    ruleList.add(new RegexpInsteadOfLikeDetector());
-    ruleList.add(new FindInSetDetector());
-    ruleList.add(new UnusedJoinDetector());
-    ruleList.add(new MergeableQueriesDetector());
-    ruleList.add(new NonDeterministicPaginationDetector());
-
-    // New detectors from Team 3 gap analysis
-    ruleList.add(new LimitWithoutOrderByDetector());
-    ruleList.add(new WindowFunctionWithoutPartitionDetector());
-    ruleList.add(new ForUpdateWithoutTimeoutDetector());
-    ruleList.add(new CaseInWhereDetector());
-    ruleList.add(new ForceIndexHintDetector());
-
-    // External detectors discovered via ServiceLoader (user-provided)
-    ServiceLoader<DetectionRule> externalRules = ServiceLoader.load(DetectionRule.class);
-    for (DetectionRule rule : externalRules) {
-      ruleList.add(rule);
-    }
-
-    // Filter out rules excluded by the profile tier or explicit disables
-    ruleList.removeIf(rule -> isRuleDisabled(rule, config));
-
-    return ruleList;
-  }
-
-  /**
-   * Checks if a rule should be disabled based on the config. Maps rule classes to their issue type
-   * codes for filtering.
-   */
-  private boolean isRuleDisabled(DetectionRule rule, QueryAuditConfig config) {
-    // Prefer the explicit rule code when available: profile-aware decision (exact match)
-    String ruleCode = rule.getRuleCode();
-    if (ruleCode != null) {
-      return config.isRuleExcluded(ruleCode);
-    }
-
-    // Fallback: heuristic match based on class name for external/legacy rules
-    String className = rule.getClass().getSimpleName();
-    for (String disabledCode : config.getDisabledRules()) {
-      if (matchesRuleCode(className, disabledCode)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Heuristic match between a detector class name and a rule code. Converts the code (e.g.,
-   * "select-all") to a class name fragment (e.g., "SelectAll") and checks if the class name
-   * contains it.
-   */
-  private boolean matchesRuleCode(String className, String code) {
-    // Convert "select-all" -> "SelectAll", "n-plus-one" -> "NPlusOne"
-    String[] parts = code.split("-");
-    StringBuilder expected = new StringBuilder();
-    for (String part : parts) {
-      if (part.equals("n")) {
-        expected.append("N");
-      } else if (!part.isEmpty()) {
-        expected.append(Character.toUpperCase(part.charAt(0)));
-        if (part.length() > 1) {
-          expected.append(part.substring(1));
-        }
-      }
-    }
-    String fragment = expected.toString();
-    return className.contains(fragment);
   }
 
   public QueryAuditAnalyzer() {
@@ -303,41 +164,7 @@ public class QueryAuditAnalyzer {
     List<Issue> infoIssues = new ArrayList<>();
     List<Issue> acknowledgedIssues = new ArrayList<>();
 
-    for (Issue issue : allIssues) {
-      // Profile tier / enabled-rules / disabled-rules decision on the exact issue code. This is
-      // the correctness net: rule-level filtering above can only exclude detectors that declare
-      // getRuleCode(), and most built-ins rely on the class-name heuristic instead.
-      if (config.isRuleExcluded(issue.type().getCode())) {
-        continue;
-      }
-      if (config.isSuppressed(issue.type().getCode(), issue.table(), issue.column())) {
-        continue;
-      }
-
-      // Apply severity override if configured
-      Severity effectiveSeverity =
-          config.getEffectiveSeverity(issue.type().getCode(), issue.severity());
-      Issue effectiveIssue =
-          effectiveSeverity != issue.severity()
-              ? new Issue(
-                  issue.type(),
-                  effectiveSeverity,
-                  issue.query(),
-                  issue.table(),
-                  issue.column(),
-                  issue.detail(),
-                  issue.suggestion(),
-                  issue.sourceLocation())
-              : issue;
-
-      if (Baseline.isAcknowledged(baseline, effectiveIssue)) {
-        acknowledgedIssues.add(effectiveIssue);
-      } else if (effectiveIssue.severity() == Severity.INFO) {
-        infoIssues.add(effectiveIssue);
-      } else {
-        confirmedIssues.add(effectiveIssue);
-      }
-    }
+    classifyIssues(allIssues, confirmedIssues, infoIssues, acknowledgedIssues);
 
     // Single-pass calculation of unique patterns and total execution time.
     // Replaces two separate stream passes over filteredQueries.
@@ -361,6 +188,89 @@ public class QueryAuditAnalyzer {
         (int) uniquePatternCount,
         filteredQueries.size(),
         totalExecutionTimeNanos);
+  }
+
+  /**
+   * Applies the configured rule selection, suppressions, severity overrides, and baseline to issues
+   * detected outside the normal SQL rule list, then merges them into an existing report.
+   *
+   * @param report report that already contains the SQL analysis result
+   * @param detectedIssues additional issues to classify and merge
+   * @return the merged report, or {@code report} when no additional issue remains after policy
+   *     evaluation
+   * @since 0.6.0
+   */
+  public QueryAuditReport mergeDetectedIssues(QueryAuditReport report, List<Issue> detectedIssues) {
+    if (detectedIssues == null || detectedIssues.isEmpty()) {
+      return report;
+    }
+
+    List<Issue> confirmedIssues = new ArrayList<>(report.getConfirmedIssues());
+    List<Issue> infoIssues = new ArrayList<>(report.getInfoIssues());
+    List<Issue> acknowledgedIssues = new ArrayList<>(report.getAcknowledgedIssues());
+    int existingIssueCount = confirmedIssues.size() + infoIssues.size() + acknowledgedIssues.size();
+
+    classifyIssues(detectedIssues, confirmedIssues, infoIssues, acknowledgedIssues);
+
+    int mergedIssueCount = confirmedIssues.size() + infoIssues.size() + acknowledgedIssues.size();
+    if (mergedIssueCount == existingIssueCount) {
+      return report;
+    }
+
+    QueryAuditReport mergedReport =
+        new QueryAuditReport(
+            report.getTestClass(),
+            report.getTestName(),
+            confirmedIssues,
+            infoIssues,
+            acknowledgedIssues,
+            report.getAllQueries(),
+            report.getUniquePatternCount(),
+            report.getTotalQueryCount(),
+            report.getTotalExecutionTimeNanos());
+    return mergedReport.withIndexMetadata(report.getIndexMetadata());
+  }
+
+  private void classifyIssues(
+      List<Issue> issues,
+      List<Issue> confirmedIssues,
+      List<Issue> infoIssues,
+      List<Issue> acknowledgedIssues) {
+    for (Issue issue : issues) {
+      // The exact issue code is the correctness net for detectors that do not declare a rule code.
+      if (config.isRuleExcluded(issue.type().getCode())) {
+        continue;
+      }
+      if (config.isSuppressed(issue.type().getCode(), issue.table(), issue.column())) {
+        continue;
+      }
+
+      Issue effectiveIssue = applySeverityOverride(issue);
+      if (Baseline.isAcknowledged(baseline, effectiveIssue)) {
+        acknowledgedIssues.add(effectiveIssue);
+      } else if (effectiveIssue.severity() == Severity.INFO) {
+        infoIssues.add(effectiveIssue);
+      } else {
+        confirmedIssues.add(effectiveIssue);
+      }
+    }
+  }
+
+  private Issue applySeverityOverride(Issue issue) {
+    Severity effectiveSeverity =
+        config.getEffectiveSeverity(issue.type().getCode(), issue.severity());
+    if (effectiveSeverity == issue.severity()) {
+      return issue;
+    }
+    return new Issue(
+        issue.type(),
+        effectiveSeverity,
+        issue.query(),
+        issue.table(),
+        issue.column(),
+        issue.detail(),
+        issue.suggestion(),
+        issue.sourceLocation());
   }
 
   public QueryAuditConfig getConfig() {

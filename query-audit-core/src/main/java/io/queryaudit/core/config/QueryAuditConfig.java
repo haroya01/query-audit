@@ -1,6 +1,7 @@
 package io.queryaudit.core.config;
 
 import io.queryaudit.core.detector.RepeatedSingleInsertDetector;
+import io.queryaudit.core.detector.RepeatedSingleUpdateDetector;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Severity;
@@ -42,6 +43,8 @@ public class QueryAuditConfig {
   private final int excessiveColumnThreshold;
   private final int repeatedInsertThreshold;
   private final Set<String> repeatedInsertExcludeTables;
+  private final int repeatedUpdateThreshold;
+  private final Set<String> repeatedUpdateExcludeTables;
   private final int writeAmplificationThreshold;
   private final long slowQueryWarningMs;
   private final long slowQueryErrorMs;
@@ -73,6 +76,9 @@ public class QueryAuditConfig {
     this.repeatedInsertThreshold = builder.repeatedInsertThreshold;
     this.repeatedInsertExcludeTables =
         Collections.unmodifiableSet(new HashSet<>(builder.repeatedInsertExcludeTables));
+    this.repeatedUpdateThreshold = builder.repeatedUpdateThreshold;
+    this.repeatedUpdateExcludeTables =
+        Collections.unmodifiableSet(new HashSet<>(builder.repeatedUpdateExcludeTables));
     this.writeAmplificationThreshold = builder.writeAmplificationThreshold;
     this.slowQueryWarningMs = builder.slowQueryWarningMs;
     this.slowQueryErrorMs = builder.slowQueryErrorMs;
@@ -218,6 +224,24 @@ public class QueryAuditConfig {
    */
   public Set<String> getRepeatedInsertExcludeTables() {
     return repeatedInsertExcludeTables;
+  }
+
+  /**
+   * Returns the repeated single-row UPDATE threshold.
+   *
+   * @since 0.6.0
+   */
+  public int getRepeatedUpdateThreshold() {
+    return repeatedUpdateThreshold;
+  }
+
+  /**
+   * Returns table-name globs excluded from repeated UPDATE detection.
+   *
+   * @since 0.6.0
+   */
+  public Set<String> getRepeatedUpdateExcludeTables() {
+    return repeatedUpdateExcludeTables;
   }
 
   public int getWriteAmplificationThreshold() {
@@ -369,6 +393,9 @@ public class QueryAuditConfig {
     private int repeatedInsertThreshold = 3;
     private Set<String> repeatedInsertExcludeTables =
         new HashSet<>(RepeatedSingleInsertDetector.DEFAULT_EXCLUDE_TABLES);
+    private int repeatedUpdateThreshold = 3;
+    private Set<String> repeatedUpdateExcludeTables =
+        new HashSet<>(RepeatedSingleUpdateDetector.DEFAULT_EXCLUDE_TABLES);
     private int writeAmplificationThreshold = 6;
     private long slowQueryWarningMs = 500;
     private long slowQueryErrorMs = 3000;
@@ -405,6 +432,8 @@ public class QueryAuditConfig {
       b.excessiveColumnThreshold = source.excessiveColumnThreshold;
       b.repeatedInsertThreshold = source.repeatedInsertThreshold;
       b.repeatedInsertExcludeTables = new HashSet<>(source.repeatedInsertExcludeTables);
+      b.repeatedUpdateThreshold = source.repeatedUpdateThreshold;
+      b.repeatedUpdateExcludeTables = new HashSet<>(source.repeatedUpdateExcludeTables);
       b.writeAmplificationThreshold = source.writeAmplificationThreshold;
       b.slowQueryWarningMs = source.slowQueryWarningMs;
       b.slowQueryErrorMs = source.slowQueryErrorMs;
@@ -541,6 +570,38 @@ public class QueryAuditConfig {
      */
     public Builder addRepeatedInsertExcludeTable(String pattern) {
       this.repeatedInsertExcludeTables.add(pattern);
+      return this;
+    }
+
+    /**
+     * Sets the repeated single-row UPDATE threshold.
+     *
+     * @since 0.6.0
+     */
+    public Builder repeatedUpdateThreshold(int repeatedUpdateThreshold) {
+      this.repeatedUpdateThreshold = repeatedUpdateThreshold;
+      return this;
+    }
+
+    /**
+     * Replaces the table-name globs that {@link RepeatedSingleUpdateDetector} treats as deliberate
+     * staging tables. Each entry is a case-insensitive glob with {@code *} as the only wildcard
+     * (e.g. {@code "etl_*"}). Pass an empty set to disable the exclusion entirely.
+     *
+     * @since 0.6.0
+     */
+    public Builder repeatedUpdateExcludeTables(Set<String> patterns) {
+      this.repeatedUpdateExcludeTables = new HashSet<>(patterns);
+      return this;
+    }
+
+    /**
+     * Adds one extra table-name glob to the repeated-single-update exclusion list.
+     *
+     * @since 0.6.0
+     */
+    public Builder addRepeatedUpdateExcludeTable(String pattern) {
+      this.repeatedUpdateExcludeTables.add(pattern);
       return this;
     }
 

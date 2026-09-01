@@ -297,9 +297,20 @@ class JsonReporterTest {
             IssueType.MISSING_WHERE_INDEX, Severity.ERROR, "sql", "orders", "user_id", "d", "s");
     Issue unmapped =
         new Issue(IssueType.WHERE_FUNCTION, Severity.ERROR, "sql", "orders", "email", "d", "s");
+    Issue batchUpdate =
+        new Issue(
+            IssueType.REPEATED_SINGLE_UPDATE, Severity.WARNING, "sql", "orders", null, "d", "s");
     QueryAuditReport report =
         new QueryAuditReport(
-            "TC", "tm", List.of(missingIndex, unmapped), List.of(), List.of(), List.of(), 2, 2, 0L);
+            "TC",
+            "tm",
+            List.of(missingIndex, unmapped, batchUpdate),
+            List.of(),
+            List.of(),
+            List.of(),
+            3,
+            3,
+            0L);
 
     String json = generateJson(report);
 
@@ -307,7 +318,9 @@ class JsonReporterTest {
         .contains(
             "\"remediation\": {\"kind\": \"add-index\", \"table\": \"orders\","
                 + " \"columns\": [\"user_id\"]}");
-    assertThat(json.split("\"remediation\"", -1)).hasSize(2); // exactly one remediation
+    assertThat(json)
+        .contains("\"remediation\": {\"kind\": \"batch-update\", \"table\": \"orders\"}");
+    assertThat(json.split("\"remediation\"", -1)).hasSize(3); // exactly two remediations
   }
 
   @Test

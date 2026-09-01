@@ -5,7 +5,7 @@ bugs, and anti-patterns during your test runs. The rules are organized by severi
 confidence model to help you prioritize fixes.
 
 !!! info "IssueType enum"
-    The `IssueType` enum currently contains **66** entries. **64** are actively emitted by
+    The `IssueType` enum currently contains **69** entries. **67** are actively emitted by
     detection rules (one rule can emit multiple issue types — `MissingIndexDetector` alone
     emits 4). The remaining 2 are [disabled or reserved](#disabled-reserved-rules).
     The full canonical list is in
@@ -85,49 +85,50 @@ The complete searchable reference of issue types emitted by the active detection
 | 25 | Slow Query | `slow-query` | WARNING | Query Patterns | Slow query detected |
 | 26 | Unbounded Result Set | `unbounded-result-set` | WARNING | SQL Anti-Patterns | SELECT without LIMIT could return unbounded rows |
 | 27 | Repeated Single INSERT | `repeated-single-insert` | WARNING | DML Safety | Repeated single-row INSERT should use batch |
-| 28 | Query Count Regression | `query-count-regression` | WARNING | Query Patterns | Query count regression detected |
-| 29 | DML Without Index | `dml-without-index` | WARNING | DML Safety | UPDATE/DELETE WHERE column has no index |
-| 30 | INSERT SELECT * | `insert-select-all` | WARNING | DML Safety | INSERT with SELECT * is fragile |
-| 31 | INSERT ON DUPLICATE KEY | `insert-on-duplicate-key` | WARNING | DML Safety | INSERT ON DUPLICATE KEY UPDATE may cause deadlocks |
-| 32 | Subquery in DML | `subquery-in-dml` | WARNING | DML Safety | Subquery in UPDATE/DELETE cannot use semijoin |
-| 33 | Implicit Columns INSERT | `implicit-columns-insert` | WARNING | DML Safety | INSERT without explicit column list is fragile |
-| 34 | Correlated Subquery | `correlated-subquery` | WARNING | JOIN Issues | Correlated subquery in SELECT clause |
-| 35 | Too Many JOINs | `too-many-joins` | WARNING | JOIN Issues | Query has too many JOINs |
-| 36 | Implicit JOIN | `implicit-join` | WARNING | JOIN Issues | Implicit comma-separated join syntax |
-| 37 | Unused JOIN | `unused-join` | WARNING | JOIN Issues | LEFT JOIN table is never referenced |
-| 38 | FOR UPDATE Non-Unique | `for-update-non-unique` | WARNING | Locking Risks | FOR UPDATE on non-unique index causes gap locks |
-| 39 | Range Lock Risk | `range-lock-risk` | WARNING | Locking Risks | Range + FOR UPDATE on unindexed column may gap lock |
-| 40 | String Concat in WHERE | `string-concat-where` | WARNING | MySQL-Specific | String concatenation in WHERE prevents index |
-| 41 | GROUP BY Function | `group-by-function` | WARNING | MySQL-Specific | Function in GROUP BY prevents index usage |
-| 42 | REGEXP Usage | `regexp-usage` | WARNING | MySQL-Specific | REGEXP/RLIKE prevents index usage |
-| 43 | FIND_IN_SET | `find-in-set` | WARNING | MySQL-Specific | FIND_IN_SET indicates comma-separated values violating 1NF |
-| 44 | Collection Delete+Reinsert | `collection-delete-reinsert` | WARNING | Hibernate/ORM | DELETE-all + re-INSERT pattern |
-| 45 | Derived Delete Loads Entities | `derived-delete-loads-entities` | WARNING | Hibernate/ORM | Derived delete loads entities before deletes |
-| 46 | LIMIT Without ORDER BY | `limit-without-order-by` | WARNING | Query Structure | LIMIT without ORDER BY returns non-deterministic rows |
-| 47 | Window No PARTITION | `window-no-partition` | WARNING | Query Structure | Window function without PARTITION BY |
-| 48 | FOR UPDATE No Timeout | `for-update-no-timeout` | WARNING | Locking Risks | FOR UPDATE without NOWAIT/SKIP LOCKED |
-| 49 | CASE in WHERE | `case-in-where` | WARNING | SQL Anti-Patterns | CASE expression in WHERE prevents index usage |
-| 50 | SELECT * | `select-all` | INFO | SQL Anti-Patterns | SELECT * usage |
-| 51 | Redundant Filter | `redundant-filter` | INFO | SQL Anti-Patterns | Redundant duplicate WHERE condition |
-| 52 | COUNT vs EXISTS | `count-instead-of-exists` | INFO | SQL Anti-Patterns | COUNT used where EXISTS would be more efficient |
-| 53 | UNION Without ALL | `union-without-all` | INFO | SQL Anti-Patterns | UNION without ALL forces deduplication sort |
-| 54 | Covering Index Opportunity | `covering-index-opportunity` | INFO | Index Issues | Query could benefit from a covering index |
-| 55 | COUNT(*) No WHERE | `count-star-no-where` | INFO | SQL Anti-Patterns | COUNT(*) without WHERE scans entire table |
-| 56 | INSERT SELECT Locks Source | `insert-select-locks-source` | INFO | DML Safety | INSERT...SELECT locks source table rows |
-| 57 | Excessive Column Fetch | `excessive-column-fetch` | INFO | SQL Anti-Patterns | Too many columns fetched, consider DTO projection |
-| 58 | Mergeable Queries | `mergeable-queries` | INFO | Query Patterns | Multiple queries to same table could be merged |
-| 59 | Non-Deterministic Pagination | `non-deterministic-pagination` | INFO | SQL Anti-Patterns | ORDER BY+LIMIT on non-unique column |
-| 60 | Force Index Hint | `force-index-hint` | INFO | SQL Anti-Patterns | FORCE/USE/IGNORE INDEX hint overrides optimizer |
-| 61 | N+1 Suspect | `n-plus-one-suspect` | INFO | Query Patterns | N+1 Query suspected (SQL-level heuristic) |
-| 62 | findById for Association | `find-by-id-for-association` | INFO | Hibernate/ORM | findById() used only for FK association; consider getReferenceById() |
-| 63 | Filesort | `filesort` | INFO | EXPLAIN-Based | Filesort detected in EXPLAIN output |
-| 64 | Temporary Table | `temporary-table` | INFO | EXPLAIN-Based | Temporary table usage in EXPLAIN output |
-| 65 | Read-Modify-Write | `read-modify-write` | INFO | Locking Risks | SELECT without a lock followed by INSERT/UPDATE on the same table, with no unique-constraint backing, upsert, atomic SET, or version column |
-| 66 | Connection Held Idle | `connection-held-idle` | INFO | Connection Lifecycle | Connection held while non-database work runs -- the pool-exhaustion shape |
+| 28 | Repeated Single UPDATE | `repeated-single-update` | WARNING | DML Safety | Repeated UPDATEs scoped by a unique key should use a set-based statement or batch |
+| 29 | Query Count Regression | `query-count-regression` | WARNING | Query Patterns | Query count regression detected |
+| 30 | DML Without Index | `dml-without-index` | WARNING | DML Safety | UPDATE/DELETE WHERE column has no index |
+| 31 | INSERT SELECT * | `insert-select-all` | WARNING | DML Safety | INSERT with SELECT * is fragile |
+| 32 | INSERT ON DUPLICATE KEY | `insert-on-duplicate-key` | WARNING | DML Safety | INSERT ON DUPLICATE KEY UPDATE may cause deadlocks |
+| 33 | Subquery in DML | `subquery-in-dml` | WARNING | DML Safety | Subquery in UPDATE/DELETE cannot use semijoin |
+| 34 | Implicit Columns INSERT | `implicit-columns-insert` | WARNING | DML Safety | INSERT without explicit column list is fragile |
+| 35 | Correlated Subquery | `correlated-subquery` | WARNING | JOIN Issues | Correlated subquery in SELECT clause |
+| 36 | Too Many JOINs | `too-many-joins` | WARNING | JOIN Issues | Query has too many JOINs |
+| 37 | Implicit JOIN | `implicit-join` | WARNING | JOIN Issues | Implicit comma-separated join syntax |
+| 38 | Unused JOIN | `unused-join` | WARNING | JOIN Issues | LEFT JOIN table is never referenced |
+| 39 | FOR UPDATE Non-Unique | `for-update-non-unique` | WARNING | Locking Risks | FOR UPDATE on non-unique index causes gap locks |
+| 40 | Range Lock Risk | `range-lock-risk` | WARNING | Locking Risks | Range + FOR UPDATE on unindexed column may gap lock |
+| 41 | String Concat in WHERE | `string-concat-where` | WARNING | MySQL-Specific | String concatenation in WHERE prevents index |
+| 42 | GROUP BY Function | `group-by-function` | WARNING | MySQL-Specific | Function in GROUP BY prevents index usage |
+| 43 | REGEXP Usage | `regexp-usage` | WARNING | MySQL-Specific | REGEXP/RLIKE prevents index usage |
+| 44 | FIND_IN_SET | `find-in-set` | WARNING | MySQL-Specific | FIND_IN_SET indicates comma-separated values violating 1NF |
+| 45 | Collection Delete+Reinsert | `collection-delete-reinsert` | WARNING | Hibernate/ORM | DELETE-all + re-INSERT pattern |
+| 46 | Derived Delete Loads Entities | `derived-delete-loads-entities` | WARNING | Hibernate/ORM | Derived delete loads entities before deletes |
+| 47 | LIMIT Without ORDER BY | `limit-without-order-by` | WARNING | Query Structure | LIMIT without ORDER BY returns non-deterministic rows |
+| 48 | Window No PARTITION | `window-no-partition` | WARNING | Query Structure | Window function without PARTITION BY |
+| 49 | FOR UPDATE No Timeout | `for-update-no-timeout` | WARNING | Locking Risks | FOR UPDATE without NOWAIT/SKIP LOCKED |
+| 50 | CASE in WHERE | `case-in-where` | WARNING | SQL Anti-Patterns | CASE expression in WHERE prevents index usage |
+| 51 | SELECT * | `select-all` | INFO | SQL Anti-Patterns | SELECT * usage |
+| 52 | Redundant Filter | `redundant-filter` | INFO | SQL Anti-Patterns | Redundant duplicate WHERE condition |
+| 53 | COUNT vs EXISTS | `count-instead-of-exists` | INFO | SQL Anti-Patterns | COUNT used where EXISTS would be more efficient |
+| 54 | UNION Without ALL | `union-without-all` | INFO | SQL Anti-Patterns | UNION without ALL forces deduplication sort |
+| 55 | Covering Index Opportunity | `covering-index-opportunity` | INFO | Index Issues | Query could benefit from a covering index |
+| 56 | COUNT(*) No WHERE | `count-star-no-where` | INFO | SQL Anti-Patterns | COUNT(*) without WHERE scans entire table |
+| 57 | INSERT SELECT Locks Source | `insert-select-locks-source` | INFO | DML Safety | INSERT...SELECT locks source table rows |
+| 58 | Excessive Column Fetch | `excessive-column-fetch` | INFO | SQL Anti-Patterns | Too many columns fetched, consider DTO projection |
+| 59 | Mergeable Queries | `mergeable-queries` | INFO | Query Patterns | Multiple queries to same table could be merged |
+| 60 | Non-Deterministic Pagination | `non-deterministic-pagination` | INFO | SQL Anti-Patterns | ORDER BY+LIMIT on non-unique column |
+| 61 | Force Index Hint | `force-index-hint` | INFO | SQL Anti-Patterns | FORCE/USE/IGNORE INDEX hint overrides optimizer |
+| 62 | N+1 Suspect | `n-plus-one-suspect` | INFO | Query Patterns | N+1 Query suspected (SQL-level heuristic) |
+| 63 | findById for Association | `find-by-id-for-association` | INFO | Hibernate/ORM | findById() used only for FK association; consider getReferenceById() |
+| 64 | Filesort | `filesort` | INFO | EXPLAIN-Based | Filesort detected in EXPLAIN output |
+| 65 | Temporary Table | `temporary-table` | INFO | EXPLAIN-Based | Temporary table usage in EXPLAIN output |
+| 66 | Read-Modify-Write | `read-modify-write` | INFO | Locking Risks | SELECT without a lock followed by INSERT/UPDATE on the same table, with no unique-constraint backing, upsert, atomic SET, or version column |
+| 67 | Connection Held Idle | `connection-held-idle` | INFO | Connection Lifecycle | Connection held while non-database work runs -- the pool-exhaustion shape |
 
 !!! note "Rule numbering"
-    Rules 50-60 are INFO severity. The table numbers are for reference only and do not correspond
-    to priority. Rules 1-11 are ERROR severity and should always be addressed. Rules 12-49 are
+    Rules 51-67 are INFO severity. The table numbers are for reference only and do not correspond
+    to priority. Rules 1-11 are ERROR severity and should always be addressed. Rules 12-50 are
     WARNING severity and should be reviewed.
 
 ---
@@ -159,7 +160,7 @@ Critical issues -- logic bugs, full table locks, or guaranteed performance degra
 
 ---
 
-### WARNING Severity (38 issue types)
+### WARNING Severity (39 issue types)
 
 Important issues that should be reviewed and typically fixed.
 
@@ -202,12 +203,13 @@ Important issues that should be reviewed and typically fixed.
 | `subquery-in-dml` | Subquery in UPDATE/DELETE can't use semijoin | Detect subqueries in UPDATE/DELETE statements |
 | `implicit-columns-insert` | INSERT without column list is fragile | Detect INSERT without column specification |
 
-#### Query Patterns (3 issue types)
+#### Query Patterns (4 issue types)
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
 | `slow-query` | Slow query detected | Compare execution time to configured threshold |
 | `repeated-single-insert` | Repeated single-row INSERT should batch | Normalize INSERT, group by pattern, check count |
+| `repeated-single-update` | Repeated UPDATEs scoped by a unique key should use a set-based statement or batch | Normalize UPDATE, require equality predicates that cover a unique index, group by pattern |
 | `query-count-regression` | Query count regression detected | Compare query count against baseline |
 
 #### JOIN Issues (4 issue types)
@@ -252,7 +254,7 @@ Important issues that should be reviewed and typically fixed.
 
 ---
 
-### INFO Severity (15 issue types)
+### INFO Severity (17 issue types)
 
 Best-practice suggestions and heuristic checks. These won't fail your build by default
 but are worth reviewing.
@@ -286,7 +288,7 @@ but are worth reviewing.
 
 ## Disabled & Reserved Rules
 
-The `IssueType` enum currently has **68 entries**. **66 are actively emitted** by detection
+The `IssueType` enum currently has **69 entries**. **67 are actively emitted** by detection
 rules. The remaining 2 entries fall into two categories:
 
 ### Disabled Rules (1 entry)
@@ -296,9 +298,9 @@ rules. The remaining 2 entries fall into two categories:
 | `duplicate-query` | **Disabled in code.** datasource-proxy provides SQL with `?` placeholders, making it impossible to distinguish "same query, same params" from "same query, different params." The N+1 detector already covers repeated patterns. Will be re-enabled when parameter tracking is added. |
 
 !!! warning "DuplicateQueryDetector"
-    The `DuplicateQueryDetector` class exists in the codebase but is commented out in
-    `QueryAuditAnalyzer.createRules()`. The `DUPLICATE_QUERY` IssueType remains in the enum
-    for forward compatibility.
+    The `DuplicateQueryDetector` class exists in the codebase but is intentionally omitted from
+    `DetectionRuleRegistry.createBuiltInRules()`. The `DUPLICATE_QUERY` IssueType remains in the
+    enum for forward compatibility.
 
 ### Reserved for Future EXPLAIN-based Detection (1 entry)
 
@@ -313,10 +315,10 @@ for full-table-scan detection in the EXPLAIN analyzers.
 
 | Category | Count |
 |----------|-------|
-| Active issue types emitted by detectors | **66** |
+| Active issue types emitted by detectors | **67** |
 | Disabled (DuplicateQueryDetector) | 1 |
 | Reserved (full-scan) | 1 |
-| **Total IssueType enum entries** | **68** |
+| **Total IssueType enum entries** | **69** |
 
 !!! note "Why fewer detector classes than active issue types?"
     A single detector can emit multiple issue types. The biggest example is
@@ -326,7 +328,7 @@ for full-table-scan detection in the EXPLAIN analyzers.
     the MySQL/PostgreSQL EXPLAIN analyzers emit `filesort` and `temporary-table`, the
     Hibernate-level trackers emit `find-by-id-for-association` and the authoritative N+1
     signal, and the connection lifecycle tracker emits `connection-held-idle` -- these run
-    outside `QueryAuditAnalyzer.createRules()`.
+    outside `DetectionRuleRegistry.createBuiltInRules()`.
 
 ---
 
@@ -379,6 +381,7 @@ for full-table-scan detection in the EXPLAIN analyzers.
 - [`update-without-where`](dml-anti-patterns.md) -- UPDATE/DELETE without WHERE (ERROR)
 - [`dml-without-index`](dml-anti-patterns.md) -- DML without index (WARNING)
 - [`repeated-single-insert`](dml-anti-patterns.md) -- Repeated single INSERT (WARNING)
+- [`repeated-single-update`](dml-anti-patterns.md) -- Repeated single-row UPDATE (WARNING)
 - [`insert-select-all`](dml-anti-patterns.md) -- INSERT SELECT * (WARNING)
 - [`insert-on-duplicate-key`](dml-anti-patterns.md) -- INSERT ON DUPLICATE KEY (WARNING)
 - [`subquery-in-dml`](dml-anti-patterns.md) -- Subquery in DML (WARNING)
@@ -429,9 +432,9 @@ for full-table-scan detection in the EXPLAIN analyzers.
 | Severity | Issue Types | Action |
 |----------|-------------|--------|
 | ERROR | 11 | Must fix -- logic bugs or guaranteed performance degradation |
-| WARNING | 38 | Should fix -- important issues that typically need attention |
-| INFO | 15 | Review -- best-practice suggestions, may have false positives |
-| **Active Total** | **64 issue types** | Emitted by the active detector set |
+| WARNING | 39 | Should fix -- important issues that typically need attention |
+| INFO | 17 | Review -- best-practice suggestions, may have false positives |
+| **Active Total** | **67 issue types** | Emitted by the active detector set |
 | Disabled | 1 | DuplicateQueryDetector (awaiting parameter tracking) |
 | Reserved | 1 | full-scan (EXPLAIN full-table-scan detection planned) |
 

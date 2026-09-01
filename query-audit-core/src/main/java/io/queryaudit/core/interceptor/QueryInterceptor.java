@@ -4,7 +4,6 @@ import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -58,15 +57,12 @@ public class QueryInterceptor implements QueryExecutionListener {
 
   private static final int MAX_FRAMES = 10;
 
-  // ArrayList + synchronization replaces CopyOnWriteArrayList.
-  // CopyOnWriteArrayList copies the entire backing array on every add(),
-  // which is O(n) per write and O(n^2) total for n queries — unacceptable
-  // when capturing thousands of queries per test.
-  private final List<QueryRecord> recordedQueries =
-      Collections.synchronizedList(new ArrayList<>(256));
+  private final Object captureLock = new Object();
+  private final List<QueryRecord> recordedQueries = new ArrayList<>(256);
+  private long droppedQueryCount;
+  private boolean capacityWarningLogged;
   private volatile boolean active = false;
   private volatile int maxQueries = DEFAULT_MAX_QUERIES;
-  private volatile boolean capacityWarningLogged = false;
   private volatile LifecyclePhase currentPhase = LifecyclePhase.TEST;
 
   // SQL string pool: identical SQL strings share the same object reference,
@@ -96,11 +92,19 @@ public class QueryInterceptor implements QueryExecutionListener {
       return;
     }
 
-    for (QueryInfo queryInfo : queryInfoList) {
-      String sql = queryInfo.getQuery();
-      if (sql != null && !sql.isBlank()) {
-        // Check capacity before recording to prevent unbounded memory growth.
+    synchronized (captureLock) {
+      if (!active) {
+        return;
+      }
+
+      for (QueryInfo queryInfo : queryInfoList) {
+        String sql = queryInfo.getQuery();
+        if (sql == null || sql.isBlank()) {
+          continue;
+        }
+
         if (recordedQueries.size() >= maxQueries) {
+          droppedQueryCount++;
           if (!capacityWarningLogged) {
             capacityWarningLogged = true;
             System.err.println(
@@ -111,7 +115,7 @@ public class QueryInterceptor implements QueryExecutionListener {
                     + "Increase the limit via QueryInterceptor.setMaxQueries() or "
                     + "query-audit.max-queries in application.yml.");
           }
-          return;
+          continue;
         }
         String pooledSql = poolString(sqlPool, sql);
         String stackTrace = poolString(stackTracePool, captureStackTrace());
@@ -141,17 +145,23 @@ public class QueryInterceptor implements QueryExecutionListener {
   }
 
   public void start() {
-    recordedQueries.clear();
-    sqlPool.clear();
-    stackTracePool.clear();
-    capacityWarningLogged = false;
-    connectionTracker.start();
-    currentPhase = LifecyclePhase.TEST;
-    active = true;
+    synchronized (captureLock) {
+      active = false;
+      recordedQueries.clear();
+      droppedQueryCount = 0;
+      capacityWarningLogged = false;
+      sqlPool.clear();
+      stackTracePool.clear();
+      connectionTracker.start();
+      currentPhase = LifecyclePhase.TEST;
+      active = true;
+    }
   }
 
   public void stop() {
-    active = false;
+    synchronized (captureLock) {
+      active = false;
+    }
     connectionTracker.stop();
   }
 
@@ -159,15 +169,29 @@ public class QueryInterceptor implements QueryExecutionListener {
     // Defensive copy into a mutable ArrayList. Cheaper than List.copyOf()
     // which iterates and checks each element for null. The caller gets
     // an independent snapshot that won't affect the internal list.
-    synchronized (recordedQueries) {
+    synchronized (captureLock) {
       return new ArrayList<>(recordedQueries);
     }
   }
 
+  /**
+   * Returns an immutable, consistent view of the current capture window.
+   *
+   * @since 0.6.0
+   */
+  public QueryCaptureSnapshot snapshot() {
+    synchronized (captureLock) {
+      return new QueryCaptureSnapshot(recordedQueries, droppedQueryCount);
+    }
+  }
+
   public void clear() {
-    recordedQueries.clear();
-    sqlPool.clear();
-    stackTracePool.clear();
+    synchronized (captureLock) {
+      recordedQueries.clear();
+      droppedQueryCount = 0;
+      sqlPool.clear();
+      stackTracePool.clear();
+    }
   }
 
   public boolean isActive() {
@@ -176,7 +200,8 @@ public class QueryInterceptor implements QueryExecutionListener {
 
   /**
    * Returns the maximum number of queries that will be recorded per test. When this limit is
-   * reached, further queries are silently dropped (with a single warning to stderr).
+   * exceeded, further queries are dropped and the capture snapshot is marked as truncated. A single
+   * warning is also written to stderr.
    *
    * @return the current max queries limit
    */

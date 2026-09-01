@@ -1,12 +1,14 @@
 package io.queryaudit.core.regression;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -58,7 +60,7 @@ class QueryCountBaselineTest {
   }
 
   @Test
-  void loadSkipsMalformedLines() throws IOException {
+  void loadRejectsLinesWithTheWrongNumberOfFields() throws IOException {
     Path file = tempDir.resolve(".query-audit-counts");
     Files.writeString(
         file,
@@ -66,16 +68,86 @@ class QueryCountBaselineTest {
                 # Header comment
                 RoomApiTest | testCreateRoom | 12 | 3 | 0 | 0 | 15
                 bad line without enough pipes
-                MessageApiTest | testSendMessage | not-a-number | 2 | 1 | 0 | 18
-                UserApiTest | testGetUser | 8 | 0 | 0 | 0 | 8
                 """);
 
-    Map<String, QueryCounts> loaded = QueryCountBaseline.load(file);
+    assertThatThrownBy(() -> QueryCountBaseline.load(file))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining(file.toAbsolutePath().toString())
+        .hasMessageContaining("line 3")
+        .hasMessageContaining("expected 7 pipe-separated fields, found 1");
+  }
 
-    // Only the valid lines should be loaded
-    assertThat(loaded).hasSize(2);
-    assertThat(loaded).containsKey(QueryCountBaseline.key("RoomApiTest", "testCreateRoom"));
-    assertThat(loaded).containsKey(QueryCountBaseline.key("UserApiTest", "testGetUser"));
+  @Test
+  void loadRejectsInvalidCounts() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    Files.writeString(file, "MessageApiTest | testSendMessage | not-a-number | 2 | 1 | 0 | 18\n");
+
+    assertThatThrownBy(() -> QueryCountBaseline.load(file))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining(file.toAbsolutePath().toString())
+        .hasMessageContaining("line 1")
+        .hasMessageContaining("selectCount must be an integer: not-a-number");
+  }
+
+  @Test
+  void loadRejectsNegativeCounts() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    Files.writeString(file, "MessageApiTest | testSendMessage | 1 | -1 | 0 | 0 | 0\n");
+
+    assertThatThrownBy(() -> QueryCountBaseline.load(file))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("line 1")
+        .hasMessageContaining("insertCount must not be negative: -1");
+  }
+
+  @Test
+  void loadRejectsAnInconsistentTotal() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    Files.writeString(file, "MessageApiTest | testSendMessage | 1 | 2 | 0 | 0 | 4\n");
+
+    assertThatThrownBy(() -> QueryCountBaseline.load(file))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("line 1")
+        .hasMessageContaining("expected 3, found 4");
+  }
+
+  @Test
+  void loadRejectsAnExistingPathThatIsNotAFile() {
+    assertThatThrownBy(() -> QueryCountBaseline.load(tempDir))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining(tempDir.toAbsolutePath().toString())
+        .hasMessageContaining("Cannot read QueryAudit policy file");
+  }
+
+  @Test
+  void loadRejectsADanglingSymbolicLink() {
+    Path file = tempDir.resolve(".query-audit-counts");
+    try {
+      Files.createSymbolicLink(file, tempDir.resolve("missing-counts"));
+    } catch (IOException | UnsupportedOperationException e) {
+      Assumptions.abort("Symbolic links are unavailable: " + e.getMessage());
+    }
+
+    assertThatThrownBy(() -> QueryCountBaseline.load(file))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining(file.toAbsolutePath().toString())
+        .hasMessageContaining("Cannot read QueryAudit policy file");
+  }
+
+  @Test
+  void loadRejectsDuplicateTestEntries() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    Files.writeString(
+        file,
+        """
+                OrderServiceTest | loadsOrders | 1 | 0 | 0 | 0 | 1
+                OrderServiceTest | loadsOrders | 2 | 0 | 0 | 0 | 2
+                """);
+
+    assertThatThrownBy(() -> QueryCountBaseline.load(file))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("line 2")
+        .hasMessageContaining("duplicate entry for OrderServiceTest|loadsOrders");
   }
 
   @Test

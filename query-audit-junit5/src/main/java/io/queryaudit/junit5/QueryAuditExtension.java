@@ -9,6 +9,7 @@ import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.ConnectionUsageTracker;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
+import io.queryaudit.core.interceptor.QueryCaptureSnapshot;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
 import io.queryaudit.core.model.LifecyclePhase;
@@ -32,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.extension.*;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
  * JUnit 5 extension that intercepts SQL queries during test execution, analyzes them for
@@ -67,12 +69,19 @@ public class QueryAuditExtension
   private static final String KEY_DATASOURCE = "dataSource";
   private static final String KEY_RETURN_TYPE_RESOLVER = "returnTypeResolver";
   private static final String KEY_DATASOURCE_HOOK_CLEANUP = "dataSourceHookCleanup";
+  private static final String KEY_METHOD_SCOPED_CLEANUP = "methodScopedCleanup";
   private static final String KEY_ACTIVE = "auditActive";
   private static final String KEY_AFTER_EACH_DONE = "afterEachDone";
+  private static final String KEY_CONCURRENT_EXECUTION_REJECTED = "concurrentExecutionRejected";
   private static final String KEY_CONTRACTS = "queryContracts";
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
+
+  private enum InitializationScope {
+    CLASS,
+    METHOD
+  }
 
   private final DataSourceResolver dataSourceResolver = new DataSourceResolver();
   private final IndexMetadataCollector metadataCollector = new IndexMetadataCollector();
@@ -88,6 +97,10 @@ public class QueryAuditExtension
     // it without re-resolving the Spring context.
     ExtensionContext.Store activeStore = context.getStore(NAMESPACE);
     boolean active = computeActive(context);
+    QueryAuditConfig auditConfig = active ? buildConfig(context) : null;
+    if (auditConfig != null && !auditConfig.isEnabled()) {
+      active = false;
+    }
     activeStore.put(KEY_ACTIVE, active);
     if (!active) {
       return;
@@ -98,25 +111,46 @@ public class QueryAuditExtension
       return;
     }
 
-    QueryInterceptor interceptor = new QueryInterceptor();
+    // A missing DataSource is reported from beforeEach, when method-level exclusions are known.
+    // If a DataSource is already available, initialize once at class scope as before.
+    initializeAudit(context, auditConfig, InitializationScope.CLASS);
+  }
 
-    // Apply memory configuration from @QueryAudit or defaults
-    QueryAuditConfig earlyConfig = buildConfig(context);
-    interceptor.setMaxQueries(earlyConfig.getMaxQueries());
+  private void initializeAudit(
+      ExtensionContext context, QueryAuditConfig auditConfig, InitializationScope scope)
+      throws Exception {
+    if (getInterceptor(context) != null) {
+      return;
+    }
+
+    DataSource dataSource = dataSourceResolver.resolve(context);
+    if (dataSource == null) {
+      if (scope == InitializationScope.METHOD) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: DataSource unavailable for active audit of "
+                + auditTarget(context)
+                + ". Register a DataSource bean in the Spring ApplicationContext or expose a"
+                + " non-null static DataSource field on the test class.");
+      }
+      return;
+    }
+
+    Path countBaselinePath = resolveCountBaselinePath(context);
+    Map<String, QueryCounts> countBaseline = QueryCountBaseline.load(countBaselinePath);
+    Map<String, QueryCounts> contracts = QueryCountBaseline.load(resolveContractsPath());
+
+    QueryInterceptor interceptor = new QueryInterceptor();
+    interceptor.setMaxQueries(auditConfig.getMaxQueries());
 
     ExtensionContext.Store store = context.getStore(NAMESPACE);
     store.put(KEY_INTERCEPTOR, interceptor);
+    store.put(KEY_DATASOURCE, dataSource);
+    Runnable hookCleanup = dataSourceResolver.hookInterceptor(dataSource, interceptor);
+    store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
 
-    DataSource dataSource = dataSourceResolver.resolve(context);
-    if (dataSource != null) {
-      store.put(KEY_DATASOURCE, dataSource);
-      Runnable hookCleanup = dataSourceResolver.hookInterceptor(dataSource, interceptor);
-      store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
-
-      IndexMetadata metadata = metadataCollector.collect(dataSource);
-      if (metadata != null) {
-        store.put(KEY_INDEX_METADATA, metadata);
-      }
+    IndexMetadata metadata = metadataCollector.collect(dataSource);
+    if (metadata != null) {
+      store.put(KEY_INDEX_METADATA, metadata);
     }
 
     // Build return type resolver from Spring Data repositories if available
@@ -130,34 +164,78 @@ public class QueryAuditExtension
           "[QueryAudit] Failed to initialize return type resolver: " + e.getMessage());
     }
 
-    // Load query count baseline for regression detection
-    Path countBaselinePath = resolveCountBaselinePath(context);
-    Map<String, QueryCounts> countBaseline = QueryCountBaseline.load(countBaselinePath);
     store.put(KEY_COUNT_BASELINE, countBaseline);
     store.put(KEY_CURRENT_COUNTS, new ConcurrentHashMap<String, QueryCounts>());
 
-    // Load recorded query contracts for snapshot enforcement (issue #166)
-    store.put(KEY_CONTRACTS, QueryCountBaseline.load(resolveContractsPath()));
+    store.put(KEY_CONTRACTS, contracts);
 
     // Register Hibernate LazyLoadTracker if Hibernate is on the classpath
     LazyLoadTracker tracker = hibernateIntegration.registerTracker(context, NAMESPACE);
     if (tracker != null) {
       store.put(KEY_LAZY_LOAD_TRACKER, tracker);
     }
+    if (scope == InitializationScope.METHOD) {
+      store.put(
+          KEY_METHOD_SCOPED_CLEANUP,
+          (ExtensionContext.Store.CloseableResource)
+              () -> {
+                try {
+                  if (tracker != null) {
+                    hibernateIntegration.unregisterTracker(context, tracker);
+                  }
+                } finally {
+                  try {
+                    hookCleanup.run();
+                  } finally {
+                    QueryAuditDataSourceStore.clear();
+                  }
+                }
+              });
+    }
+  }
+
+  private static String auditTarget(ExtensionContext context) {
+    String target = context.getRequiredTestClass().getName();
+    return context.getTestMethod().map(method -> target + "#" + method.getName()).orElse(target);
+  }
+
+  private static void requireSameThreadExecution(ExtensionContext context) {
+    if (context.getExecutionMode() != ExecutionMode.CONCURRENT) {
+      return;
+    }
+
+    context.getStore(NAMESPACE).put(KEY_CONCURRENT_EXECUTION_REJECTED, Boolean.TRUE);
+    throw new ExtensionConfigurationException(
+        "QueryAudit: cannot audit "
+            + auditTarget(context)
+            + " with concurrent execution. Query capture is shared within a test class, so"
+            + " overlapping methods cannot be attributed reliably. Use @Execution(SAME_THREAD)"
+            + " or set junit.jupiter.execution.parallel.mode.default=same_thread.");
+  }
+
+  private static boolean wasConcurrentExecutionRejected(ExtensionContext context) {
+    return Boolean.TRUE.equals(
+        context.getStore(NAMESPACE).get(KEY_CONCURRENT_EXECUTION_REJECTED, Boolean.class));
   }
 
   // ── BeforeEachCallback ─────────────────────────────────────────────
 
   @Override
-  public void beforeEach(ExtensionContext context) {
+  public void beforeEach(ExtensionContext context) throws Exception {
     if (!isAuditActive(context)) {
       return;
     }
-    QueryInterceptor interceptor = getInterceptor(context);
-    if (interceptor != null) {
-      interceptor.start();
-      interceptor.setPhase(LifecyclePhase.SETUP);
+    QueryAuditConfig auditConfig = buildConfig(context);
+    if (!auditConfig.isEnabled()) {
+      context.getStore(NAMESPACE).put(KEY_ACTIVE, Boolean.FALSE);
+      return;
     }
+    requireSameThreadExecution(context);
+    initializeAudit(context, auditConfig, InitializationScope.METHOD);
+
+    QueryInterceptor interceptor = getInterceptor(context);
+    interceptor.start();
+    interceptor.setPhase(LifecyclePhase.SETUP);
 
     LazyLoadTracker tracker = getLazyLoadTracker(context);
     if (tracker != null) {
@@ -170,7 +248,7 @@ public class QueryAuditExtension
 
   @Override
   public void beforeTestExecution(ExtensionContext context) {
-    if (!isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
       return;
     }
     QueryInterceptor interceptor = getInterceptor(context);
@@ -184,7 +262,7 @@ public class QueryAuditExtension
 
   @Override
   public void afterTestExecution(ExtensionContext context) {
-    if (!isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
       return;
     }
     QueryInterceptor interceptor = getInterceptor(context);
@@ -197,7 +275,7 @@ public class QueryAuditExtension
 
   @Override
   public void afterEach(ExtensionContext context) {
-    if (!isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
       return;
     }
     // Method-level store: guards against double analysis when the extension is registered twice
@@ -220,10 +298,15 @@ public class QueryAuditExtension
       tracker.stop();
     }
 
-    List<QueryRecord> queries = interceptor.getRecordedQueries();
-    if (queries.isEmpty() && (tracker == null || tracker.getRecords().isEmpty())) {
-      return;
+    QueryCaptureSnapshot capture = interceptor.snapshot();
+    if (capture.truncated()) {
+      throw new AssertionError(
+          buildTruncatedCaptureMessage(
+              context.getDisplayName(), interceptor.getMaxQueries(), capture));
     }
+
+    List<QueryRecord> queries = capture.queries();
+    // Empty executions still need contract enforcement, count recording, and report coverage.
 
     QueryAuditConfig config = buildConfig(context);
     IndexMetadata indexMetadata = getIndexMetadata(context);
@@ -246,12 +329,12 @@ public class QueryAuditExtension
 
     // Merge Hibernate-level N+1 issues if tracker is available
     if (tracker != null && !tracker.getRecords().isEmpty()) {
-      report = hibernateIntegration.mergeNPlusOneIssues(report, tracker, config);
+      report = hibernateIntegration.mergeNPlusOneIssues(report, tracker, analyzer);
     }
 
     // Merge findById-for-association issues if tracker recorded explicit loads
     if (tracker != null && !tracker.getExplicitLoads().isEmpty()) {
-      report = hibernateIntegration.mergeFindByIdIssues(report, tracker, config);
+      report = hibernateIntegration.mergeFindByIdIssues(report, tracker, analyzer);
     }
 
     // --- Query count regression detection ---
@@ -297,6 +380,19 @@ public class QueryAuditExtension
         throw new AssertionError(buildFailureMessage(testName, failableIssues));
       }
     }
+  }
+
+  private static String buildTruncatedCaptureMessage(
+      String testName, int maxQueries, QueryCaptureSnapshot capture) {
+    return "QueryAudit: "
+        + testName
+        + " exceeded the query capture limit (maxQueries="
+        + maxQueries
+        + "). The audit is incomplete. Retained query count: "
+        + capture.queries().size()
+        + "; dropped query count: "
+        + capture.droppedCount()
+        + ". Increase query-audit.max-queries or reduce the test's query volume.";
   }
 
   // ── EXPLAIN-based analysis ───────────────────────────────────────
@@ -803,6 +899,15 @@ public class QueryAuditExtension
     if (method.isPresent() && method.get().isAnnotationPresent(QueryAuditExclude.class)) {
       return false;
     }
+    if (isClassExcluded(context.getRequiredTestClass())) {
+      return false;
+    }
+
+    // A method-level @QueryAudit registers the extension too late for beforeAll. It must therefore
+    // opt the method in even if suite-wide autodetection cached the otherwise plain class as false.
+    if (method.isPresent() && method.get().isAnnotationPresent(QueryAudit.class)) {
+      return buildConfig(context).isEnabled();
+    }
 
     ExtensionContext current = context;
     while (current != null) {
@@ -812,7 +917,12 @@ public class QueryAuditExtension
       }
       current = current.getParent().orElse(null);
     }
-    return computeActive(context);
+    boolean active = computeActive(context);
+    if (active) {
+      active = buildConfig(context).isEnabled();
+    }
+    context.getStore(NAMESPACE).put(KEY_ACTIVE, active);
+    return active;
   }
 
   private static boolean isClassExcluded(Class<?> testClass) {

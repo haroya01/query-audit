@@ -4,7 +4,7 @@ QueryAudit detects performance and safety issues in **INSERT, UPDATE, DELETE** s
 These rules analyze SQL structure and repetition patterns, not `EXPLAIN` output, making them
 100% reliable.
 
-This page covers all 10 DML-related issue types organized by severity, including
+This page covers all 11 DML-related issue types organized by severity, including
 Hibernate/ORM-specific patterns.
 
 ---
@@ -307,6 +307,126 @@ query-audit:
   repeated-insert:
     threshold: 3   # default
 ```
+
+---
+
+### Repeated Single-Row UPDATE
+
+| | |
+|---|---|
+| **Issue code** | `repeated-single-update` |
+| **Severity** | WARNING |
+| **Confidence** | Confirmed (schema-backed) |
+| **Default threshold** | 3 identical UPDATE patterns |
+
+#### Why It Matters
+
+Updating entities one at a time makes the database parse and execute the same statement for
+every row. This often appears when an ORM loads a collection, changes each entity, and flushes
+one UPDATE per entity. A set-based UPDATE does the work in one statement; when each row needs a
+different value, a JDBC batch reduces the number of database round trips.
+
+#### Detection
+
+QueryAudit normalizes UPDATE statements and groups statements with the same table and SQL shape.
+It reports a group when it reaches the configured threshold and the outer `WHERE` clause:
+
+- contains a positive scalar equality predicate, with no `OR` branch; and
+- covers a primary-key or unique-index definition found in the database metadata.
+
+Those checks establish that each statement targets at most one row. Range predicates, `IN`
+lists, `IS NULL`, column-to-column comparisons, and non-unique filters do not count toward that
+proof. Joined, multi-table, and schema-qualified UPDATEs are skipped because the current metadata
+model cannot resolve their target scope safely. An UPDATE without an outer `WHERE` clause is
+handled by
+[`update-without-where`](#updatedelete-without-where). Temporary and staging tables are excluded
+by default.
+
+#### Examples and Fixes
+
+=== "Bad: entity updates in a loop"
+
+    ```java
+    for (Post post : posts) {
+        post.archive();
+        postRepository.save(post);
+    }
+    ```
+
+    This can produce the same single-row shape repeatedly:
+
+    ```sql
+    UPDATE posts SET archived = true WHERE id = 101;
+    UPDATE posts SET archived = true WHERE id = 102;
+    UPDATE posts SET archived = true WHERE id = 103;
+    ```
+
+=== "Good: one set-based UPDATE"
+
+    When every row receives the same value, update the whole set in one statement:
+
+    ```java
+    @Modifying
+    @Query("UPDATE Post p SET p.archived = true WHERE p.id IN :ids")
+    int archiveAllById(@Param("ids") Collection<Long> ids);
+    ```
+
+=== "Good: JDBC batch"
+
+    When values differ by row, keep the parameterized statement and submit it as a batch:
+
+    ```java
+    try (PreparedStatement statement = connection.prepareStatement(
+            "UPDATE posts SET rank = ? WHERE id = ?")) {
+        for (PostRank rank : ranks) {
+            statement.setInt(1, rank.value());
+            statement.setLong(2, rank.postId());
+            statement.addBatch();
+        }
+        statement.executeBatch();
+    }
+    ```
+
+=== "Good: Hibernate batching"
+
+    ```yaml
+    spring:
+      jpa:
+        properties:
+          hibernate:
+            jdbc:
+              batch_size: 50
+            order_updates: true
+    ```
+
+#### Report Output
+
+```
+[WARNING] Repeated single-row UPDATE should use a set-based update or batch
+  Query  : update posts set archived = ? where id = ?
+  Table  : posts
+  Detail : Single-row UPDATE executed 3 times on table 'posts'.
+  Fix    : Collapse the statements into one set-based UPDATE, or use JDBC/Hibernate batching
+           when each row needs different values.
+```
+
+#### Configuration
+
+```yaml
+query-audit:
+  repeated-update:
+    threshold: 3
+    exclude-tables:
+      - "temp_*"
+      - "*_temp"
+      - "tmp_*"
+      - "*_tmp"
+      - "staging_*"
+      - "*_staging"
+```
+
+The table patterns are case-insensitive globs. Set `exclude-tables: []` to inspect every table,
+or replace the list with project-specific staging tables.
 
 ---
 
@@ -757,6 +877,7 @@ QueryAudit detects a SELECT followed by individual DELETE statements on the same
 | `update-without-where` | ERROR | Safety | UPDATE/DELETE without WHERE affects all rows |
 | `dml-without-index` | WARNING | Performance | DML WHERE column has no index (full table lock) |
 | `repeated-single-insert` | WARNING | Performance | Repeated single-row INSERT should batch |
+| `repeated-single-update` | WARNING | Performance | Repeated UPDATEs scoped by a unique key should use a set-based statement or batch |
 | `insert-select-all` | WARNING | Safety | INSERT with SELECT * is fragile |
 | `insert-on-duplicate-key` | WARNING | Concurrency | ON DUPLICATE KEY may cause deadlocks |
 | `subquery-in-dml` | WARNING | Performance | Subquery in DML can't use semijoin |

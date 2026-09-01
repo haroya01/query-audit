@@ -40,6 +40,7 @@ public final class RemediationHints {
       case N_PLUS_ONE, FIND_BY_ID_FOR_ASSOCIATION ->
           new Remediation("batch-fetch", issue.table(), List.of());
       case REPEATED_SINGLE_INSERT -> new Remediation("batch-insert", issue.table(), List.of());
+      case REPEATED_SINGLE_UPDATE -> new Remediation("batch-update", issue.table(), List.of());
       case UPDATE_WITHOUT_WHERE -> new Remediation("add-where-clause", issue.table(), List.of());
       case UNBOUNDED_RESULT_SET -> new Remediation("add-limit", issue.table(), List.of());
       case SELECT_ALL -> new Remediation("select-explicit-columns", issue.table(), List.of());
