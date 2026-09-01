@@ -105,18 +105,23 @@ public class QueryAuditExtension
     interceptor.setMaxQueries(earlyConfig.getMaxQueries());
 
     ExtensionContext.Store store = context.getStore(NAMESPACE);
-    store.put(KEY_INTERCEPTOR, interceptor);
-
     DataSource dataSource = dataSourceResolver.resolve(context);
-    if (dataSource != null) {
-      store.put(KEY_DATASOURCE, dataSource);
-      Runnable hookCleanup = dataSourceResolver.hookInterceptor(dataSource, interceptor);
-      store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
+    if (dataSource == null) {
+      throw new ExtensionConfigurationException(
+          "QueryAudit: DataSource unavailable for active audit of "
+              + context.getRequiredTestClass().getName()
+              + ". Register a DataSource bean in the Spring ApplicationContext or expose a"
+              + " non-null static DataSource field on the test class.");
+    }
 
-      IndexMetadata metadata = metadataCollector.collect(dataSource);
-      if (metadata != null) {
-        store.put(KEY_INDEX_METADATA, metadata);
-      }
+    store.put(KEY_INTERCEPTOR, interceptor);
+    store.put(KEY_DATASOURCE, dataSource);
+    Runnable hookCleanup = dataSourceResolver.hookInterceptor(dataSource, interceptor);
+    store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
+
+    IndexMetadata metadata = metadataCollector.collect(dataSource);
+    if (metadata != null) {
+      store.put(KEY_INDEX_METADATA, metadata);
     }
 
     // Build return type resolver from Spring Data repositories if available
