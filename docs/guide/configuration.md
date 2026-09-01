@@ -33,7 +33,7 @@ All properties are optional. The table below lists every supported key under the
 | `suppress-queries` | `List<String>` | `[]` | SQL query substrings to suppress (e.g., health-check queries). Case-insensitive substring match. |
 | `baseline-path` | `String` | `null` | Path to the query count baseline file. When `null`, uses `.query-audit-baseline` in the working directory. |
 | `auto-open-report` | `boolean` | `true` | Whether to automatically open the HTML report in a browser after tests. |
-| `max-queries` | `int` | `10000` | Maximum number of queries recorded per test. Prevents OOM when a test generates excessive queries. |
+| `max-queries` | `int` | `10000` | Maximum number of queries retained per test. If additional queries are dropped, the audit fails as incomplete. |
 | `report.format` | `String` | `"console"` | Report output format: `console`, `json`, or `html`. |
 | `report.output-dir` | `String` | `"build/reports/query-audit"` | Directory for HTML and JSON reports. |
 | `report.show-info` | `boolean` | `true` | Whether INFO-level issues appear in the report. |
@@ -527,10 +527,10 @@ significant heap memory. The following settings help control memory usage.
 
 ### Max Queries Per Test (default: 10,000)
 
-Each test records up to 10,000 queries by default. When the limit is reached,
-further queries are silently dropped (a single warning is printed to stderr).
-This prevents out-of-memory errors when a test unexpectedly generates a very
-large number of SQL statements.
+Each test retains up to 10,000 queries by default. Reaching the limit is valid when no queries are
+lost. If another query arrives, it is dropped, a warning is printed to stderr, and the audit fails
+as incomplete before the retained queries are analyzed. This prevents both out-of-memory errors
+and successful audit results based on partial data.
 
 ```yaml
 query-audit:

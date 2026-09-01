@@ -9,6 +9,7 @@ import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.ConnectionUsageTracker;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
+import io.queryaudit.core.interceptor.QueryCaptureSnapshot;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
 import io.queryaudit.core.model.LifecyclePhase;
@@ -275,7 +276,14 @@ public class QueryAuditExtension
       tracker.stop();
     }
 
-    List<QueryRecord> queries = interceptor.getRecordedQueries();
+    QueryCaptureSnapshot capture = interceptor.snapshot();
+    if (capture.truncated()) {
+      throw new AssertionError(
+          buildTruncatedCaptureMessage(
+              context.getDisplayName(), interceptor.getMaxQueries(), capture));
+    }
+
+    List<QueryRecord> queries = capture.queries();
     // Empty executions still need contract enforcement, count recording, and report coverage.
 
     QueryAuditConfig config = buildConfig(context);
@@ -350,6 +358,19 @@ public class QueryAuditExtension
         throw new AssertionError(buildFailureMessage(testName, failableIssues));
       }
     }
+  }
+
+  private static String buildTruncatedCaptureMessage(
+      String testName, int maxQueries, QueryCaptureSnapshot capture) {
+    return "QueryAudit: "
+        + testName
+        + " exceeded the query capture limit (maxQueries="
+        + maxQueries
+        + "). The audit is incomplete. Retained query count: "
+        + capture.queries().size()
+        + "; dropped query count: "
+        + capture.droppedCount()
+        + ". Increase query-audit.max-queries or reduce the test's query volume.";
   }
 
   // ── EXPLAIN-based analysis ───────────────────────────────────────
