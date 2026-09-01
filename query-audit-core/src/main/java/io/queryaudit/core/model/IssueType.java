@@ -77,6 +77,10 @@ public enum IssueType {
       WARNING),
   REPEATED_SINGLE_INSERT(
       "repeated-single-insert", "Repeated single-row INSERT should use batch insert", WARNING),
+  REPEATED_SINGLE_UPDATE(
+      "repeated-single-update",
+      "Repeated single-row UPDATE should use a set-based update or batch",
+      WARNING),
   INSERT_SELECT_ALL(
       "insert-select-all",
       "INSERT with SELECT * is fragile and may transfer unnecessary data",

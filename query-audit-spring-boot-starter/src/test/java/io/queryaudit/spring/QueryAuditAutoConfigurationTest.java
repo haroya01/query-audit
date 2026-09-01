@@ -140,6 +140,17 @@ class QueryAuditAutoConfigurationTest {
     }
 
     @Test
+    @DisplayName("repeated UPDATE settings have safe defaults")
+    void repeatedUpdateDefaults() {
+      QueryAuditProperties props = new QueryAuditProperties();
+
+      assertThat(props.getRepeatedUpdate().getThreshold()).isEqualTo(3);
+      assertThat(props.getRepeatedUpdate().getExcludeTables())
+          .containsExactlyInAnyOrderElementsOf(
+              io.queryaudit.core.detector.RepeatedSingleUpdateDetector.DEFAULT_EXCLUDE_TABLES);
+    }
+
+    @Test
     @DisplayName("suppress patterns is empty by default")
     void suppressPatternsEmptyByDefault() {
       QueryAuditProperties props = new QueryAuditProperties();
@@ -279,6 +290,22 @@ class QueryAuditAutoConfigurationTest {
               context -> {
                 QueryAuditConfig config = context.getBean(QueryAuditConfig.class);
                 assertThat(config.getBaselinePath()).isEqualTo("/tmp/my-baseline.json");
+              });
+    }
+
+    @Test
+    @DisplayName("repeated UPDATE properties bind to QueryAuditConfig")
+    void repeatedUpdatePropertyBinding() {
+      contextRunner
+          .withPropertyValues(
+              "query-audit.repeated-update.threshold=7",
+              "query-audit.repeated-update.exclude-tables=audit_*,etl_*")
+          .run(
+              context -> {
+                QueryAuditConfig config = context.getBean(QueryAuditConfig.class);
+                assertThat(config.getRepeatedUpdateThreshold()).isEqualTo(7);
+                assertThat(config.getRepeatedUpdateExcludeTables())
+                    .containsExactlyInAnyOrder("audit_*", "etl_*");
               });
     }
 

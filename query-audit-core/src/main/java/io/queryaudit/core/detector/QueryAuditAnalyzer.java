@@ -154,6 +154,9 @@ public class QueryAuditAnalyzer {
     ruleList.add(
         new RepeatedSingleInsertDetector(
             config.getRepeatedInsertThreshold(), config.getRepeatedInsertExcludeTables()));
+    ruleList.add(
+        new RepeatedSingleUpdateDetector(
+            config.getRepeatedUpdateThreshold(), config.getRepeatedUpdateExcludeTables()));
     ruleList.add(new InsertSelectAllDetector());
     ruleList.add(new OrderByRandDetector());
     ruleList.add(new NotInSubqueryDetector());

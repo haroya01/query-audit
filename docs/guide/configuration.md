@@ -24,7 +24,8 @@ All properties are optional. The table below lists every supported key under the
 | `fail-on-detection` | `boolean` | `true` | Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`. |
 | `count-instead-of-exists.enabled` | `boolean` | `false` | Enable the `count-instead-of-exists` INFO detector. Off by default because it can fire on legitimate aggregate counts. |
 | `connection-held-idle.threshold-ms` | `long` | `200` | Minimum idle time (connection held minus database work) before the `connection-held-idle` rule fires. Requires the non-DB work to actually take time in tests — zero-latency mocks never reproduce the gap. |
-| `repeated-insert.exclude-tables` | `List<String>` | `["temp_*", "staging_*", "*_temp", "*_staging"]` | Table-name globs (case-insensitive, `*` wildcard) treated as deliberate staging targets — repeated single-row inserts into these tables are not flagged. |
+| `repeated-insert.exclude-tables` | `List<String>` | `["temp_*", "*_temp", "tmp_*", "*_tmp", "staging_*", "*_staging"]` | Table-name globs (case-insensitive, `*` wildcard) treated as deliberate staging targets — repeated single-row inserts into these tables are not flagged. |
+| `repeated-update.exclude-tables` | `List<String>` | `["temp_*", "*_temp", "tmp_*", "*_tmp", "staging_*", "*_staging"]` | Case-insensitive table-name globs excluded from repeated single-row UPDATE detection. Replace with `[]` to inspect every table. |
 | `n-plus-one.threshold` | `int` | `3` | Number of times a structurally identical query must repeat before it is flagged as N+1. |
 | `offset-pagination.threshold` | `int` | `1000` | The OFFSET value that triggers a warning. |
 | `or-clause.threshold` | `int` | `3` | Number of OR conditions in a single WHERE clause before flagging. |
@@ -42,6 +43,7 @@ All properties are optional. The table below lists every supported key under the
 | `too-many-joins.threshold` | `int` | `5` | Number of JOINs before flagging. |
 | `excessive-column.threshold` | `int` | `15` | Number of selected columns before flagging. |
 | `repeated-insert.threshold` | `int` | `3` | Number of repeated single-row INSERTs before flagging. |
+| `repeated-update.threshold` | `int` | `3` | Number of repeated single-row UPDATEs with the same normalized shape before flagging. |
 | `write-amplification.threshold` | `int` | `6` | Number of indexes per table before flagging write amplification. |
 | `slow-query.warning-ms` | `long` | `500` | Execution time (ms) that triggers a WARNING-level slow query. |
 | `slow-query.error-ms` | `long` | `3000` | Execution time (ms) that triggers an ERROR-level slow query. |
@@ -66,6 +68,9 @@ query-audit:
     threshold: 15
   repeated-insert:
     threshold: 3
+  repeated-update:
+    threshold: 3
+    exclude-tables: ["temp_*", "*_temp", "tmp_*", "*_tmp", "staging_*", "*_staging"]
   write-amplification:
     threshold: 6
   slow-query:
@@ -279,6 +284,7 @@ Copy-paste these presets for typical use cases.
 | `too-many-joins.threshold` | 8 | 5 | 3 |
 | `excessive-column.threshold` | 25 | 15 | 10 |
 | `or-clause.threshold` | 5 | 3 | 2 |
+| `repeated-update.threshold` | 5 | 3 | 2 |
 
 !!! tip "Choosing the right profile"
     - **Conservative**: Use when adopting QueryAudit in a large existing codebase.
@@ -355,6 +361,8 @@ QueryAuditConfig config = QueryAuditConfig.builder()
     .tooManyJoinsThreshold(5)
     .excessiveColumnThreshold(15)
     .repeatedInsertThreshold(3)
+    .repeatedUpdateThreshold(3)
+    .repeatedUpdateExcludeTables(Set.of("temp_*", "staging_*"))
     .writeAmplificationThreshold(6)
     .slowQueryWarningMs(500)
     .slowQueryErrorMs(3000)
@@ -387,6 +395,9 @@ QueryAuditConfig config = QueryAuditConfig.builder()
 | `tooManyJoinsThreshold(int)` | `int` | `5` | JOIN count threshold. |
 | `excessiveColumnThreshold(int)` | `int` | `15` | Selected column count threshold. |
 | `repeatedInsertThreshold(int)` | `int` | `3` | Repeated single-row INSERT threshold. |
+| `repeatedUpdateThreshold(int)` | `int` | `3` | Repeated single-row UPDATE threshold. |
+| `repeatedUpdateExcludeTables(Set<String>)` | `Set<String>` | staging/temp globs | Replace the table exclusions for repeated UPDATE detection. |
+| `addRepeatedUpdateExcludeTable(String)` | `String` | -- | Add one table-name glob to the repeated UPDATE exclusions. |
 | `writeAmplificationThreshold(int)` | `int` | `6` | Index count per table threshold. |
 | `slowQueryWarningMs(long)` | `long` | `500` | Slow query WARNING threshold (ms). |
 | `slowQueryErrorMs(long)` | `long` | `3000` | Slow query ERROR threshold (ms). |
@@ -418,8 +429,8 @@ These can be passed via `-D` flags on the command line:
 
 ## Issue Types Reference
 
-All 68 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
-Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
+All 69 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
+Of these, 67 are actively emitted; the remaining 2 are disabled or reserved (see
 [Detection Rules Overview](../detections/overview.md#disabled-reserved-rules)).
 
 ### ERROR Severity (11 issue types)
@@ -438,7 +449,7 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `order-by-rand` | `ORDER_BY_RAND` | ORDER BY RAND() causes full table scan and sort |
 | `not-in-subquery` | `NOT_IN_SUBQUERY` | NOT IN (subquery) returns empty when subquery contains NULL |
 
-### WARNING Severity (38 issue types + 1 reserved)
+### WARNING Severity (39 active issue types + 1 disabled)
 
 | Code | Enum | Description |
 |---|---|---|
@@ -448,7 +459,7 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `missing-group-by-index` | `MISSING_GROUP_BY_INDEX` | No index on GROUP BY column |
 | `composite-index-leading` | `COMPOSITE_INDEX_LEADING_COLUMN` | Composite index leading column unused |
 | `like-leading-wildcard` | `LIKE_LEADING_WILDCARD` | Leading wildcard in LIKE |
-| `duplicate-query` | `DUPLICATE_QUERY` | Exact duplicate SQL *(reserved)* |
+| `duplicate-query` | `DUPLICATE_QUERY` | Exact duplicate SQL *(disabled)* |
 | `correlated-subquery` | `CORRELATED_SUBQUERY` | Correlated subquery in SELECT |
 | `redundant-index` | `REDUNDANT_INDEX` | Redundant index (prefix of another) |
 | `slow-query` | `SLOW_QUERY` | Query exceeding time threshold |
@@ -460,10 +471,10 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `distinct-misuse` | `DISTINCT_MISUSE` | Unnecessary DISTINCT |
 | `having-misuse` | `HAVING_MISUSE` | HAVING on non-aggregate column |
 | `range-lock-risk` | `RANGE_LOCK_RISK` | Range + FOR UPDATE on unindexed column |
-| `connection-held-idle` | `CONNECTION_HELD_IDLE` | Connection held while non-database work runs — the pool-exhaustion shape |
 | `query-count-regression` | `QUERY_COUNT_REGRESSION` | Query count regression vs baseline |
 | `dml-without-index` | `DML_WITHOUT_INDEX` | UPDATE/DELETE WHERE without index |
 | `repeated-single-insert` | `REPEATED_SINGLE_INSERT` | Repeated single-row INSERT |
+| `repeated-single-update` | `REPEATED_SINGLE_UPDATE` | Repeated UPDATEs scoped by a unique key should use a set-based statement or batch |
 | `insert-select-all` | `INSERT_SELECT_ALL` | INSERT with SELECT * |
 | `insert-on-duplicate-key` | `INSERT_ON_DUPLICATE_KEY` | INSERT ON DUPLICATE KEY UPDATE may cause deadlocks |
 | `subquery-in-dml` | `SUBQUERY_IN_DML` | Subquery in UPDATE/DELETE blocks semijoin optimization |
@@ -473,7 +484,6 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `string-concat-where` | `STRING_CONCAT_IN_WHERE` | String concatenation in WHERE prevents index |
 | `unused-join` | `UNUSED_JOIN` | LEFT JOIN table never referenced in query |
 | `for-update-non-unique` | `FOR_UPDATE_NON_UNIQUE` | FOR UPDATE on non-unique index causes gap locks |
-| `read-modify-write` | `READ_MODIFY_WRITE` | SELECT without a lock followed by INSERT/UPDATE on the same table, with no unique-constraint backing, upsert, atomic SET, or version column |
 | `group-by-function` | `GROUP_BY_FUNCTION` | Function in GROUP BY prevents index usage |
 | `regexp-usage` | `REGEXP_INSTEAD_OF_LIKE` | REGEXP/RLIKE prevents index usage |
 | `find-in-set` | `FIND_IN_SET_USAGE` | FIND_IN_SET indicates comma-separated values violating 1NF |
@@ -484,7 +494,7 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `for-update-no-timeout` | `FOR_UPDATE_WITHOUT_TIMEOUT` | FOR UPDATE without NOWAIT or SKIP LOCKED may block indefinitely |
 | `case-in-where` | `CASE_IN_WHERE` | CASE expression in WHERE clause prevents index usage |
 
-### INFO Severity (12 issue types + 3 reserved)
+### INFO Severity (17 active issue types + 1 reserved)
 
 | Code | Enum | Description |
 |---|---|---|
@@ -493,8 +503,8 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `redundant-filter` | `REDUNDANT_FILTER` | Duplicate WHERE condition |
 | `count-instead-of-exists` | `COUNT_INSTEAD_OF_EXISTS` | COUNT where EXISTS is better |
 | `full-scan` | `FULL_TABLE_SCAN` | Full table scan (EXPLAIN-based, reserved) |
-| `filesort` | `FILESORT` | Filesort detected (EXPLAIN-based, reserved) |
-| `temporary-table` | `TEMPORARY_TABLE` | Temporary table usage (EXPLAIN-based, reserved) |
+| `filesort` | `FILESORT` | Filesort detected by an EXPLAIN analyzer |
+| `temporary-table` | `TEMPORARY_TABLE` | Temporary table usage detected by an EXPLAIN analyzer |
 | `union-without-all` | `UNION_WITHOUT_ALL` | UNION without ALL |
 | `covering-index-opportunity` | `COVERING_INDEX_OPPORTUNITY` | Could benefit from covering index |
 | `count-star-no-where` | `COUNT_STAR_WITHOUT_WHERE` | COUNT(*) without WHERE scans entire table |
@@ -502,6 +512,8 @@ Of these, 64 are actively emitted; the remaining 2 are disabled or reserved (see
 | `excessive-column-fetch` | `EXCESSIVE_COLUMN_FETCH` | Query fetches too many columns |
 | `mergeable-queries` | `MERGEABLE_QUERIES` | Multiple queries to same table could be merged |
 | `non-deterministic-pagination` | `NON_DETERMINISTIC_PAGINATION` | ORDER BY + LIMIT on non-unique column gives inconsistent results |
+| `read-modify-write` | `READ_MODIFY_WRITE` | SELECT without a lock followed by INSERT/UPDATE on the same table, with no unique-constraint backing, upsert, atomic SET, or version column |
+| `connection-held-idle` | `CONNECTION_HELD_IDLE` | Connection held while non-database work runs — the pool-exhaustion shape |
 | `force-index-hint` | `FORCE_INDEX_HINT` | FORCE/USE/IGNORE INDEX hint overrides optimizer decisions |
 | `find-by-id-for-association` | `FIND_BY_ID_FOR_ASSOCIATION` | `findById()` used only for FK association — consider `getReferenceById()` to avoid the SELECT |
 

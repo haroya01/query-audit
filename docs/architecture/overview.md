@@ -321,7 +321,7 @@ public class SlackReporter implements Reporter {
 
 ---
 
-## Detection Rules (64 active issue types)
+## Detection Rules (67 active issue types)
 
 ### SELECT-Focused Rules
 
@@ -373,6 +373,7 @@ public class SlackReporter implements Reporter {
 | UpdateWithoutWhereDetector | `UPDATE_WITHOUT_WHERE` | ERROR | UPDATE/DELETE without WHERE |
 | DmlWithoutIndexDetector | `DML_WITHOUT_INDEX` | WARNING | UPDATE/DELETE WHERE without index |
 | RepeatedSingleInsertDetector | `REPEATED_SINGLE_INSERT` | WARNING | Same INSERT pattern repeated >= 3 times |
+| RepeatedSingleUpdateDetector | `REPEATED_SINGLE_UPDATE` | WARNING | Same single-row UPDATE shape repeated >= 3 times |
 | InsertSelectAllDetector | `INSERT_SELECT_ALL` | WARNING | `INSERT ... SELECT *` |
 | InsertOnDuplicateKeyDetector | `INSERT_ON_DUPLICATE_KEY` | WARNING | INSERT ON DUPLICATE KEY UPDATE may cause deadlocks |
 | InsertSelectLocksSourceDetector | `INSERT_SELECT_LOCKS_SOURCE` | INFO | INSERT...SELECT locks source table rows |

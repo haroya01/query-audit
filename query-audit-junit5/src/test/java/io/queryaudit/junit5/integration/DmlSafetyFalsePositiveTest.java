@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
+import io.queryaudit.core.model.IndexInfo;
+import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
@@ -15,6 +17,7 @@ import io.queryaudit.junit5.integration.repository.MemberRepository;
 import io.queryaudit.junit5.integration.repository.TeamRepository;
 import jakarta.persistence.EntityManager;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 @EnableQueryInspector
 @Transactional
 class DmlSafetyFalsePositiveTest {
+
+  private static final IndexMetadata MEMBERS_PRIMARY_KEY =
+      new IndexMetadata(
+          Map.of("members", List.of(new IndexInfo("members", "PRIMARY", "id", 1, false, 3))));
 
   @Autowired TeamRepository teamRepository;
   @Autowired MemberRepository memberRepository;
@@ -48,8 +55,35 @@ class DmlSafetyFalsePositiveTest {
   }
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries) {
+    return analyze(testName, queries, null);
+  }
+
+  private QueryAuditReport analyze(
+      String testName, List<QueryRecord> queries, IndexMetadata indexMetadata) {
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
-    return analyzer.analyze("Team1FP", testName, queries, null);
+    return analyzer.analyze("Team1FP", testName, queries, indexMetadata);
+  }
+
+  @Nested
+  @DisplayName("RepeatedSingleUpdate FP")
+  class RepeatedSingleUpdateFP {
+
+    @Test
+    @DisplayName("Repeated set-based UPDATEs should NOT trigger")
+    void repeatedSetBasedUpdates() {
+      queryInterceptor.start();
+      for (int i = 0; i < 3; i++) {
+        entityManager
+            .createNativeQuery("UPDATE members SET status = 'X' WHERE status = 'ACTIVE'")
+            .executeUpdate();
+      }
+      queryInterceptor.stop();
+
+      QueryAuditReport report =
+          analyze(
+              "repeatedSetBasedUpdate", queryInterceptor.getRecordedQueries(), MEMBERS_PRIMARY_KEY);
+      assertThat(allIssues(report)).noneMatch(i -> i.type() == IssueType.REPEATED_SINGLE_UPDATE);
+    }
   }
 
   private List<Issue> allIssues(QueryAuditReport report) {

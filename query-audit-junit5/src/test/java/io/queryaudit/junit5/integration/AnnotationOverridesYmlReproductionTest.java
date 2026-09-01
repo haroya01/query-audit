@@ -108,6 +108,8 @@ class AnnotationOverridesYmlReproductionTest {
               .tooManyJoinsThreshold(88)
               .excessiveColumnThreshold(33)
               .repeatedInsertThreshold(11)
+              .repeatedUpdateThreshold(12)
+              .addRepeatedUpdateExcludeTable("audit_*")
               .writeAmplificationThreshold(22)
               .slowQueryWarningMs(1234L)
               .slowQueryErrorMs(5678L)
@@ -158,6 +160,12 @@ class AnnotationOverridesYmlReproductionTest {
       assertThat(copy.getRepeatedInsertThreshold())
           .as("repeatedInsertThreshold")
           .isEqualTo(source.getRepeatedInsertThreshold());
+      assertThat(copy.getRepeatedUpdateThreshold())
+          .as("repeatedUpdateThreshold")
+          .isEqualTo(source.getRepeatedUpdateThreshold());
+      assertThat(copy.getRepeatedUpdateExcludeTables())
+          .as("repeatedUpdateExcludeTables")
+          .isEqualTo(source.getRepeatedUpdateExcludeTables());
       assertThat(copy.getWriteAmplificationThreshold())
           .as("writeAmplificationThreshold")
           .isEqualTo(source.getWriteAmplificationThreshold());

@@ -504,6 +504,16 @@ class SeverityAuditTest {
   }
 
   // -----------------------------------------------------------------------
+  // 38a. REPEATED_SINGLE_UPDATE (WARNING)
+  // Verdict: CORRECT
+  // -----------------------------------------------------------------------
+  @Test
+  void repeatedSingleUpdate_severityIsWarning_correct() {
+    assertThat(IssueType.REPEATED_SINGLE_UPDATE.getDefaultSeverity()).isEqualTo(Severity.WARNING);
+    // Batching or a set-based update reduces avoidable round trips without implying data loss.
+  }
+
+  // -----------------------------------------------------------------------
   // 39. INSERT_SELECT_ALL (WARNING)
   // Verdict: CORRECT
   // -----------------------------------------------------------------------
@@ -942,6 +952,12 @@ class SeverityAuditTest {
                 "OK",
                 "Batch insert is significantly faster"),
             new AuditEntry(
+                "REPEATED_SINGLE_UPDATE",
+                "WARNING",
+                "WARNING",
+                "OK",
+                "Batch or set-based update reduces repeated statement overhead"),
+            new AuditEntry(
                 "INSERT_SELECT_ALL",
                 "WARNING",
                 "WARNING",
@@ -1074,7 +1090,7 @@ class SeverityAuditTest {
           .as("IssueType.%s should have a non-null default severity", type.name())
           .isNotNull();
     }
-    // Verify the total count matches what we audited (56 issue types)
-    assertThat(IssueType.values().length).isEqualTo(68);
+    // Keep this explicit so every catalog addition receives a severity review.
+    assertThat(IssueType.values().length).isEqualTo(69);
   }
 }

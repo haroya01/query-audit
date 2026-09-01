@@ -94,6 +94,18 @@ class PostgreSqlIndexMetadataProviderTest {
       assertThat(emailIdx.columnName()).isEqualTo("email");
       assertThat(emailIdx.nonUnique()).isTrue();
       assertThat(emailIdx.cardinality()).isEqualTo(1000L);
+
+      verify(connection)
+          .prepareStatement(
+              argThat(
+                  sql ->
+                      sql.contains("pg_index")
+                          && sql.contains("ix.indisunique")
+                          && sql.contains("ix.indisvalid")
+                          && sql.contains("ix.indimmediate")
+                          && sql.contains("ix.indpred IS NULL")
+                          && sql.contains("ix.indexprs IS NULL")
+                          && sql.contains("column_position <= ix.indnkeyatts")));
     }
 
     @Test

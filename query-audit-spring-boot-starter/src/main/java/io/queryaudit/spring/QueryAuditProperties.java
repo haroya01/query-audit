@@ -52,6 +52,7 @@ public class QueryAuditProperties {
   private TooManyJoins tooManyJoins = new TooManyJoins();
   private ExcessiveColumn excessiveColumn = new ExcessiveColumn();
   private RepeatedInsert repeatedInsert = new RepeatedInsert();
+  private RepeatedUpdate repeatedUpdate = new RepeatedUpdate();
   private WriteAmplification writeAmplification = new WriteAmplification();
   private SlowQuery slowQuery = new SlowQuery();
   private CountInsteadOfExists countInsteadOfExists = new CountInsteadOfExists();
@@ -220,6 +221,14 @@ public class QueryAuditProperties {
     this.repeatedInsert = repeatedInsert;
   }
 
+  public RepeatedUpdate getRepeatedUpdate() {
+    return repeatedUpdate;
+  }
+
+  public void setRepeatedUpdate(RepeatedUpdate repeatedUpdate) {
+    this.repeatedUpdate = repeatedUpdate;
+  }
+
   public WriteAmplification getWriteAmplification() {
     return writeAmplification;
   }
@@ -377,6 +386,40 @@ public class QueryAuditProperties {
     private List<String> excludeTables =
         new ArrayList<>(
             io.queryaudit.core.detector.RepeatedSingleInsertDetector.DEFAULT_EXCLUDE_TABLES);
+
+    public int getThreshold() {
+      return threshold;
+    }
+
+    public void setThreshold(int threshold) {
+      this.threshold = threshold;
+    }
+
+    public List<String> getExcludeTables() {
+      return excludeTables;
+    }
+
+    public void setExcludeTables(List<String> excludeTables) {
+      this.excludeTables = excludeTables;
+    }
+  }
+
+  /**
+   * Spring properties for repeated single-row UPDATE detection.
+   *
+   * @since 0.6.0
+   */
+  public static class RepeatedUpdate {
+    private int threshold = 3;
+
+    /**
+     * Table-name globs (case-insensitive, {@code *} wildcard) the detector treats as deliberate
+     * staging targets — repeated single-row updates against these are not flagged. Defaults to
+     * common temp/staging conventions; set to an empty list to disable the exclusion.
+     */
+    private List<String> excludeTables =
+        new ArrayList<>(
+            io.queryaudit.core.detector.RepeatedSingleUpdateDetector.DEFAULT_EXCLUDE_TABLES);
 
     public int getThreshold() {
       return threshold;

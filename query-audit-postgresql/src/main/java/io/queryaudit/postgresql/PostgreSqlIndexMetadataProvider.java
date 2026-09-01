@@ -28,21 +28,31 @@ public class PostgreSqlIndexMetadataProvider implements IndexMetadataProvider {
   // named table in another schema (e.g. public.orders + staging.orders) would silently leak its
   // indexes / cardinality into the result for the table actually iterated from
   // pg_tables WHERE schemaname = current_schema(). See issue #147.
+  // Partial, expression-based, invalid, or deferred unique indexes do not prove that a plain set
+  // of column equalities targets one row. Keep their column metadata visible without advertising
+  // a global uniqueness guarantee. INCLUDE columns are payload, so they are omitted from the key.
   private static final String INDEX_QUERY =
       """
             SELECT
                 i.relname   AS index_name,
                 a.attname   AS column_name,
-                ix.indisunique AS is_unique,
-                array_position(ix.indkey, a.attnum) AS seq_in_index
+                (ix.indisunique
+                    AND ix.indisvalid
+                    AND ix.indimmediate
+                    AND ix.indpred IS NULL
+                    AND ix.indexprs IS NULL) AS is_unique,
+                indexed_column.column_position AS seq_in_index
             FROM pg_class t
             JOIN pg_namespace n ON n.oid = t.relnamespace
             JOIN pg_index ix ON t.oid = ix.indrelid
             JOIN pg_class i  ON i.oid = ix.indexrelid
+            JOIN LATERAL unnest(ix.indkey) WITH ORDINALITY
+                AS indexed_column(attnum, column_position)
+                ON indexed_column.column_position <= ix.indnkeyatts
             JOIN pg_attribute a ON a.attrelid = t.oid
-                AND a.attnum = ANY(ix.indkey)
+                AND a.attnum = indexed_column.attnum
             WHERE t.relname = ? AND t.relkind = 'r' AND n.nspname = current_schema()
-            ORDER BY i.relname, array_position(ix.indkey, a.attnum)
+            ORDER BY i.relname, indexed_column.column_position
             """;
 
   private static final String CARDINALITY_QUERY =
