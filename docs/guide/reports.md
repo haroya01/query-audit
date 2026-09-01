@@ -232,10 +232,15 @@ java -cp query-audit-core-<version>.jar \
   RESOLVED n-plus-one (table: order_items) in OrderServiceTest.findOrders
 ```
 
-- **Exit contract**: `0` when no new findings, `1` when new findings exist (the diff-aware CI
-  gate: fail a PR only on *new* issues), `2` on usage/parse errors.
-- **`verdict.json`**: `{newFindings, resolved, persisting, queryCountDelta, executionTimeMsDelta}` —
-  the termination condition for automated fix loops.
+- **Exit contract**: `0` when the comparison is complete and has no new findings, `1` when the
+  comparison is complete and new findings exist, and `2` when the comparison is incomplete or a
+  usage/parse error prevents a verdict.
+- **`verdict.json`**: `{newFindings, resolved, persisting, complete, missingTests,
+  queryCountDelta, executionTimeMsDelta}` — the termination condition for automated fix loops.
+- Every test present in the baseline report must also appear in the candidate report. Otherwise,
+  `complete` is `false`, `missingTests` identifies the absent tests, and their findings are not
+  classified as resolved. With the schema 1.x report fields, tests are matched by
+  `testClass|testName`.
 - **Matching key**: `testClass|testName|type|normalized-pattern|sourceLocation`, so findings
   survive unrelated refactors as long as the statement shape and call site are stable.
 - Only **confirmed** findings participate; INFO advisories don't gate fix loops.

@@ -22,8 +22,9 @@ import java.util.Set;
  * the statement shape and call site are stable. Only <em>confirmed</em> findings participate — INFO
  * advisories don't gate fix loops.
  *
- * <p><strong>Exit contract</strong> (CLI): {@code 0} when no new findings, {@code 1} when new
- * findings exist, {@code 2} on usage or parse errors.
+ * <p><strong>Exit contract</strong> (CLI): {@code 0} when a complete comparison has no new
+ * findings, {@code 1} when a complete comparison has new findings, and {@code 2} when the
+ * comparison is incomplete or on usage/parse errors.
  *
  * @author haroya
  * @since 0.5.0
@@ -38,7 +39,10 @@ public final class ReportComparator {
   public record Finding(
       String testClass, String testName, String type, String table, String detail, String key) {}
 
-  /** The comparison result; {@code newFindings} non-empty means the gate should fail. */
+  /** Identifies an audited test using the fields available in the schema 1.x report envelope. */
+  public record TestRef(String testClass, String testName) {}
+
+  /** The comparison result; incomplete comparisons cannot produce a trustworthy success signal. */
   public record Verdict(
       List<Finding> resolved,
       List<Finding> newFindings,
@@ -46,19 +50,57 @@ public final class ReportComparator {
       long queriesBefore,
       long queriesAfter,
       long executionTimeMsBefore,
-      long executionTimeMsAfter) {}
+      long executionTimeMsAfter,
+      List<TestRef> missingTests) {
+
+    /** Retains the original constructor for callers compiled against the 0.5.0 API. */
+    public Verdict(
+        List<Finding> resolved,
+        List<Finding> newFindings,
+        List<Finding> persisting,
+        long queriesBefore,
+        long queriesAfter,
+        long executionTimeMsBefore,
+        long executionTimeMsAfter) {
+      this(
+          resolved,
+          newFindings,
+          persisting,
+          queriesBefore,
+          queriesAfter,
+          executionTimeMsBefore,
+          executionTimeMsAfter,
+          List.of());
+    }
+
+    /** Returns whether every test audited in the baseline also appears in the candidate report. */
+    public boolean complete() {
+      return missingTests.isEmpty();
+    }
+  }
 
   /** Compares two envelope documents (the string content of two {@code report.json} files). */
   public static Verdict compare(String beforeJson, String afterJson) {
-    List<Finding> before = confirmedFindings(beforeJson);
-    List<Finding> after = confirmedFindings(afterJson);
+    List<Map<String, Object>> beforeReports = reports(beforeJson);
+    List<Map<String, Object>> afterReports = reports(afterJson);
+    List<Finding> before = confirmedFindings(beforeReports);
+    List<Finding> after = confirmedFindings(afterReports);
 
     Set<String> beforeKeys = new LinkedHashSet<>();
     before.forEach(f -> beforeKeys.add(f.key()));
     Set<String> afterKeys = new LinkedHashSet<>();
     after.forEach(f -> afterKeys.add(f.key()));
 
-    List<Finding> resolved = before.stream().filter(f -> !afterKeys.contains(f.key())).toList();
+    Set<TestRef> beforeTests = auditedTests(beforeReports);
+    Set<TestRef> afterTests = auditedTests(afterReports);
+    List<TestRef> missingTests =
+        beforeTests.stream().filter(test -> !afterTests.contains(test)).toList();
+
+    List<Finding> resolved =
+        before.stream()
+            .filter(f -> afterTests.contains(new TestRef(f.testClass(), f.testName())))
+            .filter(f -> !afterKeys.contains(f.key()))
+            .toList();
     List<Finding> fresh = after.stream().filter(f -> !beforeKeys.contains(f.key())).toList();
     List<Finding> persisting = after.stream().filter(f -> beforeKeys.contains(f.key())).toList();
 
@@ -66,10 +108,11 @@ public final class ReportComparator {
         resolved,
         fresh,
         persisting,
-        sumSummary(beforeJson, "totalQueries"),
-        sumSummary(afterJson, "totalQueries"),
-        sumSummary(beforeJson, "executionTimeMs"),
-        sumSummary(afterJson, "executionTimeMs"));
+        sumSummary(beforeReports, "totalQueries"),
+        sumSummary(afterReports, "totalQueries"),
+        sumSummary(beforeReports, "executionTimeMs"),
+        sumSummary(afterReports, "executionTimeMs"),
+        missingTests);
   }
 
   /** Renders the verdict as JSON (the {@code verdict.json} contract). */
@@ -82,6 +125,9 @@ public final class ReportComparator {
     appendFindings(sb, verdict.resolved());
     sb.append(",\n  \"persisting\": ");
     appendFindings(sb, verdict.persisting());
+    sb.append(",\n  \"complete\": ").append(verdict.complete());
+    sb.append(",\n  \"missingTests\": ");
+    appendTests(sb, verdict.missingTests());
     sb.append(",\n  \"queryCountDelta\": {\"before\": ")
         .append(verdict.queriesBefore())
         .append(", \"after\": ")
@@ -109,6 +155,16 @@ public final class ReportComparator {
         .append(verdict.queriesBefore())
         .append(" -> ")
         .append(verdict.queriesAfter());
+    if (!verdict.complete()) {
+      sb.append("; INCOMPLETE: ")
+          .append(verdict.missingTests().size())
+          .append(" baseline ")
+          .append(verdict.missingTests().size() == 1 ? "test" : "tests")
+          .append(" missing");
+      for (TestRef test : verdict.missingTests()) {
+        sb.append("\n  MISSING  ").append(describe(test));
+      }
+    }
     for (Finding f : verdict.newFindings()) {
       sb.append("\n  NEW      ").append(describe(f));
     }
@@ -146,7 +202,14 @@ public final class ReportComparator {
       Files.writeString(Path.of(args[2]), toJson(verdict), StandardCharsets.UTF_8);
       System.out.println("[QueryAudit] verdict: " + Path.of(args[2]).toAbsolutePath());
     }
-    System.exit(verdict.newFindings().isEmpty() ? 0 : 1);
+    System.exit(exitCode(verdict));
+  }
+
+  static int exitCode(Verdict verdict) {
+    if (!verdict.complete()) {
+      return 2;
+    }
+    return verdict.newFindings().isEmpty() ? 0 : 1;
   }
 
   // ── Envelope reading ───────────────────────────────────────────────
@@ -163,9 +226,9 @@ public final class ReportComparator {
   }
 
   @SuppressWarnings("unchecked")
-  private static List<Finding> confirmedFindings(String envelopeJson) {
+  private static List<Finding> confirmedFindings(List<Map<String, Object>> reports) {
     List<Finding> findings = new ArrayList<>();
-    for (Map<String, Object> report : reports(envelopeJson)) {
+    for (Map<String, Object> report : reports) {
       String testClass = (String) report.get("testClass");
       String testName = (String) report.get("testName");
       Object confirmed = report.get("confirmedIssues");
@@ -191,9 +254,17 @@ public final class ReportComparator {
     return findings;
   }
 
-  private static long sumSummary(String envelopeJson, String field) {
+  private static Set<TestRef> auditedTests(List<Map<String, Object>> reports) {
+    Set<TestRef> tests = new LinkedHashSet<>();
+    for (Map<String, Object> report : reports) {
+      tests.add(new TestRef((String) report.get("testClass"), (String) report.get("testName")));
+    }
+    return tests;
+  }
+
+  private static long sumSummary(List<Map<String, Object>> reports, String field) {
     long sum = 0;
-    for (Map<String, Object> report : reports(envelopeJson)) {
+    for (Map<String, Object> report : reports) {
       if (report.get("summary") instanceof Map<?, ?> summary
           && summary.get(field) instanceof Long value) {
         sum += value;
@@ -232,6 +303,35 @@ public final class ReportComparator {
     sb.append("  ]");
   }
 
+  private static void appendTests(StringBuilder sb, List<TestRef> tests) {
+    if (tests.isEmpty()) {
+      sb.append("[]");
+      return;
+    }
+    sb.append("[\n");
+    for (int i = 0; i < tests.size(); i++) {
+      TestRef test = tests.get(i);
+      sb.append("    {\"testClass\": ");
+      appendString(sb, test.testClass());
+      sb.append(", \"testName\": ");
+      appendString(sb, test.testName());
+      sb.append("}");
+      if (i < tests.size() - 1) {
+        sb.append(",");
+      }
+      sb.append("\n");
+    }
+    sb.append("  ]");
+  }
+
+  private static void appendString(StringBuilder sb, String value) {
+    if (value == null) {
+      sb.append("null");
+      return;
+    }
+    sb.append("\"").append(JsonReporter.escapeJson(value)).append("\"");
+  }
+
   private static String describe(Finding f) {
     return f.type()
         + (f.table() != null ? " (table: " + f.table() + ")" : "")
@@ -239,5 +339,9 @@ public final class ReportComparator {
         + f.testClass()
         + "."
         + f.testName();
+  }
+
+  private static String describe(TestRef test) {
+    return test.testClass() + "." + test.testName();
   }
 }
