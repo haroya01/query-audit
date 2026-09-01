@@ -329,12 +329,12 @@ public class QueryAuditExtension
 
     // Merge Hibernate-level N+1 issues if tracker is available
     if (tracker != null && !tracker.getRecords().isEmpty()) {
-      report = hibernateIntegration.mergeNPlusOneIssues(report, tracker, config);
+      report = hibernateIntegration.mergeNPlusOneIssues(report, tracker, analyzer);
     }
 
     // Merge findById-for-association issues if tracker recorded explicit loads
     if (tracker != null && !tracker.getExplicitLoads().isEmpty()) {
-      report = hibernateIntegration.mergeFindByIdIssues(report, tracker, config);
+      report = hibernateIntegration.mergeFindByIdIssues(report, tracker, analyzer);
     }
 
     // --- Query count regression detection ---

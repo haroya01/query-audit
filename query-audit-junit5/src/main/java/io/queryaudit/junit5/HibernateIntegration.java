@@ -1,8 +1,8 @@
 package io.queryaudit.junit5;
 
-import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.detector.FindByIdForAssociationDetector;
 import io.queryaudit.core.detector.LazyLoadNPlusOneDetector;
+import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
@@ -172,35 +172,14 @@ class HibernateIntegration {
     return getServiceMethod.invoke(serviceRegistry, registryClass);
   }
 
-  /**
-   * Merges Hibernate-level N+1 issues into the report. Hibernate-level issues are authoritative
-   * (ERROR severity).
-   */
+  /** Detects Hibernate-level N+1 issues and merges them through the analyzer's policy pipeline. */
   QueryAuditReport mergeNPlusOneIssues(
-      QueryAuditReport report, LazyLoadTracker tracker, QueryAuditConfig config) {
+      QueryAuditReport report, LazyLoadTracker tracker, QueryAuditAnalyzer analyzer) {
 
     LazyLoadNPlusOneDetector hibernateDetector =
-        new LazyLoadNPlusOneDetector(config.getNPlusOneThreshold());
+        new LazyLoadNPlusOneDetector(analyzer.getConfig().getNPlusOneThreshold());
     List<Issue> hibernateIssues = hibernateDetector.evaluate(tracker.getRecords());
-
-    if (hibernateIssues.isEmpty()) {
-      return report;
-    }
-
-    // Add Hibernate-level N+1 issues to the confirmed list
-    List<Issue> mergedConfirmed = new ArrayList<>(report.getConfirmedIssues());
-    mergedConfirmed.addAll(hibernateIssues);
-
-    return new QueryAuditReport(
-        report.getTestClass(),
-        report.getTestName(),
-        mergedConfirmed,
-        report.getInfoIssues(),
-        report.getAcknowledgedIssues(),
-        report.getAllQueries(),
-        report.getUniquePatternCount(),
-        report.getTotalQueryCount(),
-        report.getTotalExecutionTimeNanos());
+    return analyzer.mergeDetectedIssues(report, hibernateIssues);
   }
 
   /**
@@ -208,34 +187,12 @@ class HibernateIntegration {
    * {@code getReferenceById()} when {@code findById()} is used only for FK assignment.
    */
   QueryAuditReport mergeFindByIdIssues(
-      QueryAuditReport report, LazyLoadTracker tracker, QueryAuditConfig config) {
-
-    if (config.getDisabledRules().contains("find-by-id-for-association")) {
-      return report;
-    }
+      QueryAuditReport report, LazyLoadTracker tracker, QueryAuditAnalyzer analyzer) {
 
     FindByIdForAssociationDetector detector = new FindByIdForAssociationDetector();
     List<Issue> findByIdIssues =
         detector.evaluate(tracker.getExplicitLoads(), tracker.getRecords(), report.getAllQueries());
-
-    if (findByIdIssues.isEmpty()) {
-      return report;
-    }
-
-    // findById issues are INFO severity → add to infoIssues
-    List<Issue> mergedInfo = new ArrayList<>(report.getInfoIssues());
-    mergedInfo.addAll(findByIdIssues);
-
-    return new QueryAuditReport(
-        report.getTestClass(),
-        report.getTestName(),
-        report.getConfirmedIssues(),
-        mergedInfo,
-        report.getAcknowledgedIssues(),
-        report.getAllQueries(),
-        report.getUniquePatternCount(),
-        report.getTotalQueryCount(),
-        report.getTotalExecutionTimeNanos());
+    return analyzer.mergeDetectedIssues(report, findByIdIssues);
   }
 
   /** Resolves the EntityManagerFactory from Spring context via reflection. */
