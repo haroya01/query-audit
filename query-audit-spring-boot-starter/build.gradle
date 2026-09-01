@@ -52,3 +52,6 @@ tasks.register('boot4Test', Test) {
     systemProperty 'spring.test.context.cache.maxSize', '1'
     shouldRunAfter tasks.named('test')
 }
+tasks.named('check') {
+    dependsOn tasks.named('boot4Test')
+}
