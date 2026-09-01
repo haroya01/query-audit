@@ -133,6 +133,10 @@ public class QueryAuditExtension
       return;
     }
 
+    Path countBaselinePath = resolveCountBaselinePath(context);
+    Map<String, QueryCounts> countBaseline = QueryCountBaseline.load(countBaselinePath);
+    Map<String, QueryCounts> contracts = QueryCountBaseline.load(resolveContractsPath());
+
     QueryInterceptor interceptor = new QueryInterceptor();
     interceptor.setMaxQueries(auditConfig.getMaxQueries());
 
@@ -158,14 +162,10 @@ public class QueryAuditExtension
           "[QueryAudit] Failed to initialize return type resolver: " + e.getMessage());
     }
 
-    // Load query count baseline for regression detection
-    Path countBaselinePath = resolveCountBaselinePath(context);
-    Map<String, QueryCounts> countBaseline = QueryCountBaseline.load(countBaselinePath);
     store.put(KEY_COUNT_BASELINE, countBaseline);
     store.put(KEY_CURRENT_COUNTS, new ConcurrentHashMap<String, QueryCounts>());
 
-    // Load recorded query contracts for snapshot enforcement (issue #166)
-    store.put(KEY_CONTRACTS, QueryCountBaseline.load(resolveContractsPath()));
+    store.put(KEY_CONTRACTS, contracts);
 
     // Register Hibernate LazyLoadTracker if Hibernate is on the classpath
     LazyLoadTracker tracker = hibernateIntegration.registerTracker(context, NAMESPACE);

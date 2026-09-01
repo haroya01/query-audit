@@ -291,6 +291,10 @@ not cause test failures.
 This is useful for gradual adoption: establish a baseline of existing issues, then
 only fail on new regressions.
 
+An existing malformed or unreadable `.query-audit-counts` file fails audit initialization. The
+error identifies the file and, for malformed entries, the line number. A missing file remains valid
+before the first baseline is recorded.
+
 ---
 
 ## Severity Overrides

@@ -70,7 +70,12 @@ Rules of enforcement:
   re-recording picks them up.
 - **`@ExpectQueries` wins.** A method carrying an inline budget is exempt from the file
   contract — the annotation is the more specific declaration.
-- **Record mode skips enforcement**, so a red suite can always re-record.
+- **Record mode skips count comparison**, so a suite with contract deviations can re-record.
+  The existing file must still be readable and valid because recording keeps entries for tests that
+  did not run.
+- **Invalid files fail the run.** An existing contract file that is malformed or unreadable stops
+  audit initialization. The error identifies the file and, for malformed entries, the line number.
+  A missing file remains valid and means that no contracts have been recorded yet.
 
 ## Updating
 

@@ -5,6 +5,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -46,50 +47,122 @@ public final class QueryCountBaseline {
   /**
    * Loads the count baseline from the given file.
    *
-   * @return an unmodifiable map of test-key to {@link QueryCounts}, or an empty map if the file
-   *     does not exist or cannot be read.
+   * @return an unmodifiable map of test-key to {@link QueryCounts}, or an empty map if the path is
+   *     {@code null} or the file does not exist
+   * @throws IllegalStateException if an existing file cannot be read or contains a malformed entry
    */
   public static Map<String, QueryCounts> load(Path file) {
-    if (file == null || !Files.isRegularFile(file)) {
+    if (file == null) {
       return Map.of();
     }
 
     Map<String, QueryCounts> result = new LinkedHashMap<>();
-    try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        String trimmed = line.trim();
-        if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-          continue;
-        }
+    try {
+      if (Files.notExists(file, LinkOption.NOFOLLOW_LINKS)) {
+        return Map.of();
+      }
+      if (!Files.isRegularFile(file)) {
+        throw unreadableFile(file, "path is not a regular file", null);
+      }
 
-        String[] parts = trimmed.split("\\|", -1);
-        if (parts.length < 7) {
-          // Malformed line -- skip silently
-          continue;
-        }
+      try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        String line;
+        int lineNumber = 0;
+        while ((line = reader.readLine()) != null) {
+          lineNumber++;
+          String trimmed = line.trim();
+          if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+            continue;
+          }
 
-        try {
-          String testClass = parts[0].trim();
-          String testMethod = parts[1].trim();
-          int selectCount = Integer.parseInt(parts[2].trim());
-          int insertCount = Integer.parseInt(parts[3].trim());
-          int updateCount = Integer.parseInt(parts[4].trim());
-          int deleteCount = Integer.parseInt(parts[5].trim());
-          int totalCount = Integer.parseInt(parts[6].trim());
-
-          result.put(
-              key(testClass, testMethod),
-              new QueryCounts(selectCount, insertCount, updateCount, deleteCount, totalCount));
-        } catch (NumberFormatException ignored) {
-          // Malformed numbers -- skip
+          Map.Entry<String, QueryCounts> entry = parseEntry(file, lineNumber, trimmed);
+          if (result.putIfAbsent(entry.getKey(), entry.getValue()) != null) {
+            throw invalidFile(file, lineNumber, "duplicate entry for " + entry.getKey(), null);
+          }
         }
       }
     } catch (IOException e) {
-      return Map.of();
+      throw unreadableFile(file, messageOf(e), e);
+    } catch (SecurityException e) {
+      throw unreadableFile(file, messageOf(e), e);
     }
 
     return Collections.unmodifiableMap(result);
+  }
+
+  private static Map.Entry<String, QueryCounts> parseEntry(Path file, int lineNumber, String line) {
+    String[] parts = line.split("\\|", -1);
+    if (parts.length != 7) {
+      throw invalidFile(
+          file, lineNumber, "expected 7 pipe-separated fields, found " + parts.length, null);
+    }
+
+    String testClass = parts[0].trim();
+    String testMethod = parts[1].trim();
+    if (testClass.isEmpty() || testMethod.isEmpty()) {
+      throw invalidFile(file, lineNumber, "test class and test method must not be blank", null);
+    }
+
+    int selectCount = parseCount(file, lineNumber, "selectCount", parts[2]);
+    int insertCount = parseCount(file, lineNumber, "insertCount", parts[3]);
+    int updateCount = parseCount(file, lineNumber, "updateCount", parts[4]);
+    int deleteCount = parseCount(file, lineNumber, "deleteCount", parts[5]);
+    int totalCount = parseCount(file, lineNumber, "totalCount", parts[6]);
+    long calculatedTotal = (long) selectCount + insertCount + updateCount + deleteCount;
+    if (totalCount != calculatedTotal) {
+      throw invalidFile(
+          file,
+          lineNumber,
+          "totalCount must equal the four query type counts: expected "
+              + calculatedTotal
+              + ", found "
+              + totalCount,
+          null);
+    }
+
+    return Map.entry(
+        key(testClass, testMethod),
+        new QueryCounts(selectCount, insertCount, updateCount, deleteCount, totalCount));
+  }
+
+  private static int parseCount(Path file, int lineNumber, String field, String value) {
+    String trimmed = value.trim();
+    try {
+      int count = Integer.parseInt(trimmed);
+      if (count < 0) {
+        throw invalidFile(file, lineNumber, field + " must not be negative: " + count, null);
+      }
+      return count;
+    } catch (NumberFormatException e) {
+      throw invalidFile(file, lineNumber, field + " must be an integer: " + trimmed, e);
+    }
+  }
+
+  private static IllegalStateException invalidFile(
+      Path file, int lineNumber, String detail, Exception cause) {
+    String message =
+        "Invalid QueryAudit policy file "
+            + file.toAbsolutePath()
+            + " at line "
+            + lineNumber
+            + ": "
+            + detail;
+    return cause == null
+        ? new IllegalStateException(message)
+        : new IllegalStateException(message, cause);
+  }
+
+  private static IllegalStateException unreadableFile(Path file, String detail, Exception cause) {
+    String message = "Cannot read QueryAudit policy file " + file.toAbsolutePath() + ": " + detail;
+    return cause == null
+        ? new IllegalStateException(message)
+        : new IllegalStateException(message, cause);
+  }
+
+  private static String messageOf(Exception exception) {
+    return exception.getMessage() == null
+        ? exception.getClass().getSimpleName()
+        : exception.getMessage();
   }
 
   /**
