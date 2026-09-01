@@ -398,6 +398,33 @@ should be optimized. Add the missing index or use `@Query` with optimized SQL.
 
 ---
 
+## Concurrent Audited Tests Fail Before Execution
+
+QueryAudit keeps one query capture window for the methods in an audited test class. It therefore
+rejects a method when JUnit reports `ExecutionMode.CONCURRENT`, rather than risk clearing another
+method's queries or assigning them to the wrong report.
+
+Run audited methods on the same thread:
+
+```java
+@QueryAudit
+@Execution(ExecutionMode.SAME_THREAD)
+class OrderRepositoryTest {
+    // ...
+}
+```
+
+To make same-thread execution the project default, add this to `junit-platform.properties`:
+
+```properties
+junit.jupiter.execution.parallel.mode.default=same_thread
+```
+
+An explicit `@Execution(CONCURRENT)` takes precedence over the default and must be removed or
+changed on the audited class or method.
+
+---
+
 ## Report Not Printing
 
 **Symptom:** No QueryAudit report appears in test output.

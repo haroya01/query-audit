@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.extension.*;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 
 /**
  * JUnit 5 extension that intercepts SQL queries during test execution, analyzes them for
@@ -71,6 +72,7 @@ public class QueryAuditExtension
   private static final String KEY_METHOD_SCOPED_CLEANUP = "methodScopedCleanup";
   private static final String KEY_ACTIVE = "auditActive";
   private static final String KEY_AFTER_EACH_DONE = "afterEachDone";
+  private static final String KEY_CONCURRENT_EXECUTION_REJECTED = "concurrentExecutionRejected";
   private static final String KEY_CONTRACTS = "queryContracts";
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
@@ -197,6 +199,25 @@ public class QueryAuditExtension
     return context.getTestMethod().map(method -> target + "#" + method.getName()).orElse(target);
   }
 
+  private static void requireSameThreadExecution(ExtensionContext context) {
+    if (context.getExecutionMode() != ExecutionMode.CONCURRENT) {
+      return;
+    }
+
+    context.getStore(NAMESPACE).put(KEY_CONCURRENT_EXECUTION_REJECTED, Boolean.TRUE);
+    throw new ExtensionConfigurationException(
+        "QueryAudit: cannot audit "
+            + auditTarget(context)
+            + " with concurrent execution. Query capture is shared within a test class, so"
+            + " overlapping methods cannot be attributed reliably. Use @Execution(SAME_THREAD)"
+            + " or set junit.jupiter.execution.parallel.mode.default=same_thread.");
+  }
+
+  private static boolean wasConcurrentExecutionRejected(ExtensionContext context) {
+    return Boolean.TRUE.equals(
+        context.getStore(NAMESPACE).get(KEY_CONCURRENT_EXECUTION_REJECTED, Boolean.class));
+  }
+
   // ── BeforeEachCallback ─────────────────────────────────────────────
 
   @Override
@@ -209,6 +230,7 @@ public class QueryAuditExtension
       context.getStore(NAMESPACE).put(KEY_ACTIVE, Boolean.FALSE);
       return;
     }
+    requireSameThreadExecution(context);
     initializeAudit(context, auditConfig, InitializationScope.METHOD);
 
     QueryInterceptor interceptor = getInterceptor(context);
@@ -226,7 +248,7 @@ public class QueryAuditExtension
 
   @Override
   public void beforeTestExecution(ExtensionContext context) {
-    if (!isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
       return;
     }
     QueryInterceptor interceptor = getInterceptor(context);
@@ -240,7 +262,7 @@ public class QueryAuditExtension
 
   @Override
   public void afterTestExecution(ExtensionContext context) {
-    if (!isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
       return;
     }
     QueryInterceptor interceptor = getInterceptor(context);
@@ -253,7 +275,7 @@ public class QueryAuditExtension
 
   @Override
   public void afterEach(ExtensionContext context) {
-    if (!isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
       return;
     }
     // Method-level store: guards against double analysis when the extension is registered twice
