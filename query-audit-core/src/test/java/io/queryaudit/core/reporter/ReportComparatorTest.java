@@ -193,6 +193,50 @@ class ReportComparatorTest {
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("envelope");
     }
+
+    @Test
+    @DisplayName("accepts compatible 1.x schema versions")
+    void acceptsCompatibleSchemaVersion() {
+      String compatibleEnvelope = "{\"schemaVersion\":\"1.42.7\",\"reports\":[]}";
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(compatibleEnvelope, compatibleEnvelope);
+
+      assertThat(verdict.complete()).isTrue();
+    }
+
+    @Test
+    @DisplayName("rejects an envelope without a schema version")
+    void rejectsMissingSchemaVersion() {
+      assertThatThrownBy(() -> ReportComparator.compare("{\"reports\":[]}", envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("schemaVersion")
+          .hasMessageContaining("required");
+    }
+
+    @Test
+    @DisplayName("rejects an unsupported schema major version")
+    void rejectsUnsupportedSchemaVersion() {
+      assertThatThrownBy(
+              () ->
+                  ReportComparator.compare(
+                      "{\"schemaVersion\":\"999.0.0\",\"reports\":[]}", envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("unsupported schemaVersion")
+          .hasMessageContaining("1.x");
+    }
+
+    @Test
+    @DisplayName("rejects a malformed schema version")
+    void rejectsMalformedSchemaVersion() {
+      assertThatThrownBy(
+              () ->
+                  ReportComparator.compare(
+                      "{\"schemaVersion\":\"1.0\",\"reports\":[]}", envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("invalid schemaVersion")
+          .hasMessageContaining("major.minor.patch");
+    }
   }
 
   @Nested
