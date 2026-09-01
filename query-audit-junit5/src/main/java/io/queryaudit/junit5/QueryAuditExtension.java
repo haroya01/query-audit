@@ -67,12 +67,18 @@ public class QueryAuditExtension
   private static final String KEY_DATASOURCE = "dataSource";
   private static final String KEY_RETURN_TYPE_RESOLVER = "returnTypeResolver";
   private static final String KEY_DATASOURCE_HOOK_CLEANUP = "dataSourceHookCleanup";
+  private static final String KEY_METHOD_SCOPED_CLEANUP = "methodScopedCleanup";
   private static final String KEY_ACTIVE = "auditActive";
   private static final String KEY_AFTER_EACH_DONE = "afterEachDone";
   private static final String KEY_CONTRACTS = "queryContracts";
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
+
+  private enum InitializationScope {
+    CLASS,
+    METHOD
+  }
 
   private final DataSourceResolver dataSourceResolver = new DataSourceResolver();
   private final IndexMetadataCollector metadataCollector = new IndexMetadataCollector();
@@ -88,6 +94,10 @@ public class QueryAuditExtension
     // it without re-resolving the Spring context.
     ExtensionContext.Store activeStore = context.getStore(NAMESPACE);
     boolean active = computeActive(context);
+    QueryAuditConfig auditConfig = active ? buildConfig(context) : null;
+    if (auditConfig != null && !auditConfig.isEnabled()) {
+      active = false;
+    }
     activeStore.put(KEY_ACTIVE, active);
     if (!active) {
       return;
@@ -98,25 +108,42 @@ public class QueryAuditExtension
       return;
     }
 
-    QueryInterceptor interceptor = new QueryInterceptor();
+    // A missing DataSource is reported from beforeEach, when method-level exclusions are known.
+    // If a DataSource is already available, initialize once at class scope as before.
+    initializeAudit(context, auditConfig, InitializationScope.CLASS);
+  }
 
-    // Apply memory configuration from @QueryAudit or defaults
-    QueryAuditConfig earlyConfig = buildConfig(context);
-    interceptor.setMaxQueries(earlyConfig.getMaxQueries());
+  private void initializeAudit(
+      ExtensionContext context, QueryAuditConfig auditConfig, InitializationScope scope)
+      throws Exception {
+    if (getInterceptor(context) != null) {
+      return;
+    }
+
+    DataSource dataSource = dataSourceResolver.resolve(context);
+    if (dataSource == null) {
+      if (scope == InitializationScope.METHOD) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: DataSource unavailable for active audit of "
+                + auditTarget(context)
+                + ". Register a DataSource bean in the Spring ApplicationContext or expose a"
+                + " non-null static DataSource field on the test class.");
+      }
+      return;
+    }
+
+    QueryInterceptor interceptor = new QueryInterceptor();
+    interceptor.setMaxQueries(auditConfig.getMaxQueries());
 
     ExtensionContext.Store store = context.getStore(NAMESPACE);
     store.put(KEY_INTERCEPTOR, interceptor);
+    store.put(KEY_DATASOURCE, dataSource);
+    Runnable hookCleanup = dataSourceResolver.hookInterceptor(dataSource, interceptor);
+    store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
 
-    DataSource dataSource = dataSourceResolver.resolve(context);
-    if (dataSource != null) {
-      store.put(KEY_DATASOURCE, dataSource);
-      Runnable hookCleanup = dataSourceResolver.hookInterceptor(dataSource, interceptor);
-      store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
-
-      IndexMetadata metadata = metadataCollector.collect(dataSource);
-      if (metadata != null) {
-        store.put(KEY_INDEX_METADATA, metadata);
-      }
+    IndexMetadata metadata = metadataCollector.collect(dataSource);
+    if (metadata != null) {
+      store.put(KEY_INDEX_METADATA, metadata);
     }
 
     // Build return type resolver from Spring Data repositories if available
@@ -144,20 +171,48 @@ public class QueryAuditExtension
     if (tracker != null) {
       store.put(KEY_LAZY_LOAD_TRACKER, tracker);
     }
+    if (scope == InitializationScope.METHOD) {
+      store.put(
+          KEY_METHOD_SCOPED_CLEANUP,
+          (ExtensionContext.Store.CloseableResource)
+              () -> {
+                try {
+                  if (tracker != null) {
+                    hibernateIntegration.unregisterTracker(context, tracker);
+                  }
+                } finally {
+                  try {
+                    hookCleanup.run();
+                  } finally {
+                    QueryAuditDataSourceStore.clear();
+                  }
+                }
+              });
+    }
+  }
+
+  private static String auditTarget(ExtensionContext context) {
+    String target = context.getRequiredTestClass().getName();
+    return context.getTestMethod().map(method -> target + "#" + method.getName()).orElse(target);
   }
 
   // ── BeforeEachCallback ─────────────────────────────────────────────
 
   @Override
-  public void beforeEach(ExtensionContext context) {
+  public void beforeEach(ExtensionContext context) throws Exception {
     if (!isAuditActive(context)) {
       return;
     }
-    QueryInterceptor interceptor = getInterceptor(context);
-    if (interceptor != null) {
-      interceptor.start();
-      interceptor.setPhase(LifecyclePhase.SETUP);
+    QueryAuditConfig auditConfig = buildConfig(context);
+    if (!auditConfig.isEnabled()) {
+      context.getStore(NAMESPACE).put(KEY_ACTIVE, Boolean.FALSE);
+      return;
     }
+    initializeAudit(context, auditConfig, InitializationScope.METHOD);
+
+    QueryInterceptor interceptor = getInterceptor(context);
+    interceptor.start();
+    interceptor.setPhase(LifecyclePhase.SETUP);
 
     LazyLoadTracker tracker = getLazyLoadTracker(context);
     if (tracker != null) {
@@ -801,6 +856,15 @@ public class QueryAuditExtension
     if (method.isPresent() && method.get().isAnnotationPresent(QueryAuditExclude.class)) {
       return false;
     }
+    if (isClassExcluded(context.getRequiredTestClass())) {
+      return false;
+    }
+
+    // A method-level @QueryAudit registers the extension too late for beforeAll. It must therefore
+    // opt the method in even if suite-wide autodetection cached the otherwise plain class as false.
+    if (method.isPresent() && method.get().isAnnotationPresent(QueryAudit.class)) {
+      return buildConfig(context).isEnabled();
+    }
 
     ExtensionContext current = context;
     while (current != null) {
@@ -810,7 +874,12 @@ public class QueryAuditExtension
       }
       current = current.getParent().orElse(null);
     }
-    return computeActive(context);
+    boolean active = computeActive(context);
+    if (active) {
+      active = buildConfig(context).isEnabled();
+    }
+    context.getStore(NAMESPACE).put(KEY_ACTIVE, active);
+    return active;
   }
 
   private static boolean isClassExcluded(Class<?> testClass) {
