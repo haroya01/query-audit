@@ -8,6 +8,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Compares two {@code report.json} runs into a machine-readable resolution verdict (issue #167).
@@ -30,6 +32,9 @@ import java.util.Set;
  * @since 0.5.0
  */
 public final class ReportComparator {
+
+  private static final String SUPPORTED_SCHEMA_MAJOR = "1";
+  private static final Pattern SCHEMA_VERSION_PATTERN = Pattern.compile("^(\\d+)\\.\\d+\\.\\d+$");
 
   private ReportComparator() {
     // static entry points only
@@ -217,12 +222,35 @@ public final class ReportComparator {
   @SuppressWarnings("unchecked")
   private static List<Map<String, Object>> reports(String envelopeJson) {
     Object root = MiniJsonParser.parse(envelopeJson);
-    if (!(root instanceof Map<?, ?> envelope) || !(envelope.get("reports") instanceof List<?>)) {
-      throw new IllegalArgumentException(
-          "not a report.json envelope — expected {\"schemaVersion\", \"reports\": [...]}"
-              + " (schema 1.x, QueryAudit 0.5.0+)");
+    if (!(root instanceof Map<?, ?> envelope)) {
+      throw invalidEnvelope("expected a JSON object");
+    }
+    requireSupportedSchemaVersion(envelope);
+    if (!(envelope.get("reports") instanceof List<?>)) {
+      throw invalidEnvelope("reports must be an array");
     }
     return (List<Map<String, Object>>) envelope.get("reports");
+  }
+
+  private static void requireSupportedSchemaVersion(Map<?, ?> envelope) {
+    Object value = envelope.get("schemaVersion");
+    if (!(value instanceof String schemaVersion)) {
+      throw invalidEnvelope("schemaVersion is required and must be a string");
+    }
+
+    Matcher version = SCHEMA_VERSION_PATTERN.matcher(schemaVersion);
+    if (!version.matches()) {
+      throw invalidEnvelope("invalid schemaVersion; expected major.minor.patch");
+    }
+    if (!SUPPORTED_SCHEMA_MAJOR.equals(version.group(1))) {
+      throw invalidEnvelope(
+          "unsupported schemaVersion; this comparator supports " + SUPPORTED_SCHEMA_MAJOR + ".x");
+    }
+  }
+
+  private static IllegalArgumentException invalidEnvelope(String reason) {
+    return new IllegalArgumentException(
+        "not a supported report.json envelope — " + reason + " (QueryAudit 0.5.0+)");
   }
 
   @SuppressWarnings("unchecked")
