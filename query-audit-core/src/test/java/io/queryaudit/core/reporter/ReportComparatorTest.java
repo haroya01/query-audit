@@ -105,6 +105,8 @@ class ReportComparatorTest {
       assertThat(verdict.queriesBefore()).isEqualTo(11);
       assertThat(verdict.queriesAfter()).isEqualTo(7);
       assertThat(verdict.executionTimeMsBefore()).isEqualTo(2);
+      assertThat(verdict.complete()).isTrue();
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(1);
     }
 
     @Test
@@ -119,6 +121,69 @@ class ReportComparatorTest {
       assertThat(verdict.newFindings()).isEmpty();
       assertThat(verdict.resolved()).hasSize(1);
       assertThat(verdict.persisting()).isEmpty();
+      assertThat(verdict.missingTests()).isEmpty();
+      assertThat(verdict.complete()).isTrue();
+      assertThat(ReportComparator.exitCode(verdict)).isZero();
+    }
+
+    @Test
+    @DisplayName("does not resolve findings when their audited test is missing")
+    void missingFindingProducerIsIncomplete() {
+      Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(
+              envelope(report("findOrders", List.of(finding), 11)), envelope());
+
+      assertThat(verdict.resolved()).isEmpty();
+      assertThat(verdict.newFindings()).isEmpty();
+      assertThat(verdict.persisting()).isEmpty();
+      assertThat(verdict.missingTests())
+          .containsExactly(new ReportComparator.TestRef("OrderServiceTest", "findOrders"));
+      assertThat(verdict.complete()).isFalse();
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("is incomplete when a clean audited test is missing")
+    void missingCleanTestIsIncomplete() {
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(envelope(report("findOrders", List.of(), 3)), envelope());
+
+      assertThat(verdict.resolved()).isEmpty();
+      assertThat(verdict.missingTests())
+          .containsExactly(new ReportComparator.TestRef("OrderServiceTest", "findOrders"));
+      assertThat(verdict.complete()).isFalse();
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("keeps partial finding deltas while a missing test makes the verdict incomplete")
+    void mixedCompleteAndMissingTests() {
+      Issue unverified = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+      Issue fixed = nPlusOne("select * from payments where order_id = ?", "S.pay:20");
+      Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
+
+      String before =
+          envelope(
+              report("missingOrders", List.of(unverified), 11),
+              report("findPayments", List.of(fixed), 5));
+      String after =
+          envelope(
+              report("findPayments", List.of(), 3), report("findRefunds", List.of(introduced), 7));
+
+      ReportComparator.Verdict verdict = ReportComparator.compare(before, after);
+
+      assertThat(verdict.resolved())
+          .extracting(ReportComparator.Finding::testName)
+          .containsExactly("findPayments");
+      assertThat(verdict.newFindings())
+          .extracting(ReportComparator.Finding::testName)
+          .containsExactly("findRefunds");
+      assertThat(verdict.missingTests())
+          .containsExactly(new ReportComparator.TestRef("OrderServiceTest", "missingOrders"));
+      assertThat(verdict.complete()).isFalse();
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
     }
 
     @Test
@@ -147,9 +212,36 @@ class ReportComparatorTest {
       Map<?, ?> parsed = (Map<?, ?>) MiniJsonParser.parse(json);
       assertThat((List<?>) parsed.get("newFindings")).hasSize(1);
       assertThat((List<?>) parsed.get("resolved")).isEmpty();
+      assertThat(parsed.get("complete")).isEqualTo(Boolean.TRUE);
+      assertThat((List<?>) parsed.get("missingTests")).isEmpty();
       Map<?, ?> delta = (Map<?, ?>) parsed.get("queryCountDelta");
       assertThat(delta.get("before")).isEqualTo(5L);
       assertThat(delta.get("after")).isEqualTo(9L);
+    }
+
+    @Test
+    @DisplayName("verdict.json and summary identify an incomplete comparison")
+    void rendersMissingTests() {
+      Issue finding = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(envelope(report("findOrders", List.of(finding), 5)), envelope());
+
+      Map<?, ?> parsed = (Map<?, ?>) MiniJsonParser.parse(ReportComparator.toJson(verdict));
+      assertThat(parsed.get("complete")).isEqualTo(Boolean.FALSE);
+      assertThat((List<?>) parsed.get("resolved")).isEmpty();
+      assertThat((List<?>) parsed.get("missingTests"))
+          .singleElement()
+          .satisfies(
+              entry -> {
+                Map<?, ?> missing = (Map<?, ?>) entry;
+                assertThat(missing.get("testClass")).isEqualTo("OrderServiceTest");
+                assertThat(missing.get("testName")).isEqualTo("findOrders");
+              });
+
+      String summary = ReportComparator.toSummary(verdict);
+      assertThat(summary).contains("INCOMPLETE: 1 baseline test missing");
+      assertThat(summary).contains("MISSING  OrderServiceTest.findOrders");
+      assertThat(summary).doesNotContain("RESOLVED");
     }
 
     @Test
