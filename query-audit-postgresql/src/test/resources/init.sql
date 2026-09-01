@@ -19,3 +19,19 @@ CREATE TABLE orders (
 
 CREATE INDEX idx_user_id ON orders (user_id);
 CREATE INDEX idx_status ON orders (status);
+
+CREATE TABLE index_semantics (
+    id BIGSERIAL PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    email VARCHAR(255),
+    note TEXT
+);
+
+CREATE UNIQUE INDEX idx_key_expression
+    ON index_semantics (tenant_id, lower(email));
+CREATE UNIQUE INDEX idx_key_include
+    ON index_semantics (tenant_id, email) INCLUDE (note);
+CREATE UNIQUE INDEX idx_key_partial
+    ON index_semantics (tenant_id) WHERE email IS NOT NULL;
+ALTER TABLE index_semantics
+    ADD CONSTRAINT uq_deferred_email UNIQUE (email) DEFERRABLE INITIALLY DEFERRED;

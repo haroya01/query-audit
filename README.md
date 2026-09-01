@@ -32,9 +32,9 @@ change — human or automated — on an explicit, reviewable behavior diff.
 
 ## What It Does
 
-QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes each one against **66 detection rules**, cross-references index metadata from your database, and fails your build when it finds performance anti-patterns.
+QueryAudit intercepts every SQL query executed during your JUnit tests, analyzes each one against **67 detection rules**, cross-references index metadata from your database, and fails your build when it finds performance anti-patterns.
 
-- **66 detection rules** covering N+1 queries, missing indexes, DML safety, locking and race risks, connection-lifecycle misuse, ORM anti-patterns, and more
+- **67 detection rules** covering N+1 queries, missing indexes, DML safety, locking and race risks, connection-lifecycle misuse, ORM anti-patterns, and more
 - **Zero configuration** -- add one annotation and go; or flip [`mode: all`](https://haroya01.github.io/query-audit/guide/configuration/#audit-coverage-mode) to audit every test with per-test opt-out
 - **Rule profiles** -- `strict` / `recommended` / `minimal` tiers for a quiet, trustworthy first run
 - **Per-type query budgets** -- `@ExpectQueries(select = 2, insert = 1)` fails the test when a SELECT / INSERT / UPDATE / DELETE budget is exceeded, and [snapshot contracts](https://haroya01.github.io/query-audit/guide/contracts/) record those budgets for the whole suite in one run
@@ -186,9 +186,9 @@ INFO (for review)
 
 ---
 
-## 66 Detection Rules
+## 67 Detection Rules
 
-QueryAudit ships with 66 active detection rules (68 issue types in the catalog; one detector
+QueryAudit ships with 67 active detection rules (69 issue types in the catalog; one detector
 is disabled by default and one EXPLAIN-based type is reserved), organized into two confidence
 tiers:
 
@@ -202,7 +202,7 @@ tiers:
 | **Missing Index** | WHERE, JOIN, ORDER BY, GROUP BY, DML columns without index | 5 |
 | **Index Misuse** | Composite leading column, redundant index, covering index opportunity, write amplification | 4 |
 | **SQL Anti-Patterns** | SELECT *, function in WHERE, OR abuse, OFFSET pagination, LIKE wildcard, implicit type conversion | 6 |
-| **DML Safety** | UPDATE without WHERE, DML without index, INSERT with SELECT *, INSERT ON DUPLICATE KEY | 6 |
+| **DML Safety** | UPDATE without WHERE, DML without index, repeated single-row UPDATE, INSERT with SELECT * | 7 |
 | **Join Issues** | Cartesian join, too many joins, implicit join, unused join, correlated subquery | 5 |
 | **Locking & Races** | FOR UPDATE without index, FOR UPDATE on non-unique index, range lock risk, INSERT...SELECT locks source, read-modify-write without lock | 5 |
 | **Query Structure** | DISTINCT misuse, HAVING misuse, UNION without ALL, large IN list, NOT IN subquery, ORDER BY RAND | 8 |

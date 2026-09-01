@@ -147,6 +147,7 @@ be flagged:
 | OFFSET pagination | `offset-pagination.threshold` | 1000 |
 | Excessive columns | `excessive-column.threshold` | 15 |
 | Repeated INSERT | `repeated-insert.threshold` | 3 |
+| Repeated UPDATE | `repeated-update.threshold` | 3 |
 | Slow query (warning) | `slow-query.warning-ms` | 500 |
 | Slow query (error) | `slow-query.error-ms` | 3000 |
 

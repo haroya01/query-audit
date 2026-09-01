@@ -62,6 +62,9 @@ public class QueryAuditAutoConfiguration {
         .repeatedInsertThreshold(properties.getRepeatedInsert().getThreshold())
         .repeatedInsertExcludeTables(
             new HashSet<>(properties.getRepeatedInsert().getExcludeTables()))
+        .repeatedUpdateThreshold(properties.getRepeatedUpdate().getThreshold())
+        .repeatedUpdateExcludeTables(
+            new HashSet<>(properties.getRepeatedUpdate().getExcludeTables()))
         .writeAmplificationThreshold(properties.getWriteAmplification().getThreshold())
         .slowQueryWarningMs(properties.getSlowQuery().getWarningMs())
         .slowQueryErrorMs(properties.getSlowQuery().getErrorMs())

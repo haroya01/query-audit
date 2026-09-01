@@ -16,6 +16,7 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
@@ -100,6 +101,29 @@ class PostgreSqlIntegrationTest {
     assertThat(emailIdx).hasSize(1);
     assertThat(emailIdx.get(0).columnName()).isEqualTo("email");
     assertThat(emailIdx.get(0).nonUnique()).isFalse();
+  }
+
+  @Test
+  @DisplayName("only global column keys are exposed as unique")
+  void onlyGlobalColumnKeysAreUnique() {
+    List<IndexInfo> indexes = metadata.getIndexesForTable("index_semantics");
+
+    assertThat(indexesFor(indexes, "idx_key_expression"))
+        .extracting(IndexInfo::nonUnique)
+        .containsOnly(true);
+    assertThat(indexesFor(indexes, "idx_key_partial"))
+        .extracting(IndexInfo::nonUnique)
+        .containsOnly(true);
+    assertThat(indexesFor(indexes, "uq_deferred_email"))
+        .extracting(IndexInfo::nonUnique)
+        .containsOnly(true);
+    assertThat(metadata.hasUniqueIndexCoveredBy("index_semantics", Set.of("tenant_id"))).isFalse();
+
+    assertThat(indexesFor(indexes, "idx_key_include"))
+        .extracting(IndexInfo::columnName)
+        .containsExactly("tenant_id", "email");
+    assertThat(metadata.hasUniqueIndexCoveredBy("index_semantics", Set.of("tenant_id", "email")))
+        .isTrue();
   }
 
   @Test
@@ -221,5 +245,9 @@ class PostgreSqlIntegrationTest {
             .collect(Collectors.toList());
 
     assertThat(joinIssues).isNotEmpty();
+  }
+
+  private static List<IndexInfo> indexesFor(List<IndexInfo> indexes, String indexName) {
+    return indexes.stream().filter(index -> indexName.equals(index.indexName())).toList();
   }
 }

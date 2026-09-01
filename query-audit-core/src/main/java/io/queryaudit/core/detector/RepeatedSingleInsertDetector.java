@@ -34,14 +34,14 @@ public class RepeatedSingleInsertDetector implements DetectionRule {
    * round-trip / log-flush cost the rule warns about does not apply.
    */
   public static final Set<String> DEFAULT_EXCLUDE_TABLES =
-      Set.of("temp_*", "*_temp", "tmp_*", "*_tmp", "staging_*", "*_staging");
+      TableNameGlobMatcher.DEFAULT_STAGING_TABLES;
 
   private static final Pattern MULTI_ROW_INSERT =
       Pattern.compile(
           "\\bVALUES\\s*\\(.*\\)\\s*,\\s*\\(", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
   private final int threshold;
-  private final List<Pattern> excludeTablePatterns;
+  private final TableNameGlobMatcher excludedTables;
 
   public RepeatedSingleInsertDetector() {
     this(DEFAULT_THRESHOLD, DEFAULT_EXCLUDE_TABLES);
@@ -53,43 +53,7 @@ public class RepeatedSingleInsertDetector implements DetectionRule {
 
   public RepeatedSingleInsertDetector(int threshold, Collection<String> excludeTablePatterns) {
     this.threshold = threshold;
-    this.excludeTablePatterns = compileGlobs(excludeTablePatterns);
-  }
-
-  private static List<Pattern> compileGlobs(Collection<String> globs) {
-    if (globs == null || globs.isEmpty()) {
-      return List.of();
-    }
-    List<Pattern> compiled = new ArrayList<>(globs.size());
-    for (String glob : globs) {
-      if (glob == null || glob.isBlank()) {
-        continue;
-      }
-      StringBuilder regex = new StringBuilder("^");
-      for (int i = 0; i < glob.length(); i++) {
-        char c = glob.charAt(i);
-        if (c == '*') {
-          regex.append(".*");
-        } else {
-          regex.append(Pattern.quote(String.valueOf(c)));
-        }
-      }
-      regex.append('$');
-      compiled.add(Pattern.compile(regex.toString(), Pattern.CASE_INSENSITIVE));
-    }
-    return compiled;
-  }
-
-  private boolean isExcludedTable(String table) {
-    if (table == null || excludeTablePatterns.isEmpty()) {
-      return false;
-    }
-    for (Pattern p : excludeTablePatterns) {
-      if (p.matcher(table).matches()) {
-        return true;
-      }
-    }
-    return false;
+    this.excludedTables = new TableNameGlobMatcher(excludeTablePatterns);
   }
 
   @Override
@@ -116,7 +80,7 @@ public class RepeatedSingleInsertDetector implements DetectionRule {
       }
 
       String table = SqlParser.extractInsertTable(sql);
-      if (isExcludedTable(table)) {
+      if (excludedTables.matches(table)) {
         continue;
       }
       groups.computeIfAbsent(normalized, k -> new InsertGroup(table, normalized)).count++;

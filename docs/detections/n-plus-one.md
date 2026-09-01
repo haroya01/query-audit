@@ -621,4 +621,5 @@ queries), suppress it:
 
 - [`duplicate-query`](overview.md#disabled-rules-1-entry) -- Detects identical queries (currently disabled)
 - [`repeated-single-insert`](dml-anti-patterns.md#repeated-single-row-insert) -- Similar pattern for INSERT statements
+- [`repeated-single-update`](dml-anti-patterns.md#repeated-single-row-update) -- Similar pattern for UPDATEs scoped by a unique key
 - [`mergeable-queries`](overview.md) -- Multiple queries to same table that could be combined
