@@ -221,9 +221,7 @@ public class QueryAuditExtension
     }
 
     List<QueryRecord> queries = interceptor.getRecordedQueries();
-    if (queries.isEmpty() && (tracker == null || tracker.getRecords().isEmpty())) {
-      return;
-    }
+    // Empty executions still need contract enforcement, count recording, and report coverage.
 
     QueryAuditConfig config = buildConfig(context);
     IndexMetadata indexMetadata = getIndexMetadata(context);
