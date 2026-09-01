@@ -220,10 +220,10 @@ Release Please uses these commits to generate changelogs and determine version b
     MY_NEW_ISSUE("my-new-issue", "Description of the new issue", WARNING),
     ```
 
-3. **Register the detector** in `QueryAuditAnalyzer.createRules()`:
+3. **Register the detector** in `DetectionRuleRegistry.createBuiltInRules()`:
 
     ```java
-    ruleList.add(new MyNewDetector());
+    rules.add(new MyNewDetector());
     ```
 
 4. **Add tests** in `query-audit-core/src/test/java/io/queryaudit/core/detector/`:

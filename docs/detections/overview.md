@@ -298,9 +298,9 @@ rules. The remaining 2 entries fall into two categories:
 | `duplicate-query` | **Disabled in code.** datasource-proxy provides SQL with `?` placeholders, making it impossible to distinguish "same query, same params" from "same query, different params." The N+1 detector already covers repeated patterns. Will be re-enabled when parameter tracking is added. |
 
 !!! warning "DuplicateQueryDetector"
-    The `DuplicateQueryDetector` class exists in the codebase but is commented out in
-    `QueryAuditAnalyzer.createRules()`. The `DUPLICATE_QUERY` IssueType remains in the enum
-    for forward compatibility.
+    The `DuplicateQueryDetector` class exists in the codebase but is intentionally omitted from
+    `DetectionRuleRegistry.createBuiltInRules()`. The `DUPLICATE_QUERY` IssueType remains in the
+    enum for forward compatibility.
 
 ### Reserved for Future EXPLAIN-based Detection (1 entry)
 
@@ -328,7 +328,7 @@ for full-table-scan detection in the EXPLAIN analyzers.
     the MySQL/PostgreSQL EXPLAIN analyzers emit `filesort` and `temporary-table`, the
     Hibernate-level trackers emit `find-by-id-for-association` and the authoritative N+1
     signal, and the connection lifecycle tracker emits `connection-held-idle` -- these run
-    outside `QueryAuditAnalyzer.createRules()`.
+    outside `DetectionRuleRegistry.createBuiltInRules()`.
 
 ---
 
