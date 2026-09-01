@@ -306,41 +306,7 @@ public class QueryAuditAnalyzer {
     List<Issue> infoIssues = new ArrayList<>();
     List<Issue> acknowledgedIssues = new ArrayList<>();
 
-    for (Issue issue : allIssues) {
-      // Profile tier / enabled-rules / disabled-rules decision on the exact issue code. This is
-      // the correctness net: rule-level filtering above can only exclude detectors that declare
-      // getRuleCode(), and most built-ins rely on the class-name heuristic instead.
-      if (config.isRuleExcluded(issue.type().getCode())) {
-        continue;
-      }
-      if (config.isSuppressed(issue.type().getCode(), issue.table(), issue.column())) {
-        continue;
-      }
-
-      // Apply severity override if configured
-      Severity effectiveSeverity =
-          config.getEffectiveSeverity(issue.type().getCode(), issue.severity());
-      Issue effectiveIssue =
-          effectiveSeverity != issue.severity()
-              ? new Issue(
-                  issue.type(),
-                  effectiveSeverity,
-                  issue.query(),
-                  issue.table(),
-                  issue.column(),
-                  issue.detail(),
-                  issue.suggestion(),
-                  issue.sourceLocation())
-              : issue;
-
-      if (Baseline.isAcknowledged(baseline, effectiveIssue)) {
-        acknowledgedIssues.add(effectiveIssue);
-      } else if (effectiveIssue.severity() == Severity.INFO) {
-        infoIssues.add(effectiveIssue);
-      } else {
-        confirmedIssues.add(effectiveIssue);
-      }
-    }
+    classifyIssues(allIssues, confirmedIssues, infoIssues, acknowledgedIssues);
 
     // Single-pass calculation of unique patterns and total execution time.
     // Replaces two separate stream passes over filteredQueries.
@@ -364,6 +330,89 @@ public class QueryAuditAnalyzer {
         (int) uniquePatternCount,
         filteredQueries.size(),
         totalExecutionTimeNanos);
+  }
+
+  /**
+   * Applies the configured rule selection, suppressions, severity overrides, and baseline to issues
+   * detected outside the normal SQL rule list, then merges them into an existing report.
+   *
+   * @param report report that already contains the SQL analysis result
+   * @param detectedIssues additional issues to classify and merge
+   * @return the merged report, or {@code report} when no additional issue remains after policy
+   *     evaluation
+   * @since 0.6.0
+   */
+  public QueryAuditReport mergeDetectedIssues(QueryAuditReport report, List<Issue> detectedIssues) {
+    if (detectedIssues == null || detectedIssues.isEmpty()) {
+      return report;
+    }
+
+    List<Issue> confirmedIssues = new ArrayList<>(report.getConfirmedIssues());
+    List<Issue> infoIssues = new ArrayList<>(report.getInfoIssues());
+    List<Issue> acknowledgedIssues = new ArrayList<>(report.getAcknowledgedIssues());
+    int existingIssueCount = confirmedIssues.size() + infoIssues.size() + acknowledgedIssues.size();
+
+    classifyIssues(detectedIssues, confirmedIssues, infoIssues, acknowledgedIssues);
+
+    int mergedIssueCount = confirmedIssues.size() + infoIssues.size() + acknowledgedIssues.size();
+    if (mergedIssueCount == existingIssueCount) {
+      return report;
+    }
+
+    QueryAuditReport mergedReport =
+        new QueryAuditReport(
+            report.getTestClass(),
+            report.getTestName(),
+            confirmedIssues,
+            infoIssues,
+            acknowledgedIssues,
+            report.getAllQueries(),
+            report.getUniquePatternCount(),
+            report.getTotalQueryCount(),
+            report.getTotalExecutionTimeNanos());
+    return mergedReport.withIndexMetadata(report.getIndexMetadata());
+  }
+
+  private void classifyIssues(
+      List<Issue> issues,
+      List<Issue> confirmedIssues,
+      List<Issue> infoIssues,
+      List<Issue> acknowledgedIssues) {
+    for (Issue issue : issues) {
+      // The exact issue code is the correctness net for detectors that do not declare a rule code.
+      if (config.isRuleExcluded(issue.type().getCode())) {
+        continue;
+      }
+      if (config.isSuppressed(issue.type().getCode(), issue.table(), issue.column())) {
+        continue;
+      }
+
+      Issue effectiveIssue = applySeverityOverride(issue);
+      if (Baseline.isAcknowledged(baseline, effectiveIssue)) {
+        acknowledgedIssues.add(effectiveIssue);
+      } else if (effectiveIssue.severity() == Severity.INFO) {
+        infoIssues.add(effectiveIssue);
+      } else {
+        confirmedIssues.add(effectiveIssue);
+      }
+    }
+  }
+
+  private Issue applySeverityOverride(Issue issue) {
+    Severity effectiveSeverity =
+        config.getEffectiveSeverity(issue.type().getCode(), issue.severity());
+    if (effectiveSeverity == issue.severity()) {
+      return issue;
+    }
+    return new Issue(
+        issue.type(),
+        effectiveSeverity,
+        issue.query(),
+        issue.table(),
+        issue.column(),
+        issue.detail(),
+        issue.suggestion(),
+        issue.sourceLocation());
   }
 
   public QueryAuditConfig getConfig() {
