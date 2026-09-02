@@ -19,10 +19,10 @@ import java.util.regex.Pattern;
  * which confirmed findings were resolved, which are new, which persist, and how the query profile
  * moved.
  *
- * <p><strong>Matching key:</strong> {@code testClass|testName|type|query|sourceLocation}. The query
- * field holds the normalized statement pattern, so findings survive unrelated refactors as long as
- * the statement shape and call site are stable. Only <em>confirmed</em> findings participate — INFO
- * advisories don't gate fix loops.
+ * <p><strong>Matching key:</strong> {@code testClass|testName|type|query|sourceMethod}. The query
+ * field holds the normalized statement pattern, and source line numbers are removed before
+ * matching, so findings survive line-only refactors while still distinguishing different call
+ * sites. Only <em>confirmed</em> findings participate — INFO advisories don't gate fix loops.
  *
  * <p><strong>Exit contract</strong> (CLI): {@code 0} when a complete comparison has no new
  * findings, {@code 1} when a complete comparison has new findings, and {@code 2} when the
@@ -35,6 +35,7 @@ public final class ReportComparator {
 
   private static final String SUPPORTED_SCHEMA_MAJOR = "1";
   private static final Pattern SCHEMA_VERSION_PATTERN = Pattern.compile("^(\\d+)\\.\\d+\\.\\d+$");
+  private static final Pattern SOURCE_LINE_NUMBER = Pattern.compile("(?m):-?\\d+$");
 
   private ReportComparator() {
     // static entry points only
@@ -340,7 +341,7 @@ public final class ReportComparator {
         Map<?, ?> issue = (Map<?, ?>) entry;
         String type = (String) issue.get("type");
         String query = (String) issue.get("query");
-        String sourceLocation = (String) issue.get("sourceLocation");
+        String sourceLocation = stableSourceLocation((String) issue.get("sourceLocation"));
         String key = testClass + "|" + testName + "|" + type + "|" + query + "|" + sourceLocation;
         findings.add(
             new Finding(
@@ -353,6 +354,13 @@ public final class ReportComparator {
       }
     }
     return findings;
+  }
+
+  private static String stableSourceLocation(String sourceLocation) {
+    if (sourceLocation == null) {
+      return null;
+    }
+    return SOURCE_LINE_NUMBER.matcher(sourceLocation).replaceAll("");
   }
 
   private static Set<TestRef> auditedTests(List<Map<?, ?>> reports) {

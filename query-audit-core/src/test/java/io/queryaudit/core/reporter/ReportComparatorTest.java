@@ -120,6 +120,49 @@ class ReportComparatorTest {
     }
 
     @Test
+    @DisplayName("keeps a finding when only its source line changes")
+    void ignoresSourceLineChanges() {
+      Issue beforeFinding =
+          nPlusOne(
+              "select * from order_items where order_id = ?",
+              "com.example.OrderService.load:42\ncom.example.OrderController.list:18");
+      Issue afterFinding =
+          nPlusOne(
+              "select * from order_items where order_id = ?",
+              "com.example.OrderService.load:43\ncom.example.OrderController.list:21");
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(
+              envelope(report("findOrders", List.of(beforeFinding), 5)),
+              envelope(report("findOrders", List.of(afterFinding), 5)));
+
+      assertThat(verdict.persisting()).hasSize(1);
+      assertThat(verdict.resolved()).isEmpty();
+      assertThat(verdict.newFindings()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("keeps different source methods as different findings")
+    void distinguishesDifferentSourceMethods() {
+      Issue beforeFinding =
+          nPlusOne(
+              "select * from order_items where order_id = ?", "com.example.OrderService.load:42");
+      Issue afterFinding =
+          nPlusOne(
+              "select * from order_items where order_id = ?",
+              "com.example.OrderService.refresh:42");
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(
+              envelope(report("findOrders", List.of(beforeFinding), 5)),
+              envelope(report("findOrders", List.of(afterFinding), 5)));
+
+      assertThat(verdict.persisting()).isEmpty();
+      assertThat(verdict.resolved()).hasSize(1);
+      assertThat(verdict.newFindings()).hasSize(1);
+    }
+
+    @Test
     @DisplayName("a clean fix: resolved findings, nothing new — the loop's success signal")
     void cleanFix() {
       Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
