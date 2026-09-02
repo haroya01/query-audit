@@ -75,7 +75,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run tests (including QueryAudit analysis)
-        run: ./gradlew test
+        run: ./gradlew test -DqueryAudit.reportFormat=json
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/testdb
           SPRING_DATASOURCE_USERNAME: root
@@ -114,28 +114,42 @@ the JSON report with a `github-script` step:
           script: |
             const fs = require('fs');
             const path = 'build/reports/query-audit/report.json';
-            if (!fs.existsSync(path)) return;
-            // report.json is a versioned envelope: { schemaVersion, reports: [...] }.
-            const tests = JSON.parse(fs.readFileSync(path, 'utf8')).reports;
+            if (!fs.existsSync(path)) {
+              core.setFailed('QueryAudit report.json is missing');
+              return;
+            }
+            const audit = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const tests = audit.reports;
             const confirmed = tests.reduce((s, t) => s + (t.summary?.confirmedIssues || 0), 0);
             const info = tests.reduce((s, t) => s + (t.summary?.infoIssues || 0), 0);
-            const body = `**QueryAudit**: ${confirmed} confirmed, ${info} info across ${tests.length} test method(s).`;
+            const body = `**QueryAudit ${audit.outcome}**: ${confirmed} confirmed, ${info} info across ${tests.length} test method(s).`;
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               body,
             });
+            if (audit.outcome !== 'PASS') {
+              core.setFailed(`QueryAudit outcome is ${audit.outcome}`);
+            }
 ```
 
 !!! info "Report file layout"
     QueryAudit writes a single aggregate `report.json` at the configured
     `report.output-dir` (default `build/reports/query-audit/`). The top-level value is a
-    **versioned envelope** — `schemaVersion` plus a `reports` array with one entry per test
-    method. Each entry has a `summary` object (`confirmedIssues`, `infoIssues`,
+    **versioned envelope** — `schemaVersion`, `outcome`, `incompleteReasons`, and a `reports`
+    array with one entry per test method. Gate automation on `outcome`; findings remain available
+    when it is `INCONCLUSIVE`. Each entry has a `summary` object (`confirmedIssues`, `infoIssues`,
     `acknowledgedIssues`, ...) plus `confirmedIssues` / `infoIssues` arrays of individual
     findings. See [Reports — JSON schema](reports.md#json-schema) for the full contract.
-    Per-test HTML files (`<TestClass>.html`) and an `index.html` aggregate sit alongside.
+    With `format: json`, HTML files are not created; select `html` instead when the browser report
+    is the artifact you want to keep.
+
+!!! warning "Treat a missing report as incomplete"
+    The suite envelope can represent audit incompleteness once it is written. A write failure
+    cannot be recorded in the missing file itself, so QueryAudit fails the JUnit run when the
+    selected artifact cannot be written. CI should still reject a missing `report.json`, as in the
+    example above, because an earlier test-engine failure can prevent audit finalization entirely.
 
 ### With PostgreSQL
 
@@ -172,7 +186,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Run tests
-        run: ./gradlew test
+        run: ./gradlew test -DqueryAudit.reportFormat=json
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
           SPRING_DATASOURCE_USERNAME: test
@@ -214,7 +228,7 @@ Post a summary of QueryAudit findings as a PR comment:
 
 ```yaml
       - name: Run tests with JSON report
-        run: ./gradlew test
+        run: ./gradlew test -DqueryAudit.reportFormat=json
         env:
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/testdb
           SPRING_DATASOURCE_USERNAME: root
@@ -228,9 +242,12 @@ Post a summary of QueryAudit findings as a PR comment:
           script: |
             const fs = require('fs');
             const path = 'build/reports/query-audit/report.json';
-            if (!fs.existsSync(path)) return;
-            // report.json is a versioned envelope: { schemaVersion, reports: [...] }.
-            const tests = JSON.parse(fs.readFileSync(path, 'utf8')).reports;
+            if (!fs.existsSync(path)) {
+              core.setFailed('QueryAudit report.json is missing');
+              return;
+            }
+            const audit = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const tests = audit.reports;
             const totalConfirmed = tests.reduce((s, t) => s + (t.summary?.confirmedIssues || 0), 0);
             const totalInfo = tests.reduce((s, t) => s + (t.summary?.infoIssues || 0), 0);
             if (totalConfirmed > 0 || totalInfo > 0) {
@@ -239,8 +256,11 @@ Post a summary of QueryAudit findings as a PR comment:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
-                body: `**QueryAudit Report**: ${totalConfirmed} confirmed, ${totalInfo} info. See the [build artifacts](${runUrl}) for the per-test HTML reports.`
+                body: `**QueryAudit ${audit.outcome}**: ${totalConfirmed} confirmed, ${totalInfo} info. See the [build artifacts](${runUrl}) for report.json.`
               });
+            }
+            if (audit.outcome !== 'PASS') {
+              core.setFailed(`QueryAudit outcome is ${audit.outcome}`);
             }
 ```
 
@@ -264,7 +284,7 @@ test:
     SPRING_DATASOURCE_USERNAME: root
     SPRING_DATASOURCE_PASSWORD: test
   script:
-    - ./gradlew test
+    - ./gradlew test -DqueryAudit.reportFormat=json
   artifacts:
     when: always
     paths:
@@ -289,7 +309,7 @@ test:
     SPRING_DATASOURCE_USERNAME: test
     SPRING_DATASOURCE_PASSWORD: test
   script:
-    - ./gradlew test
+    - ./gradlew test -DqueryAudit.reportFormat=json
   artifacts:
     when: always
     paths:
@@ -313,7 +333,7 @@ test:
     SPRING_DATASOURCE_USERNAME: root
     SPRING_DATASOURCE_PASSWORD: test
   script:
-    - ./gradlew test
+    - ./gradlew test -DqueryAudit.reportFormat=json
   artifacts:
     when: always
     paths:
@@ -357,7 +377,7 @@ update-baseline:
         stages {
             stage('Test') {
                 steps {
-                    sh './gradlew test'
+                    sh './gradlew test -DqueryAudit.reportFormat=json'
                 }
             }
         }
@@ -380,7 +400,7 @@ update-baseline:
         }
         stage('Test') {
             try {
-                sh './gradlew test'
+                sh './gradlew test -DqueryAudit.reportFormat=json'
             } finally {
                 archiveArtifacts artifacts: 'build/reports/query-audit/**', allowEmptyArchive: true
                 junit 'build/test-results/test/*.xml'
@@ -393,10 +413,10 @@ update-baseline:
 
 ## Maven Projects
 
-All examples above use Gradle. For Maven projects, replace `./gradlew test` with:
+All examples above use Gradle. For Maven projects that keep the JSON artifact, use:
 
 ```bash
-mvn test
+mvn test -DqueryAudit.reportFormat=json
 ```
 
 And adjust artifact paths from `build/reports/query-audit/` to `target/reports/query-audit/`.
@@ -413,7 +433,7 @@ query-audit:
   fail-on-detection: true
   auto-open-report: false              # No browser in CI
   report:
-    format: console
+    format: json                         # Required for report.json
     output-dir: build/reports/query-audit
   suppress-queries:
     - "SELECT 1"                       # Health-check queries

@@ -27,9 +27,12 @@ import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.sql.Connection;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -74,9 +77,12 @@ public class QueryAuditExtension
   private static final String KEY_DATASOURCE_HOOK_CLEANUP = "dataSourceHookCleanup";
   private static final String KEY_METHOD_SCOPED_CLEANUP = "methodScopedCleanup";
   private static final String KEY_ACTIVE = "auditActive";
+  private static final String KEY_METHOD_ACTIVE = "methodAuditActive";
   private static final String KEY_AFTER_EACH_DONE = "afterEachDone";
   private static final String KEY_CONCURRENT_EXECUTION_REJECTED = "concurrentExecutionRejected";
+  private static final String KEY_INITIALIZATION_FAILURE_RECORDED = "initializationFailureRecorded";
   private static final String KEY_CONTRACTS = "queryContracts";
+  private static final String KEY_RUN_STATE = AuditRunState.class.getName();
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
@@ -86,37 +92,57 @@ public class QueryAuditExtension
     METHOD
   }
 
-  private final DataSourceResolver dataSourceResolver = new DataSourceResolver();
-  private final IndexMetadataCollector metadataCollector = new IndexMetadataCollector();
-  private final HibernateIntegration hibernateIntegration = new HibernateIntegration();
+  private final DataSourceResolver dataSourceResolver;
+  private final IndexMetadataCollector metadataCollector;
+  private final HibernateIntegration hibernateIntegration;
+
+  public QueryAuditExtension() {
+    this(new DataSourceResolver(), new IndexMetadataCollector(), new HibernateIntegration());
+  }
+
+  QueryAuditExtension(
+      DataSourceResolver dataSourceResolver,
+      IndexMetadataCollector metadataCollector,
+      HibernateIntegration hibernateIntegration) {
+    this.dataSourceResolver = Objects.requireNonNull(dataSourceResolver, "dataSourceResolver");
+    this.metadataCollector = Objects.requireNonNull(metadataCollector, "metadataCollector");
+    this.hibernateIntegration =
+        Objects.requireNonNull(hibernateIntegration, "hibernateIntegration");
+  }
 
   // ── BeforeAllCallback ──────────────────────────────────────────────
 
   @Override
   public void beforeAll(ExtensionContext context) throws Exception {
-    // With the ServiceLoader registration + JUnit extension autodetection, this callback runs for
-    // every test class in the suite. The activation decision (audit mode + annotations +
-    // @QueryAuditExclude) is made once per class and stored so the per-method callbacks can read
-    // it without re-resolving the Spring context.
-    ExtensionContext.Store activeStore = context.getStore(NAMESPACE);
-    boolean active = computeActive(context);
-    QueryAuditConfig auditConfig = active ? buildConfig(context) : null;
-    if (auditConfig != null && !auditConfig.isEnabled()) {
-      active = false;
-    }
-    activeStore.put(KEY_ACTIVE, active);
-    if (!active) {
-      return;
-    }
-    if (activeStore.get(KEY_INTERCEPTOR) != null) {
-      // Extension registered twice for this class (autodetection + @ExtendWith/@QueryAudit) —
-      // the second instance must not re-wrap the DataSource or double-hook listeners.
-      return;
-    }
+    try {
+      // With the ServiceLoader registration + JUnit extension autodetection, this callback runs for
+      // every test class in the suite. The activation decision (audit mode + annotations +
+      // @QueryAuditExclude) is made once per class and stored so the per-method callbacks can read
+      // it without re-resolving the Spring context.
+      ExtensionContext.Store activeStore = context.getStore(NAMESPACE);
+      boolean active = computeActive(context);
+      QueryAuditConfig auditConfig = active ? buildConfig(context) : null;
+      if (auditConfig != null && !auditConfig.isEnabled()) {
+        active = false;
+      }
+      activeStore.put(KEY_ACTIVE, active);
+      if (!active) {
+        return;
+      }
+      registerReportFinalizer(context, auditConfig);
+      if (activeStore.get(KEY_INTERCEPTOR) != null) {
+        // Extension registered twice for this class (autodetection + @ExtendWith/@QueryAudit) —
+        // the second instance must not re-wrap the DataSource or double-hook listeners.
+        return;
+      }
 
-    // A missing DataSource is reported from beforeEach, when method-level exclusions are known.
-    // If a DataSource is already available, initialize once at class scope as before.
-    initializeAudit(context, auditConfig, InitializationScope.CLASS);
+      // A missing DataSource is reported from beforeEach, when method-level exclusions are known.
+      // If a DataSource is already available, initialize once at class scope as before.
+      initializeAudit(context, auditConfig, InitializationScope.CLASS);
+    } catch (Exception | Error failure) {
+      recordUnexpectedInitializationFailure(context, failure);
+      throw failure;
+    }
   }
 
   private void initializeAudit(
@@ -129,6 +155,10 @@ public class QueryAuditExtension
     DataSourceResolver.ResolvedDataSource resolvedDataSource = dataSourceResolver.resolve(context);
     if (resolvedDataSource == null) {
       if (scope == InitializationScope.METHOD) {
+        recordInitializationFailure(
+            context,
+            IncompleteReasonCode.DATASOURCE_UNAVAILABLE,
+            "No DataSource was available for " + auditTarget(context));
         throw new ExtensionConfigurationException(
             "QueryAudit: DataSource unavailable for active audit of "
                 + auditTarget(context)
@@ -139,62 +169,132 @@ public class QueryAuditExtension
     }
     DataSource dataSource = resolvedDataSource.dataSource();
 
-    Path countBaselinePath = resolveCountBaselinePath(context);
-    Map<String, QueryCounts> countBaseline = QueryCountBaseline.load(countBaselinePath);
-    Map<String, QueryCounts> contracts = QueryCountBaseline.load(resolveContractsPath());
+    Path countBaselinePath;
+    Map<String, QueryCounts> countBaseline;
+    Map<String, QueryCounts> contracts;
+    try {
+      countBaselinePath = resolveCountBaselinePath(context);
+      countBaseline = QueryCountBaseline.load(countBaselinePath);
+      contracts = QueryCountBaseline.load(resolveContractsPath());
+    } catch (IllegalStateException | InvalidPathException e) {
+      recordInitializationFailure(
+          context, IncompleteReasonCode.CONTRACT_UNREADABLE, e.getMessage());
+      throw e;
+    }
 
     QueryInterceptor interceptor = new QueryInterceptor();
-    interceptor.setMaxQueries(auditConfig.getMaxQueries());
+    try {
+      interceptor.setMaxQueries(auditConfig.getMaxQueries());
+    } catch (RuntimeException | Error failure) {
+      recordInitializationFailure(
+          context,
+          IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED,
+          "Could not initialize query capture for "
+              + auditTarget(context)
+              + ": "
+              + failureMessage(failure));
+      throw failure;
+    }
 
     ExtensionContext.Store store = context.getStore(NAMESPACE);
+    Runnable hookCleanup;
+    try {
+      hookCleanup = dataSourceResolver.hookInterceptor(resolvedDataSource, interceptor);
+    } catch (RuntimeException | Error e) {
+      recordInitializationFailure(
+          context,
+          IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED,
+          "Could not initialize query capture for "
+              + auditTarget(context)
+              + ": "
+              + failureMessage(e));
+      throw e;
+    }
     store.put(KEY_INTERCEPTOR, interceptor);
     store.put(KEY_DATASOURCE, dataSource);
-    Runnable hookCleanup = dataSourceResolver.hookInterceptor(resolvedDataSource, interceptor);
     store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
 
-    IndexMetadata metadata = metadataCollector.collect(dataSource);
-    if (metadata != null) {
-      store.put(KEY_INDEX_METADATA, metadata);
-    }
-
-    // Build return type resolver from Spring Data repositories if available
+    LazyLoadTracker tracker = null;
     try {
-      Object appContext = resolveApplicationContext(context);
-      if (appContext != null) {
-        store.put(KEY_RETURN_TYPE_RESOLVER, new SpringDataReturnTypeResolver(appContext));
+      IndexMetadata metadata = metadataCollector.collect(dataSource);
+      if (metadata != null) {
+        store.put(KEY_INDEX_METADATA, metadata);
       }
-    } catch (Exception | NoClassDefFoundError e) {
-      System.err.println(
-          "[QueryAudit] Failed to initialize return type resolver: " + e.getMessage());
-    }
 
-    store.put(KEY_COUNT_BASELINE, countBaseline);
-    store.put(KEY_CURRENT_COUNTS, new ConcurrentHashMap<String, QueryCounts>());
+      // Build return type resolver from Spring Data repositories if available
+      try {
+        Object appContext = resolveApplicationContext(context);
+        if (appContext != null) {
+          store.put(KEY_RETURN_TYPE_RESOLVER, new SpringDataReturnTypeResolver(appContext));
+        }
+      } catch (Exception | NoClassDefFoundError e) {
+        System.err.println(
+            "[QueryAudit] Failed to initialize return type resolver: " + e.getMessage());
+      }
 
-    store.put(KEY_CONTRACTS, contracts);
+      store.put(KEY_COUNT_BASELINE, countBaseline);
+      store.put(KEY_CURRENT_COUNTS, new ConcurrentHashMap<String, QueryCounts>());
+      store.put(KEY_CONTRACTS, contracts);
 
-    // Register Hibernate LazyLoadTracker if Hibernate is on the classpath
-    LazyLoadTracker tracker = hibernateIntegration.registerTracker(context, NAMESPACE);
-    if (tracker != null) {
-      store.put(KEY_LAZY_LOAD_TRACKER, tracker);
-    }
-    if (scope == InitializationScope.METHOD) {
-      store.put(
-          KEY_METHOD_SCOPED_CLEANUP,
-          (ExtensionContext.Store.CloseableResource)
-              () -> {
-                try {
-                  if (tracker != null) {
-                    hibernateIntegration.unregisterTracker(context, tracker);
-                  }
-                } finally {
+      // Register Hibernate LazyLoadTracker if Hibernate is on the classpath
+      tracker = hibernateIntegration.registerTracker(context, NAMESPACE);
+      if (tracker != null) {
+        store.put(KEY_LAZY_LOAD_TRACKER, tracker);
+      }
+      if (scope == InitializationScope.METHOD) {
+        LazyLoadTracker methodTracker = tracker;
+        store.put(
+            KEY_METHOD_SCOPED_CLEANUP,
+            (ExtensionContext.Store.CloseableResource)
+                () -> {
                   try {
-                    hookCleanup.run();
+                    if (methodTracker != null) {
+                      hibernateIntegration.unregisterTracker(context, methodTracker);
+                    }
                   } finally {
-                    QueryAuditDataSourceStore.clear();
+                    try {
+                      hookCleanup.run();
+                    } finally {
+                      QueryAuditDataSourceStore.clear();
+                    }
                   }
-                }
-              });
+                });
+      }
+    } catch (RuntimeException | Error failure) {
+      rollbackInitialization(context, store, hookCleanup, tracker, failure);
+      throw failure;
+    }
+  }
+
+  private void rollbackInitialization(
+      ExtensionContext context,
+      ExtensionContext.Store store,
+      Runnable hookCleanup,
+      LazyLoadTracker tracker,
+      Throwable failure) {
+    if (tracker != null) {
+      runCleanup(failure, () -> hibernateIntegration.unregisterTracker(context, tracker));
+    }
+    runCleanup(failure, hookCleanup);
+    runCleanup(failure, QueryAuditDataSourceStore::clear);
+
+    store.remove(KEY_INTERCEPTOR);
+    store.remove(KEY_DATASOURCE);
+    store.remove(KEY_DATASOURCE_HOOK_CLEANUP);
+    store.remove(KEY_INDEX_METADATA);
+    store.remove(KEY_RETURN_TYPE_RESOLVER);
+    store.remove(KEY_COUNT_BASELINE);
+    store.remove(KEY_CURRENT_COUNTS);
+    store.remove(KEY_CONTRACTS);
+    store.remove(KEY_LAZY_LOAD_TRACKER);
+    store.remove(KEY_METHOD_SCOPED_CLEANUP);
+  }
+
+  private static void runCleanup(Throwable failure, Runnable cleanup) {
+    try {
+      cleanup.run();
+    } catch (RuntimeException | Error cleanupFailure) {
+      failure.addSuppressed(cleanupFailure);
     }
   }
 
@@ -209,6 +309,10 @@ public class QueryAuditExtension
     }
 
     context.getStore(NAMESPACE).put(KEY_CONCURRENT_EXECUTION_REJECTED, Boolean.TRUE);
+    recordInitializationFailure(
+        context,
+        IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED,
+        "Concurrent execution prevented reliable query attribution for " + auditTarget(context));
     throw new ExtensionConfigurationException(
         "QueryAudit: cannot audit "
             + auditTarget(context)
@@ -226,25 +330,31 @@ public class QueryAuditExtension
 
   @Override
   public void beforeEach(ExtensionContext context) throws Exception {
-    if (!isAuditActive(context)) {
-      return;
-    }
-    QueryAuditConfig auditConfig = buildConfig(context);
-    if (!auditConfig.isEnabled()) {
-      context.getStore(NAMESPACE).put(KEY_ACTIVE, Boolean.FALSE);
-      return;
-    }
-    registerReportFinalizer(context, auditConfig);
-    requireSameThreadExecution(context);
-    initializeAudit(context, auditConfig, InitializationScope.METHOD);
+    try {
+      if (!isAuditActive(context)) {
+        return;
+      }
+      QueryAuditConfig auditConfig = buildConfig(context);
+      if (!auditConfig.isEnabled()) {
+        context.getStore(NAMESPACE).put(KEY_ACTIVE, Boolean.FALSE);
+        context.getStore(NAMESPACE).put(KEY_METHOD_ACTIVE, Boolean.FALSE);
+        return;
+      }
+      registerReportFinalizer(context, auditConfig);
+      requireSameThreadExecution(context);
+      initializeAudit(context, auditConfig, InitializationScope.METHOD);
 
-    QueryInterceptor interceptor = getInterceptor(context);
-    interceptor.start();
-    interceptor.setPhase(LifecyclePhase.SETUP);
+      QueryInterceptor interceptor = getInterceptor(context);
+      interceptor.start();
+      interceptor.setPhase(LifecyclePhase.SETUP);
 
-    LazyLoadTracker tracker = getLazyLoadTracker(context);
-    if (tracker != null) {
-      tracker.start();
+      LazyLoadTracker tracker = getLazyLoadTracker(context);
+      if (tracker != null) {
+        tracker.start();
+      }
+    } catch (Exception | Error failure) {
+      recordUnexpectedInitializationFailure(context, failure);
+      throw failure;
     }
   }
 
@@ -253,7 +363,9 @@ public class QueryAuditExtension
 
   @Override
   public void beforeTestExecution(ExtensionContext context) {
-    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context)
+        || wasInitializationFailureRecorded(context)
+        || !isAuditActive(context)) {
       return;
     }
     QueryInterceptor interceptor = getInterceptor(context);
@@ -267,7 +379,9 @@ public class QueryAuditExtension
 
   @Override
   public void afterTestExecution(ExtensionContext context) {
-    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context)
+        || wasInitializationFailureRecorded(context)
+        || !isAuditActive(context)) {
       return;
     }
     QueryInterceptor interceptor = getInterceptor(context);
@@ -280,9 +394,29 @@ public class QueryAuditExtension
 
   @Override
   public void afterEach(ExtensionContext context) {
-    if (wasConcurrentExecutionRejected(context) || !isAuditActive(context)) {
+    if (wasConcurrentExecutionRejected(context)
+        || wasInitializationFailureRecorded(context)
+        || !isAuditActive(context)) {
       return;
     }
+    try {
+      completeAudit(context);
+    } catch (AuditCheckFailure failure) {
+      // QueryAudit assertions record FAIL or INCONCLUSIVE at the point where they are created.
+      throw failure;
+    } catch (RuntimeException | Error failure) {
+      markIncomplete(
+          context,
+          IncompleteReasonCode.AUDIT_ANALYSIS_FAILED,
+          "Could not complete query analysis for "
+              + auditTarget(context)
+              + ": "
+              + failureMessage(failure));
+      throw failure;
+    }
+  }
+
+  private void completeAudit(ExtensionContext context) {
     // Method-level store: guards against double analysis when the extension is registered twice
     // (autodetection + @ExtendWith/@QueryAudit).
     ExtensionContext.Store methodStore = context.getStore(NAMESPACE);
@@ -304,10 +438,16 @@ public class QueryAuditExtension
     }
 
     QueryCaptureSnapshot capture = interceptor.snapshot();
-    if (capture.truncated()) {
-      throw new AssertionError(
-          buildTruncatedCaptureMessage(
-              context.getDisplayName(), interceptor.getMaxQueries(), capture));
+    boolean captureIncomplete = capture.truncated();
+    if (captureIncomplete) {
+      markIncomplete(
+          context,
+          IncompleteReasonCode.QUERY_LIMIT_REACHED,
+          context.getDisplayName()
+              + " retained "
+              + capture.queries().size()
+              + " queries and dropped "
+              + capture.droppedCount());
     }
 
     List<QueryRecord> queries = capture.queries();
@@ -342,8 +482,10 @@ public class QueryAuditExtension
       report = hibernateIntegration.mergeFindByIdIssues(report, tracker, analyzer);
     }
 
-    // --- Query count regression detection ---
-    report = detectQueryCountRegression(context, report, queries, testClass, testName, analyzer);
+    // A truncated capture cannot be compared with a complete count baseline.
+    if (!captureIncomplete) {
+      report = detectQueryCountRegression(context, report, queries, testClass, testName, analyzer);
+    }
 
     // --- EXPLAIN-based detection ---
     report = runExplainAnalysis(context, report, queries, analyzer);
@@ -368,26 +510,37 @@ public class QueryAuditExtension
     // and summary counts aligned with the console.
     HtmlReportAggregator.getInstance().addReport(outputReport);
 
+    if (captureIncomplete) {
+      throw new AuditCheckFailure(
+          buildTruncatedCaptureMessage(
+              context.getDisplayName(), interceptor.getMaxQueries(), capture));
+    }
+
     // Query budgets and snapshot contracts are direct test assertions, not findings. They
     // intentionally bypass rule selection, suppressions, severity overrides, and issue baselines.
-    // --- @ExpectMaxQueryCount ---
-    checkMaxQueryCount(context, queries, testName);
+    try {
+      // --- @ExpectMaxQueryCount ---
+      checkMaxQueryCount(context, queries, testName);
 
-    // --- @ExpectQueries ---
-    checkExpectQueries(context, queries, testName);
+      // --- @ExpectQueries ---
+      checkExpectQueries(context, queries, testName);
 
-    // --- Query snapshot contracts (issue #166) ---
-    checkQueryContracts(context, queries, testClass, testName);
+      // --- Query snapshot contracts (issue #166) ---
+      checkQueryContracts(context, queries, testClass, testName);
 
-    // --- @DetectNPlusOne ---
-    checkDetectNPlusOne(context, report, testName);
+      // --- @DetectNPlusOne ---
+      checkDetectNPlusOne(context, report, testName);
 
-    // --- @QueryAudit failOnDetection ---
-    if (config.isFailOnDetection() && report.hasConfirmedIssues()) {
-      List<Issue> failableIssues = filterFailableIssues(report, context);
-      if (!failableIssues.isEmpty()) {
-        throw new AssertionError(buildFailureMessage(testName, failableIssues));
+      // --- @QueryAudit failOnDetection ---
+      if (config.isFailOnDetection() && report.hasConfirmedIssues()) {
+        List<Issue> failableIssues = filterFailableIssues(report, context);
+        if (!failableIssues.isEmpty()) {
+          throw new AuditCheckFailure(buildFailureMessage(testName, failableIssues));
+        }
       }
+    } catch (AuditCheckFailure failure) {
+      getOrCreateRunState(context).markPolicyFailed();
+      throw failure;
     }
   }
 
@@ -496,16 +649,68 @@ public class QueryAuditExtension
   }
 
   void registerReportFinalizer(ExtensionContext context, QueryAuditConfig auditConfig) {
-    Path outputDirectory = resolveReportOutputDirectory(auditConfig);
-    ReportFormat reportFormat = auditConfig.getReportFormat();
-    ExtensionContext root = context.getRoot();
-    ReportFinalizer finalizer =
-        (ReportFinalizer)
-            root.getStore(NAMESPACE)
-                .getOrComputeIfAbsent(
-                    ReportFinalizer.class.getName(),
-                    key -> new ReportFinalizer(this, outputDirectory, reportFormat));
-    finalizer.requireConfiguration(outputDirectory, reportFormat);
+    AuditRunState runState = getOrCreateRunState(context);
+    try {
+      Path outputDirectory = resolveReportOutputDirectory(auditConfig);
+      ReportFormat reportFormat = auditConfig.getReportFormat();
+      ExtensionContext root = context.getRoot();
+      ReportFinalizer finalizer =
+          (ReportFinalizer)
+              root.getStore(NAMESPACE)
+                  .getOrComputeIfAbsent(
+                      ReportFinalizer.class.getName(),
+                      key -> new ReportFinalizer(this, outputDirectory, reportFormat, runState));
+      finalizer.requireConfiguration(outputDirectory, reportFormat);
+    } catch (RuntimeException | Error failure) {
+      recordInitializationFailure(
+          context,
+          IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED,
+          "Could not configure suite reporting: " + failureMessage(failure));
+      throw failure;
+    }
+  }
+
+  private static AuditRunState getOrCreateRunState(ExtensionContext context) {
+    return (AuditRunState)
+        context
+            .getRoot()
+            .getStore(NAMESPACE)
+            .getOrComputeIfAbsent(KEY_RUN_STATE, key -> new AuditRunState());
+  }
+
+  private static void markIncomplete(
+      ExtensionContext context, IncompleteReasonCode code, String detail) {
+    getOrCreateRunState(context).markIncomplete(new AuditIncompleteReason(code, detail));
+  }
+
+  private static void recordInitializationFailure(
+      ExtensionContext context, IncompleteReasonCode code, String detail) {
+    context.getStore(NAMESPACE).put(KEY_INITIALIZATION_FAILURE_RECORDED, Boolean.TRUE);
+    markIncomplete(context, code, detail);
+  }
+
+  private static void recordUnexpectedInitializationFailure(
+      ExtensionContext context, Throwable failure) {
+    if (wasInitializationFailureRecorded(context)) {
+      return;
+    }
+    recordInitializationFailure(
+        context,
+        IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED,
+        "Could not initialize QueryAudit for "
+            + auditTarget(context)
+            + ": "
+            + failureMessage(failure));
+  }
+
+  private static boolean wasInitializationFailureRecorded(ExtensionContext context) {
+    return Boolean.TRUE.equals(
+        context.getStore(NAMESPACE).get(KEY_INITIALIZATION_FAILURE_RECORDED, Boolean.class));
+  }
+
+  private static String failureMessage(Throwable failure) {
+    String message = failure.getMessage();
+    return message == null || message.isBlank() ? failure.getClass().getSimpleName() : message;
   }
 
   private static Path resolveReportOutputDirectory(QueryAuditConfig config) {
@@ -523,6 +728,31 @@ public class QueryAuditExtension
     }
   }
 
+  static final class AuditRunState {
+
+    private final Set<AuditIncompleteReason> incompleteReasons = new LinkedHashSet<>();
+    private boolean policyFailed;
+
+    synchronized void markPolicyFailed() {
+      policyFailed = true;
+    }
+
+    synchronized void markIncomplete(AuditIncompleteReason reason) {
+      incompleteReasons.add(reason);
+    }
+
+    synchronized AuditRunResult result(List<QueryAuditReport> reports) {
+      return AuditRunResult.determine(reports, policyFailed, incompleteReasons);
+    }
+  }
+
+  private static final class AuditCheckFailure extends AssertionError {
+
+    AuditCheckFailure(String message) {
+      super(message);
+    }
+  }
+
   /**
    * Registered once in the root {@link ExtensionContext.Store} via {@code getOrComputeIfAbsent}.
    * JUnit calls {@link #close()} exactly once when the root context is torn down — after all test
@@ -533,13 +763,23 @@ public class QueryAuditExtension
     private final QueryAuditExtension extension;
     private final Path outputDirectory;
     private final ReportFormat reportFormat;
+    private final AuditRunState runState;
     private volatile boolean autoOpen;
 
     ReportFinalizer(
         QueryAuditExtension extension, Path outputDirectory, ReportFormat reportFormat) {
+      this(extension, outputDirectory, reportFormat, new AuditRunState());
+    }
+
+    ReportFinalizer(
+        QueryAuditExtension extension,
+        Path outputDirectory,
+        ReportFormat reportFormat,
+        AuditRunState runState) {
       this.extension = extension;
       this.outputDirectory = outputDirectory.toAbsolutePath().normalize();
       this.reportFormat = reportFormat;
+      this.runState = runState;
     }
 
     void requireConfiguration(Path requestedDirectory, ReportFormat requestedFormat) {
@@ -570,6 +810,10 @@ public class QueryAuditExtension
       return reportFormat;
     }
 
+    AuditRunResult result(List<QueryAuditReport> reports) {
+      return runState.result(reports);
+    }
+
     void enableAutoOpen() {
       this.autoOpen = true;
     }
@@ -577,19 +821,18 @@ public class QueryAuditExtension
     @Override
     public void close() {
       HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
-      List<QueryAuditReport> reports = aggregator.getReports();
-      if (reports.isEmpty()) {
+      AuditRunResult runResult = runState.result(aggregator.getReports());
+      if (runResult.reports().isEmpty() && runResult.outcome() == AuditOutcome.PASS) {
         return;
       }
 
-      printSummary(reports);
       Path reportPath = reportPath();
       try {
         switch (reportFormat) {
           case CONSOLE -> {
             // Per-test output and the suite summary are already on stdout.
           }
-          case JSON -> extension.writeJsonReport(reports, outputDirectory);
+          case JSON -> extension.writeJsonReport(runResult, outputDirectory);
           case HTML -> {
             aggregator.writeReport(outputDirectory);
             System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
@@ -599,8 +842,17 @@ public class QueryAuditExtension
           }
         }
       } catch (Exception e) {
+        runState.markIncomplete(
+            new AuditIncompleteReason(
+                IncompleteReasonCode.REPORT_WRITE_FAILED,
+                "Could not write the "
+                    + reportFormat.name().toLowerCase(Locale.ROOT)
+                    + " report to "
+                    + reportPath.toAbsolutePath()));
+        printSummary(runState.result(runResult.reports()));
         throw new ReportWriteException(reportFormat, reportPath, e);
       }
+      printSummary(runResult);
     }
 
     private Path reportPath() {
@@ -611,15 +863,15 @@ public class QueryAuditExtension
       };
     }
 
-    private static void printSummary(List<QueryAuditReport> reports) {
-      long totalErrors = reports.stream().mapToLong(r -> r.getErrors().size()).sum();
-      long totalWarnings = reports.stream().mapToLong(r -> r.getWarnings().size()).sum();
+    private static void printSummary(AuditRunResult runResult) {
+      List<QueryAuditReport> reports = runResult.reports();
+      long totalErrors = reports.stream().mapToLong(report -> report.getErrors().size()).sum();
+      long totalWarnings = reports.stream().mapToLong(report -> report.getWarnings().size()).sum();
       int totalQueries = reports.stream().mapToInt(QueryAuditReport::getTotalQueryCount).sum();
-      int totalTests = reports.size();
 
       String summary =
           "[QueryAudit] "
-              + totalTests
+              + reports.size()
               + " tests, "
               + totalQueries
               + " queries"
@@ -629,9 +881,16 @@ public class QueryAuditExtension
               + (totalWarnings > 0
                   ? ", " + totalWarnings + " WARNING" + (totalWarnings > 1 ? "S" : "")
                   : "")
-              + (totalErrors == 0 && totalWarnings == 0 ? " — all clean" : "");
+              + (totalErrors == 0 && totalWarnings == 0 && runResult.outcome() == AuditOutcome.PASS
+                  ? " — all clean"
+                  : "");
       System.out.println();
       System.out.println(summary);
+      System.out.println("[QueryAudit] outcome: " + runResult.outcome());
+      for (AuditIncompleteReason reason : runResult.incompleteReasons()) {
+        String detail = reason.detail() == null ? "" : ": " + reason.detail();
+        System.out.println("[QueryAudit] incomplete: " + reason.code() + detail);
+      }
       System.out.println();
     }
   }
@@ -703,7 +962,7 @@ public class QueryAuditExtension
     String failure =
         QueryContracts.verify(testClass, testName, QueryCounts.from(queries), contracts, queries);
     if (failure != null) {
-      throw new AssertionError(failure);
+      throw new AuditCheckFailure(failure);
     }
   }
 
@@ -770,7 +1029,7 @@ public class QueryAuditExtension
     int max = annotation.value();
     int actual = queries.size();
     if (actual > max) {
-      throw new AssertionError(
+      throw new AuditCheckFailure(
           String.format(
               "QueryAudit: %s executed %d queries, expected at most %d.\n"
                   + "Tip: Check the Query Patterns section in the report above to identify which queries to optimize.",
@@ -785,7 +1044,7 @@ public class QueryAuditExtension
 
     String failure = buildExpectQueriesFailureMessage(annotation, queries, testName);
     if (failure != null) {
-      throw new AssertionError(failure);
+      throw new AuditCheckFailure(failure);
     }
   }
 
@@ -884,7 +1143,7 @@ public class QueryAuditExtension
         }
         sb.append("\n  Fix: ").append(issue.suggestion()).append("\n\n");
       }
-      throw new AssertionError(sb.toString());
+      throw new AuditCheckFailure(sb.toString());
     }
   }
 
@@ -930,7 +1189,14 @@ public class QueryAuditExtension
     // A method-level opt-in registers the extension too late for beforeAll. It must therefore opt
     // the method in even if suite-wide autodetection cached the otherwise plain class as false.
     if (method.isPresent() && isMethodLevelOptIn(method.get())) {
-      return buildConfig(context).isEnabled();
+      ExtensionContext.Store methodStore = context.getStore(NAMESPACE);
+      Boolean methodActive = methodStore.get(KEY_METHOD_ACTIVE, Boolean.class);
+      if (methodActive != null) {
+        return methodActive;
+      }
+      boolean active = buildConfig(context).isEnabled();
+      methodStore.put(KEY_METHOD_ACTIVE, active);
+      return active;
     }
 
     ExtensionContext current = context;
@@ -1209,11 +1475,42 @@ public class QueryAuditExtension
 
   // ── JSON report ───────────────────────────────────────────────────
 
-  private void writeJsonReport(List<QueryAuditReport> reports, Path outputDir) throws IOException {
-    Files.createDirectories(outputDir);
+  void writeJsonReport(AuditRunResult runResult, Path outputDir) throws IOException {
     Path jsonPath = outputDir.resolve("report.json");
-    Files.writeString(jsonPath, JsonReporter.toEnvelopeJson(reports));
+    Path temporaryPath = null;
+    try {
+      Files.createDirectories(outputDir);
+      temporaryPath = Files.createTempFile(outputDir, ".report-", ".json.tmp");
+      Files.writeString(
+          temporaryPath, JsonReporter.toRunEnvelopeJson(runResult), StandardCharsets.UTF_8);
+      moveJsonReportFile(temporaryPath, jsonPath);
+      temporaryPath = null;
+    } catch (IOException | RuntimeException failure) {
+      deleteFailedReport(temporaryPath, failure);
+      deleteFailedReport(jsonPath, failure);
+      throw failure;
+    }
     System.out.println("[QueryAudit] JSON report: " + jsonPath.toAbsolutePath());
+  }
+
+  void moveJsonReportFile(Path source, Path target) throws IOException {
+    try {
+      Files.move(
+          source, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+    } catch (AtomicMoveNotSupportedException ignored) {
+      Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+    }
+  }
+
+  private static void deleteFailedReport(Path path, Throwable failure) {
+    if (path == null) {
+      return;
+    }
+    try {
+      Files.deleteIfExists(path);
+    } catch (IOException | RuntimeException cleanupFailure) {
+      failure.addSuppressed(cleanupFailure);
+    }
   }
 
   // ── Baseline & report helpers ──────────────────────────────────────

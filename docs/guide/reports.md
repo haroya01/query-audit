@@ -1,9 +1,9 @@
 # Reports
 
-After each test method, QueryAudit generates a report summarizing all detected issues.
-The report helps you quickly identify which queries need attention and why.
+After each audited test method, QueryAudit prints its findings and adds the result to the suite
+summary. You can also select one suite-level JSON or HTML artifact for later review.
 
-QueryAudit includes three reporter implementations, all fully implemented:
+QueryAudit provides three report formats:
 
 | Reporter | Class | Output | Use Case |
 |---|---|---|---|
@@ -112,9 +112,8 @@ Colors are automatically disabled when:
 
 ## JSON Report
 
-The JSON reporter produces a structured, machine-readable report suitable for CI artifact
-storage, dashboards, and downstream processing. It uses no external JSON library --
-output is built with `StringBuilder` for zero extra dependencies.
+The JSON reporter produces a structured, machine-readable report suitable for CI artifacts,
+dashboards, and downstream processing.
 
 ### Enabling JSON Reports
 
@@ -132,12 +131,14 @@ For plain JUnit without Spring configuration, use
 
 ### Example Output
 
-The file is a **versioned envelope**: `schemaVersion` plus a `reports` array with one entry
-per test method.
+The file is a **versioned suite envelope**. `outcome` and `incompleteReasons` describe whether
+the run produced a trustworthy verdict, while `reports` keeps the per-test findings and statistics.
 
 ```json
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
+  "outcome": "FAIL",
+  "incompleteReasons": [],
   "reports": [
     {
       "testClass": "com.example.OrderServiceTest",
@@ -196,10 +197,43 @@ per test method.
 
 ### JSON Schema
 
-The envelope carries `schemaVersion` (semver) so consumers can detect breaking shape changes
-instead of silently misparsing. The current version is **1.0.0**, introduced in QueryAudit
-0.5.0 — which also changed the top-level value from a bare array to this envelope (the one
-breaking change the version field exists to prevent going forward).
+The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
+of silently misparsing it. The current version is **1.1.0**. QueryAudit 0.5.x wrote schema 1.0
+without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
+infer a trustworthy `PASS` from the per-test reports alone.
+
+The published JSON Schemas validate both envelope versions. The deprecated Java method
+`JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` retains the legacy 1.0 shape because a list
+of reports cannot establish a run outcome. New callers should use
+`JsonReporter.toRunEnvelopeJson(AuditRunResult)`.
+
+### Run outcomes
+
+The suite outcome uses one precedence rule everywhere: `INCONCLUSIVE > FAIL > PASS`.
+
+| Outcome | Meaning |
+|---|---|
+| `PASS` | The required audit completed and every configured policy and contract passed. |
+| `FAIL` | The audit completed, but `failOnDetection`, `@DetectNPlusOne`, `@ExpectQueries`, `@ExpectMaxQueryCount`, or a recorded query contract failed. |
+| `INCONCLUSIVE` | Collection or a required input was incomplete, so the run cannot produce a trustworthy verdict. Any partial findings and statistics remain in `reports`. |
+
+Confirmed findings do not automatically mean `FAIL`. For example, a completed run with
+`fail-on-detection: false` can be `PASS` while still reporting findings for review. Conversely,
+an incomplete run stays `INCONCLUSIVE` even when its retained queries also show a policy violation.
+
+Each incomplete reason is an object with a stable `code`. The `detail` field is always present and
+may be `null` when no additional context is available:
+
+| Code | Current producer |
+|---|---|
+| `QUERY_LIMIT_REACHED` | JUnit query capture exceeded `max-queries`; retained queries are still analyzed and reported. |
+| `DATASOURCE_UNAVAILABLE` | An active JUnit audit could not resolve a `DataSource`. |
+| `AUDIT_INITIALIZATION_FAILED` | An active JUnit audit could not install reliable query capture, including unsupported concurrent execution. |
+| `AUDIT_ANALYSIS_FAILED` | QueryAudit could not complete analysis for an active test. Earlier per-test reports remain available, but the suite is incomplete. |
+| `CONTRACT_UNREADABLE` | The query contract or query-count baseline was unreadable or malformed. |
+| `UNSUPPORTED_SCHEMA` | Report comparison received a schema it cannot evaluate safely, including legacy 1.0 input with no outcome. |
+| `EXPECTED_TEST_MISSING` | Report comparison can derive this from a baseline-relative missing test. Suite-wide expected-test generation remains part of [#240](https://github.com/haroya01/query-audit/issues/240). |
+| `REPORT_WRITE_FAILED` | The selected JSON or HTML artifact could not be written. QueryAudit records the incomplete state and fails the JUnit run; the missing artifact cannot contain its own failure reason. |
 
 Field notes for machine consumers:
 
@@ -211,8 +245,12 @@ Field notes for machine consumers:
   consumer can decide on and generate the correct fix without separate database access.
   `null` means no metadata was collected (non-database test).
 
-The machine-readable contract lives at
-[`schema/report.schema.json`](https://github.com/haroya01/query-audit/blob/main/docs/schema/report.schema.json).
+The stable schema URLs are
+[`schema/report-1.0.schema.json`](https://github.com/haroya01/query-audit/blob/main/docs/schema/report-1.0.schema.json)
+and
+[`schema/report-1.1.schema.json`](https://github.com/haroya01/query-audit/blob/main/docs/schema/report-1.1.schema.json).
+[`schema/report.schema.json`](https://github.com/haroya01/query-audit/blob/main/docs/schema/report.schema.json)
+always points to the current version.
 
 !!! tip "CI artifact storage"
     Store JSON reports as CI artifacts for trend tracking across builds. Parse them
@@ -244,15 +282,16 @@ java -cp query-audit-core-<version>.jar \
 ```
 
 ```
-[QueryAudit] compare: 0 new, 1 resolved, 0 persisting; queries 11 -> 7
+[QueryAudit] compare: PASS; 0 new, 1 resolved, 0 persisting; queries 11 -> 7
   RESOLVED n-plus-one (table: order_items) in OrderServiceTest.findOrders
 ```
 
-- **Exit contract**: `0` when the comparison is complete and has no new findings, `1` when the
-  comparison is complete and new findings exist, and `2` when the comparison is incomplete or a
-  usage/parse error prevents a verdict.
-- **`verdict.json`**: `{newFindings, resolved, persisting, complete, missingTests,
-  queryCountDelta, executionTimeMsDelta}` — the termination condition for automated fix loops.
+- **Exit contract**: `0` for `PASS`, `1` for `FAIL`, and `2` for `INCONCLUSIVE` or a usage/parse
+  error. A candidate run that already has outcome `FAIL` cannot become a successful comparison
+  merely because it introduced no new finding.
+- **`verdict.json`**: `{outcome, incompleteReasons, newFindings, resolved, persisting, complete,
+  missingTests, queryCountDelta, executionTimeMsDelta}` — the termination condition for automated
+  fix loops.
 - Every test present in the baseline report must also appear in the candidate report. Otherwise,
   `complete` is `false`, `missingTests` identifies the absent tests, and their findings are not
   classified as resolved. With the schema 1.x report fields, tests are matched by
@@ -260,8 +299,10 @@ java -cp query-audit-core-<version>.jar \
 - **Matching key**: `testClass|testName|type|normalized-pattern|sourceLocation`, so findings
   survive unrelated refactors as long as the statement shape and call site are stable.
 - Only **confirmed** findings participate; INFO advisories don't gate fix loops.
-- Requires the versioned envelope (schema 1.x, QueryAudit 0.5.0+); pre-envelope reports are
-  rejected with a hint.
+- Schema 1.1+ inputs must carry a valid outcome and a consistent reason list. A valid
+  `INCONCLUSIVE` input keeps its partial delta but forces comparison exit code `2`. Legacy schema
+  1.0 input is also inconclusive; unsupported major versions produce
+  `UNSUPPORTED_SCHEMA`. Pre-envelope reports are rejected with a hint.
 
 As a Gradle task in the consuming project:
 

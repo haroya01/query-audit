@@ -105,8 +105,10 @@ Start with `@EnableQueryInspector` to report detected findings without failing o
 - **Audit a full suite.** Enable JUnit extension autodetection and set `mode: all` for opt-out
   coverage, choose a `strict`, `recommended`, or `minimal` rule profile, and acknowledge existing
   findings with a baseline.
-- **Keep useful artifacts.** Console, HTML, versioned JSON, and GitHub Actions reports keep
-  findings close to the code and available after the test run.
+- **Choose the right output.** Console logs keep findings close to the failing test, while HTML,
+  versioned JSON, and GitHub Actions output support review and automation. The JSON suite envelope
+  states `PASS`, `FAIL`, or `INCONCLUSIVE`, so automation does not mistake partial collection for
+  success.
 
 The [detection overview](https://haroya01.github.io/query-audit/detections/overview/) groups
 checks by severity and explains which checks depend on Hibernate, index metadata, or EXPLAIN
@@ -116,7 +118,7 @@ output.
 
 Since 0.5.0, QueryAudit can turn test output into a repeatable review loop:
 
-1. Run the audited tests and keep `report.json` as a CI artifact.
+1. Select the JSON report format, run the audited tests, and keep `report.json` as a CI artifact.
 2. Use the context available on the finding, such as SQL, a normalized pattern, or a call site,
    to change the query, mapping, or schema. Reports may also include structured remediation and
    captured index context for supported high-precision findings.
@@ -125,14 +127,15 @@ Since 0.5.0, QueryAudit can turn test output into a repeatable review loop:
    and returns a CI-friendly exit code.
 
 ```text
-[QueryAudit] compare: 0 new, 1 resolved, 0 persisting; queries 11 -> 7
+[QueryAudit] compare: PASS; 0 new, 1 resolved, 0 persisting; queries 11 -> 7
 ```
 
-An exit code of `0` means there are no new confirmed findings; `1` means new findings were
-introduced; `2` means the comparator could not produce a verdict. For recorded tests with SQL in
-both runs, query snapshot contracts add a separate guard for statement counts, so a change that
-turns one query into many or adds writes to a read path must update the contract. Enable JUnit
-extension autodetection and set `mode: all` when you want opt-out coverage across the suite.
+The report comparator returns `0`, `1`, or `2` for `PASS`, `FAIL`, or `INCONCLUSIVE`. Known schema
+1.x inputs keep their available finding delta when the comparison is incomplete, but can never
+produce exit code `0`. For recorded tests with SQL in both runs, query snapshot contracts add a
+separate guard for statement counts, so a change that turns one query into many or adds writes to a
+read path must update the contract. Enable JUnit extension autodetection and set `mode: all` when
+you want opt-out coverage across the suite.
 
 Read [Reports](https://haroya01.github.io/query-audit/guide/reports/) for the report format and
 comparator, or [Query Contracts](https://haroya01.github.io/query-audit/guide/contracts/) for the

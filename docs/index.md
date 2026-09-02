@@ -185,12 +185,13 @@ development tools an objective way to check database-facing changes.
 </div>
 
 <div class="qa-verdict" aria-label="QueryAudit report comparison result">
-  <code>[QueryAudit] compare: 0 new, 1 resolved, 0 persisting; queries 11 -&gt; 7</code>
+  <code>[QueryAudit] compare: PASS; 0 new, 1 resolved, 0 persisting; queries 11 -&gt; 7</code>
 </div>
 
-The comparator returns `0` when there are no new confirmed findings, `1` when new findings
-appear, and `2` when it cannot produce a verdict. Structured remediation is included for
-supported high-precision findings; other findings keep their human-readable suggestion.
+The comparator returns `0` for `PASS`, `1` for `FAIL`, and `2` for `INCONCLUSIVE`. A failed or
+incomplete candidate cannot appear successful merely because its finding delta is empty.
+Structured remediation is included for supported high-precision findings; other findings keep
+their human-readable suggestion.
 [Read the report and comparator contract](guide/reports.md#delta-verdict-compare-two-runs).
 
 For recorded tests with SQL in both runs, query snapshot contracts check SELECT, INSERT, UPDATE,

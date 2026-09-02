@@ -2,6 +2,10 @@ package io.queryaudit.core.reporter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.model.AuditIncompleteReason;
+import io.queryaudit.core.model.AuditOutcome;
+import io.queryaudit.core.model.AuditRunResult;
+import io.queryaudit.core.model.IncompleteReasonCode;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
@@ -9,6 +13,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -359,20 +364,47 @@ class JsonReporterTest {
   }
 
   @Test
-  void envelopeCarriesSchemaVersionAndReports() {
+  void envelopeCarriesSchemaVersionOutcomeAndReports() {
     QueryAuditReport r1 =
         new QueryAuditReport("TC", "first", List.of(), List.of(), List.of(), List.of(), 0, 0, 0L);
     QueryAuditReport r2 =
         new QueryAuditReport("TC", "second", List.of(), List.of(), List.of(), List.of(), 0, 0, 0L);
 
-    String json = JsonReporter.toEnvelopeJson(List.of(r1, r2));
+    String json = JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(r1, r2)));
 
     assertThat(json).startsWith("{");
     assertThat(json).endsWith("}");
     assertThat(json).contains("\"schemaVersion\": \"" + JsonReporter.SCHEMA_VERSION + "\"");
+    assertThat(json).contains("\"outcome\": \"PASS\"");
+    assertThat(json).contains("\"incompleteReasons\": []");
     assertThat(json).contains("\"reports\": [");
     assertThat(json).contains("\"testName\": \"first\"");
     assertThat(json).contains("\"testName\": \"second\"");
+  }
+
+  @Test
+  @SuppressWarnings("deprecation")
+  void listOnlyEnvelopeRetainsTheLegacyShape() {
+    String json = JsonReporter.toEnvelopeJson(List.of());
+
+    assertThat(json).contains("\"schemaVersion\": \"1.0.0\"");
+    assertThat(json).doesNotContain("\"outcome\"").doesNotContain("\"incompleteReasons\"");
+  }
+
+  @Test
+  void envelopeSerializesEveryIncompleteReason() {
+    AuditRunResult result =
+        new AuditRunResult(
+            List.of(),
+            AuditOutcome.INCONCLUSIVE,
+            Arrays.stream(IncompleteReasonCode.values()).map(AuditIncompleteReason::of).toList());
+
+    String json = JsonReporter.toRunEnvelopeJson(result);
+
+    assertThat(json).contains("\"outcome\": \"INCONCLUSIVE\"");
+    for (IncompleteReasonCode code : IncompleteReasonCode.values()) {
+      assertThat(json).contains("\"code\": \"" + code + "\"");
+    }
   }
 
   @Test
