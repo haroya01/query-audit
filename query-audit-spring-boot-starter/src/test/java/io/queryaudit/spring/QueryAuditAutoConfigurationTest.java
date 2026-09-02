@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import javax.sql.DataSource;
@@ -268,6 +269,26 @@ class QueryAuditAutoConfigurationTest {
   @Nested
   @DisplayName("Property binding to QueryAuditConfig")
   class PropertyBindingTests {
+
+    @Test
+    @DisplayName("report format defaults to console in QueryAuditConfig")
+    void reportFormatDefaultsInConfig() {
+      contextRunner.run(
+          context ->
+              assertThat(context.getBean(QueryAuditConfig.class).getReportFormat())
+                  .isEqualTo(ReportFormat.CONSOLE));
+    }
+
+    @Test
+    @DisplayName("query-audit.report.format binds to QueryAuditConfig")
+    void reportFormatPropertyBinding() {
+      contextRunner
+          .withPropertyValues("query-audit.report.format=json")
+          .run(
+              context ->
+                  assertThat(context.getBean(QueryAuditConfig.class).getReportFormat())
+                      .isEqualTo(ReportFormat.JSON));
+    }
 
     @Test
     @DisplayName("report output directory uses the documented default")

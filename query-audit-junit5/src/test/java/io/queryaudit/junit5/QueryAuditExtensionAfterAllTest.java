@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
@@ -118,6 +119,7 @@ class QueryAuditExtensionAfterAllTest {
       assertThat(finalizer.outputDirectory())
           .isEqualTo(
               Path.of(QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR).toAbsolutePath().normalize());
+      assertThat(finalizer.reportFormat()).isEqualTo(ReportFormat.CONSOLE);
     }
 
     @Test
@@ -175,6 +177,37 @@ class QueryAuditExtensionAfterAllTest {
     }
 
     @Test
+    @DisplayName("different formats in one root fail with a clear configuration error")
+    void conflictingFormatsFail(@TempDir Path tempDir) {
+      ExtensionContext.Store rootStore = createRootStore();
+      ExtensionContext root = mock(ExtensionContext.class);
+      when(root.getStore(NAMESPACE)).thenReturn(rootStore);
+
+      QueryAuditConfig json =
+          QueryAuditConfig.builder()
+              .reportFormat(ReportFormat.JSON)
+              .reportOutputDir(tempDir.toString())
+              .build();
+      QueryAuditConfig html =
+          QueryAuditConfig.builder()
+              .reportFormat(ReportFormat.HTML)
+              .reportOutputDir(tempDir.toString())
+              .build();
+
+      QueryAuditExtension extension = new QueryAuditExtension();
+      extension.registerReportFinalizer(mockContext(String.class, root, rootStore), json);
+
+      assertThatThrownBy(
+              () ->
+                  extension.registerReportFinalizer(
+                      mockContext(Integer.class, root, rootStore), html))
+          .isInstanceOf(ExtensionConfigurationException.class)
+          .hasMessageContaining("'json'")
+          .hasMessageContaining("'html'")
+          .hasMessageContaining("query-audit.report.format");
+    }
+
+    @Test
     @DisplayName("a blank configured directory fails before the suite starts")
     void blankDirectoryFails() {
       ExtensionContext.Store rootStore = createRootStore();
@@ -193,27 +226,62 @@ class QueryAuditExtensionAfterAllTest {
   }
 
   @Nested
-  @DisplayName("ReportFinalizer.close() writes report exactly once")
+  @DisplayName("ReportFinalizer.close() honors the selected format")
   class FinalizerClose {
 
     @Test
-    @DisplayName("close() writes complete report with all accumulated data")
-    void closeWritesCompleteReportToConfiguredDirectory(@TempDir Path tempDir) {
+    @DisplayName("console format does not create file reports")
+    void consoleDoesNotCreateFileReports(@TempDir Path tempDir) {
+      addReports();
+
+      Path outputDirectory = tempDir.resolve("console-reports");
+      QueryAuditExtension.ReportFinalizer finalizer =
+          new QueryAuditExtension.ReportFinalizer(
+              new QueryAuditExtension(), outputDirectory, ReportFormat.CONSOLE);
+
+      finalizer.close();
+
+      assertThat(outputDirectory).doesNotExist();
+    }
+
+    @Test
+    @DisplayName("JSON format writes only the machine report")
+    void jsonWritesOnlyJson(@TempDir Path tempDir) {
+      addReports();
+
+      Path outputDirectory = tempDir.resolve("json-reports");
+      QueryAuditExtension.ReportFinalizer finalizer =
+          new QueryAuditExtension.ReportFinalizer(
+              new QueryAuditExtension(), outputDirectory, ReportFormat.JSON);
+
+      finalizer.close();
+
+      assertThat(outputDirectory.resolve("report.json")).exists();
+      assertThat(outputDirectory.resolve("index.html")).doesNotExist();
+    }
+
+    @Test
+    @DisplayName("HTML format writes only the browser report")
+    void htmlWritesOnlyHtml(@TempDir Path tempDir) {
+      addReports();
+
+      Path outputDirectory = tempDir.resolve("html-reports");
+      QueryAuditExtension.ReportFinalizer finalizer =
+          new QueryAuditExtension.ReportFinalizer(
+              new QueryAuditExtension(), outputDirectory, ReportFormat.HTML);
+
+      finalizer.close();
+
+      assertThat(HtmlReportAggregator.getInstance().getReports()).hasSize(3);
+      assertThat(outputDirectory.resolve("index.html")).exists();
+      assertThat(outputDirectory.resolve("report.json")).doesNotExist();
+    }
+
+    private void addReports() {
       HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
       aggregator.addReport(dummyReport("ClassA", "test1"));
       aggregator.addReport(dummyReport("ClassB", "test2"));
       aggregator.addReport(dummyReport("ClassC", "test3"));
-
-      QueryAuditExtension extension = new QueryAuditExtension();
-      Path outputDirectory = tempDir.resolve("custom-reports");
-      QueryAuditExtension.ReportFinalizer finalizer =
-          new QueryAuditExtension.ReportFinalizer(extension, outputDirectory);
-
-      finalizer.close();
-
-      assertThat(aggregator.getReports()).hasSize(3);
-      assertThat(outputDirectory.resolve("index.html")).exists();
-      assertThat(outputDirectory.resolve("report.json")).exists();
     }
 
     @Test
@@ -222,7 +290,7 @@ class QueryAuditExtensionAfterAllTest {
       QueryAuditExtension extension = new QueryAuditExtension();
       Path outputDirectory = tempDir.resolve("empty");
       QueryAuditExtension.ReportFinalizer finalizer =
-          new QueryAuditExtension.ReportFinalizer(extension, outputDirectory);
+          new QueryAuditExtension.ReportFinalizer(extension, outputDirectory, ReportFormat.HTML);
 
       finalizer.close();
 

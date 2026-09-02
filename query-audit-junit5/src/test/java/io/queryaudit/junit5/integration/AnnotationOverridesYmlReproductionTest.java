@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.junit5.BooleanOverride;
@@ -17,6 +18,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 /**
  * Reproduction / verification test for GitHub issue #53: "application.yml settings ignored
@@ -39,6 +42,7 @@ class AnnotationOverridesYmlReproductionTest {
 
       assertThat(config.getNPlusOneThreshold()).isEqualTo(defaults.getNPlusOneThreshold());
       assertThat(config.isFailOnDetection()).isEqualTo(defaults.isFailOnDetection());
+      assertThat(config.getReportFormat()).isEqualTo(ReportFormat.CONSOLE);
       assertThat(config.getReportOutputDir()).isEqualTo(QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR);
       assertThat(config.getSuppressPatterns()).isEmpty();
       assertThat(config.getDisabledRules()).isEmpty();
@@ -61,6 +65,19 @@ class AnnotationOverridesYmlReproductionTest {
 
       assertThat(config.getSuppressPatterns())
           .containsExactlyInAnyOrder("select-all", "n-plus-one");
+    }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
+    @DisplayName("report format system property configures plain JUnit")
+    void reportFormatSystemPropertyConfiguresPlainJUnit() throws Exception {
+      System.setProperty("queryAudit.reportFormat", "json");
+      try {
+        assertThat(invokeBuildConfig(AnnotatedWithDefaults.class).getReportFormat())
+            .isEqualTo(ReportFormat.JSON);
+      } finally {
+        System.clearProperty("queryAudit.reportFormat");
+      }
     }
 
     @Test
@@ -98,6 +115,7 @@ class AnnotationOverridesYmlReproductionTest {
               .addSuppressPattern("pattern-b")
               .addSuppressQuery("SELECT 1")
               .showInfo(false)
+              .reportFormat(ReportFormat.JSON)
               .reportOutputDir("build/custom-query-reports")
               .baselinePath("/custom/baseline.json")
               .autoOpenReport(false)
@@ -144,6 +162,7 @@ class AnnotationOverridesYmlReproductionTest {
           .as("suppressQueries")
           .isEqualTo(source.getSuppressQueries());
       assertThat(copy.isShowInfo()).as("showInfo").isEqualTo(source.isShowInfo());
+      assertThat(copy.getReportFormat()).as("reportFormat").isEqualTo(source.getReportFormat());
       assertThat(copy.getReportOutputDir())
           .as("reportOutputDir")
           .isEqualTo(source.getReportOutputDir());
