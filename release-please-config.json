@@ -32,6 +32,11 @@
           "type": "generic",
           "path": "docs/getting-started/quickstart.md",
           "glob": false
+        },
+        {
+          "type": "generic",
+          "path": "docs/getting-started/spring-boot.md",
+          "glob": false
         }
       ],
       "changelog-sections": [

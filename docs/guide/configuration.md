@@ -1,5 +1,9 @@
 # Configuration Reference
 
+!!! note "Version scope"
+    This reference follows QueryAudit 0.6 as implemented on `main`. Properties and behaviors added
+    after 0.5 require QueryAudit 0.6.0 or later.
+
 QueryAudit can be configured at three levels. When multiple levels conflict, the
 most specific one wins:
 
@@ -154,8 +158,10 @@ Two switches are required:
      mode: all
    ```
 
-   or as a system property for any project: `./gradlew test -DqueryAudit.mode=all`
-   (the system property wins over the yml value).
+   For plain JUnit, set the same value in the test JVM. With the
+   [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), run
+   `./gradlew test -PqueryAuditMode=all`; with Maven, run
+   `mvn test -DqueryAudit.mode=all`. The system property wins over the yml value.
 
 Enabling autodetection alone does **not** widen coverage: in the default `annotated` mode the
 extension stays inactive for classes that never opted in, and a class that ends up registered
@@ -408,23 +414,34 @@ QueryAuditConfig config = QueryAuditConfig.builder()
 
 ---
 
-## System Properties
+## Test-JVM System Properties
 
-These can be passed via `-D` flags on the command line:
+QueryAudit reads these values from the JVM that runs the tests. Maven passes user properties from
+`-D` to its test process. Gradle's forked `Test` workers do not inherit command-line system
+properties by default; add the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), then use the
+corresponding `-P` property below.
 
-| Property | Description |
-|---|---|
-| `-DqueryAudit.mode=all` | Audit every test regardless of annotations — see [Audit Coverage Mode](#audit-coverage-mode) |
-| `-DqueryAudit.updateBaseline=true` | Update the query count baseline file after test run |
-| `-DqueryAudit.contracts.record=true` | Record/refresh [query snapshot contracts](contracts.md) instead of enforcing them |
-| `-DqueryAudit.contractsPath=path` | Override the contracts file location |
-| `-DqueryAudit.countBaselinePath=path` | Override the query count baseline file path |
-| `-DqueryAudit.reportFormat=json` | Select the suite artifact for plain JUnit: `console`, `json`, or `html` |
-| `-Dqueryaudit.autoOpenReport=true` | Force open HTML report in browser |
+| Test-JVM system property | Gradle project property | Description |
+|---|---|---|
+| `queryAudit.mode` | `queryAuditMode` | Set to `all` to audit every test regardless of annotations — see [Audit Coverage Mode](#audit-coverage-mode) |
+| `queryAudit.updateBaseline` | `queryAuditUpdateBaseline` | Set to `true` to update the query-count baseline after the test run |
+| `queryAudit.contracts.record` | `queryAuditContractsRecord` | Set to `true` to record or refresh [query snapshot contracts](contracts.md) instead of enforcing them |
+| `queryAudit.contractsPath` | `queryAuditContractsPath` | Override the contracts file location |
+| `queryAudit.countBaselinePath` | `queryAuditCountBaselinePath` | Override the query-count baseline file location |
+| `queryAudit.reportFormat` | `queryAuditReportFormat` | Select the suite artifact for plain JUnit: `console`, `json`, or `html` |
+| `queryaudit.autoOpenReport` | `queryAuditAutoOpenReport` | Set to `true` to open the selected HTML report in a browser |
 
-```bash
-./gradlew test -DqueryAudit.updateBaseline=true
-```
+=== "Gradle"
+
+    ```bash
+    ./gradlew test -PqueryAuditUpdateBaseline=true
+    ```
+
+=== "Maven"
+
+    ```bash
+    mvn test -DqueryAudit.updateBaseline=true
+    ```
 
 ---
 

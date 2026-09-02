@@ -1,5 +1,10 @@
 # Reports
 
+!!! note "Version scope"
+    This page documents the 0.6 report contract implemented on `main`. QueryAudit 0.5 writes both
+    HTML and schema 1.0 JSON after a session with at least one completed audited result; the
+    differences are called out below.
+
 After each audited test method, QueryAudit prints its findings and adds the result to the suite
 summary. You can also select one suite-level JSON or HTML artifact for later review.
 
@@ -9,7 +14,7 @@ QueryAudit provides three report formats:
 |---|---|---|---|
 | **Console** | `ConsoleReporter` | ANSI-colored stdout | Development and local testing |
 | **JSON** | `JsonReporter` | Structured JSON file | CI artifacts, dashboards, trend tracking |
-| **HTML** | `HtmlReporter` / `HtmlReportAggregator` | Self-contained HTML file | Build artifacts, PR reviews, team sharing |
+| **HTML** | `HtmlReporter` / `HtmlReportAggregator` | HTML index plus one page per test class | Build artifacts, PR reviews, team sharing |
 
 All three reporters implement the `Reporter` interface from `query-audit-core`.
 
@@ -31,55 +36,55 @@ after each test method.
 ### Example Output
 
 ```
-------------------------------------------------------------------------
-  QUERY AUDIT REPORT
+────────────────────────────────────────────────────────────────────────
+  QUERY GUARD REPORT
   Test: findRecentOrders_shouldUseIndex
-------------------------------------------------------------------------
+────────────────────────────────────────────────────────────────────────
 
---- CONFIRMED (100% reliable) ---
+--- TOP ISSUES BY IMPACT ---
+
+  #1 [ERROR] N+1 Query detected order_items  165 pts
+      Fix: Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)
+
+--- CONFIRMED (100% reliable, sorted by priority) ---
 
   [ERROR] N+1 Query detected
-    Query:  SELECT * FROM order_items WHERE order_id = ?
+    Query:  select id, order_id, sku from order_items where order_id = ?
+    Source: com.example.OrderService.findOrders:42
     Target: order_items
-    Detail: Query repeated 12 times (threshold: 3)
+    Detail: Query repeated 3 times (threshold: 3)
     Fix:    Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)
 
-  [ERROR] Missing index on WHERE column
-    Query:  SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC
-    Target: orders.user_id
-    Detail: Column 'user_id' is used in WHERE clause but has no index
-    Fix:    CREATE INDEX idx_orders_user_id ON orders (user_id);
-
-  [WARNING] SELECT * usage
-    Query:  SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC
-    Target: orders
-    Detail: SELECT * returns all columns; consider selecting only needed columns
 
 --- INFO (may vary with data volume) ---
 
-  [INFO] Full table scan detected
-    Query:  SELECT * FROM config WHERE key = 'app.version'
-    Target: config
-    Detail: Full table scan on 'config' (small table, may be acceptable)
+  [INFO] SELECT * usage
+    Query:  select * from orders where user_id = ?
+    Source: com.example.OrderService.findOrders:41
+    Target: orders
+    Detail: SELECT * usage detected on table 'orders'
+    Fix:    Replace SELECT * with an explicit column list to reduce network I/O and enable covering index optimization.
 
-[OK] 5 queries passed
 
-------------------------------------------------------------------------
-  4 unique patterns | 18 total queries | 342 ms total
-  2 errors | 1 warning | 1 info | 5 passed
-------------------------------------------------------------------------
+[OK] 2 queries passed
+
+--- Query Patterns ---
+  [  3x] select id, order_id, sku from order_items where order_id = ?
+  [  1x] select * from orders where user_id = ?
+
+--- Table Access Frequency ---
+  order_items  3 queries
+  orders       1 queries
+────────────────────────────────────────────────────────────────────────
+  2 unique patterns | 4 total queries | 342 ms total
+  1 error | 1 info | 2 passed
+────────────────────────────────────────────────────────────────────────
 ```
 
 ### Configuration
 
-The console reporter is enabled by default. No explicit configuration is needed.
-
-```yaml
-query-audit:
-  report:
-    format: console       # Default value
-    show-info: true       # Show or hide INFO-level findings
-```
+The JUnit extension always writes the console report for an audited test. No reporter selection is
+required.
 
 With `format: console`, the suite finalizer prints its summary without creating `index.html` or
 `report.json`.
@@ -117,6 +122,8 @@ dashboards, and downstream processing.
 
 ### Enabling JSON Reports
 
+For Spring Boot, select JSON in `application.yml`:
+
 ```yaml
 query-audit:
   report:
@@ -124,10 +131,14 @@ query-audit:
     output-dir: build/reports/query-audit
 ```
 
-This selection writes `report.json` and does not create HTML files.
+The JUnit extension then writes one aggregate file to
+`build/reports/query-audit/report.json` after the test session completes. This selection does not
+create HTML files.
 
-For plain JUnit without Spring configuration, use
-`./gradlew test -DqueryAudit.reportFormat=json`.
+For plain JUnit, Maven can pass the test-JVM property directly with
+`mvn test -DqueryAudit.reportFormat=json`. Gradle users should add the
+[project-property bridge](ci-cd.md#plain-junit-build-tool-setup) once, then run
+`./gradlew test -PqueryAuditReportFormat=json`.
 
 ### Example Output
 
@@ -152,18 +163,18 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
         "confirmedIssues": 2,
         "infoIssues": 1,
         "acknowledgedIssues": 0,
-        "uniquePatterns": 4,
-        "totalQueries": 18,
+        "uniquePatterns": 2,
+        "totalQueries": 4,
         "executionTimeMs": 342
       },
       "confirmedIssues": [
         {
           "type": "n-plus-one",
           "severity": "ERROR",
-          "query": "select * from order_items where order_id = ?",
+          "query": "select id, order_id, sku from order_items where order_id = ?",
           "table": "order_items",
           "column": null,
-          "detail": "Query repeated 12 times (threshold: 3)",
+          "detail": "Query repeated 3 times (threshold: 3)",
           "suggestion": "Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)",
           "sourceLocation": "com.example.OrderService.findOrders:42",
           "remediation": {"kind": "batch-fetch", "table": "order_items"}
@@ -180,7 +191,19 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
           "remediation": {"kind": "add-index", "table": "orders", "columns": ["user_id"]}
         }
       ],
-      "infoIssues": [],
+      "infoIssues": [
+        {
+          "type": "select-all",
+          "severity": "INFO",
+          "query": "select * from orders where user_id = ? order by created_at desc",
+          "table": "orders",
+          "column": null,
+          "detail": "SELECT * usage detected on table 'orders'",
+          "suggestion": "Replace SELECT * with an explicit column list to reduce network I/O and enable covering index optimization.",
+          "sourceLocation": "com.example.OrderService.findOrders:42",
+          "remediation": {"kind": "select-explicit-columns", "table": "orders"}
+        }
+      ],
       "acknowledgedIssues": [],
       "indexMetadata": {
         "orders": [
@@ -192,6 +215,24 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
           "sql": "SELECT * FROM orders WHERE user_id = 42 ORDER BY created_at DESC",
           "normalizedSql": "select * from orders where user_id = ? order by created_at desc",
           "executionTimeNanos": 15234000,
+          "stackTrace": "com.example.OrderService.findOrders:42"
+        },
+        {
+          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = 101",
+          "normalizedSql": "select id, order_id, sku from order_items where order_id = ?",
+          "executionTimeNanos": 108922000,
+          "stackTrace": "com.example.OrderService.findOrders:42"
+        },
+        {
+          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = 102",
+          "normalizedSql": "select id, order_id, sku from order_items where order_id = ?",
+          "executionTimeNanos": 109300000,
+          "stackTrace": "com.example.OrderService.findOrders:42"
+        },
+        {
+          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = 103",
+          "normalizedSql": "select id, order_id, sku from order_items where order_id = ?",
+          "executionTimeNanos": 108544000,
           "stackTrace": "com.example.OrderService.findOrders:42"
         }
       ]
@@ -256,13 +297,15 @@ Field notes for machine consumers:
   constructors derive a deterministic `query-audit:core:v1:<sha256>` ID from the exact
   `testClass` and `testName` inputs. Core callers should pass a fully qualified class name and a
   stable logical test name when they need identity across runs.
-- Every finding carries `sourceLocation` (the innermost application stack frame of the
-  offending query) and, for high-precision rules, a structured `remediation` hint
-  (`kind` + `table` + `columns`) so tooling can act without parsing the prose `suggestion`.
-- `indexMetadata` embeds the actual index state (from `SHOW INDEX` / `pg_catalog`) of every
-  table referenced by a finding — grouped per index, columns in index order. A report
-  consumer can decide on and generate the correct fix without separate database access.
-  `null` means no metadata was collected (non-database test).
+- Every finding has a `sourceLocation` field. Its value is the innermost captured application
+  frame when one is available, and `null` when capture cannot identify one. High-precision rules
+  may also include a structured `remediation` hint (`kind` + optional `table` and `columns`) so
+  tooling can act without parsing the prose `suggestion`.
+- When database index metadata was collected, `indexMetadata` includes known indexes for finding
+  tables, grouped per index with columns in index order. It is `null` when no metadata was attached
+  and `{}` when metadata was attached but no reported table has a known index. Consumers should
+  treat this as optional context rather than assume that every finding carries complete index
+  state.
 
 The stable schema URLs are
 [`schema/report-1.0.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.0.schema.json),
@@ -350,19 +393,23 @@ tasks.register('queryAuditCompare', JavaExec) {
 
 ## HTML Report
 
-The HTML report aggregator accumulates results across all test classes and produces a
-self-contained HTML file at `build/reports/query-audit/index.html` after all tests complete.
-The report includes expandable sections, syntax-highlighted SQL, and a visual summary.
+The HTML report aggregator accumulates results across all test classes and writes a multi-page
+report under `build/reports/query-audit/` after all tests complete. `index.html` links to one detail
+page per test class. Each page embeds its own CSS and JavaScript, so the report has no external
+runtime dependencies; keep the generated directory together so those links continue to work.
 
 ### Features
 
-- **Test-level drill-down** -- Expand each test to see its detected issues and queries
-- **Filtering** -- Filter by severity, issue type, or test class
-- **Search** -- Full-text search across SQL queries and issue descriptions
-- **Summary dashboard** -- Overall counts of errors, warnings, and info findings
-- **Self-contained** -- Single HTML file with embedded CSS and JavaScript, no external dependencies
+- **Class overview** -- Compare test, issue, query, duration, and status counts by class
+- **Prioritized findings** -- Review cross-test deduplication and the highest-impact findings first
+- **Method drill-down** -- Expand a test method to inspect findings, fixes, and captured query detail
+- **Review progress** -- Check off findings locally; the browser retains that state for the same report
+- **Portable pages** -- CSS and JavaScript are embedded in each generated page
 
-### Configuration
+### Opening the Report Locally
+
+Select the HTML format to write the browser report under `build/reports/query-audit/`. Automatic
+opening is a separate setting and is disabled when a common CI environment variable is present.
 
 ```yaml
 query-audit:
@@ -374,47 +421,34 @@ query-audit:
 
 This selection writes the HTML index and per-class pages and does not create `report.json`.
 
-For plain JUnit without Spring configuration, use
-`./gradlew test -DqueryAudit.reportFormat=html`.
+For plain JUnit, Maven can select the format with
+`mvn test -DqueryAudit.reportFormat=html`. Gradle users should use the
+[project-property bridge](ci-cd.md#plain-junit-build-tool-setup) and run
+`./gradlew test -PqueryAuditReportFormat=html`.
 
 Or via annotation:
 
 ```java
-@QueryAudit(autoOpenReport = true)
+@QueryAudit(autoOpenReport = BooleanOverride.TRUE)
 ```
 
-Or via system property:
-
-```bash
-./gradlew test -Dqueryaudit.autoOpenReport=true
-```
+For plain JUnit, the equivalent test-JVM system property is
+`-Dqueryaudit.autoOpenReport=true`.
 
 ### Example HTML Report Structure
 
-The generated HTML report contains these sections:
+The generated directory contains the overview and one page for each participating test class:
 
 ```
-+------------------------------------------------------------+
-|  QueryAudit Report                                        |
-|  Generated: 2026-03-25 14:30:00                            |
-+------------------------------------------------------------+
-|  Summary: 12 tests | 5 errors | 3 warnings | 2 info       |
-+------------------------------------------------------------+
-|                                                            |
-|  [v] OrderServiceTest                                      |
-|      [v] findRecentOrders (2 errors, 1 warning)            |
-|          [ERROR] N+1 Query detected                        |
-|            Query: SELECT * FROM order_items WHERE ...       |
-|          [ERROR] Missing index on WHERE column              |
-|            Query: SELECT * FROM orders WHERE user_id = ...  |
-|          [WARNING] SELECT * usage                          |
-|      [ ] createOrder (0 issues)                            |
-|                                                            |
-|  [v] UserServiceTest                                       |
-|      [v] findActiveUsers (1 warning)                       |
-|          [WARNING] Unbounded result set                    |
-+------------------------------------------------------------+
+build/reports/query-audit/
+├── index.html
+├── OrderServiceTest.html
+└── UserServiceTest.html
 ```
+
+The index shows a class table, a cross-test unique-issue summary, and impact-ranked confirmed
+findings when present. A class page shows its totals and expandable method cards. Each method card
+contains its findings and the retained query timeline and patterns.
 
 !!! warning "HTML report timing"
     The root suite finalizer writes the HTML report after all participating test classes finish. If
@@ -428,30 +462,30 @@ The generated HTML report contains these sections:
 ### Header
 
 ```
-------------------------------------------------------------------------
-  QUERY AUDIT REPORT
+────────────────────────────────────────────────────────────────────────
+  QUERY GUARD REPORT
   Test: findRecentOrders_shouldUseIndex
-------------------------------------------------------------------------
+────────────────────────────────────────────────────────────────────────
 ```
 
 Shows the name of the test method that was analyzed.
 
-### CONFIRMED (100% reliable)
+### CONFIRMED findings
 
 ```
---- CONFIRMED (100% reliable) ---
+--- CONFIRMED (100% reliable, sorted by priority) ---
 ```
 
-Issues in this section are determined purely from SQL parsing and index metadata --
-they do not depend on data volume or query planner behavior. These are the issues
-that cause the test to fail when `failOnDetection` is `true`.
+Issues in this section are eligible to fail the test when `failOnDetection` is `true`. They come
+from structural SQL checks, database metadata, configured thresholds, or Hibernate events. Review
+the evidence against the application semantics before changing a query or schema.
 
 Confirmed issues have either **ERROR** or **WARNING** severity:
 
 - **ERROR** -- high-confidence performance problems (N+1, missing WHERE/JOIN index,
   function on indexed column)
-- **WARNING** -- likely problems that may be intentional in some cases (SELECT *,
-  excessive OR clauses, large OFFSET pagination, missing ORDER BY/GROUP BY index)
+- **WARNING** -- likely problems that may be intentional in some cases (excessive OR clauses,
+  large OFFSET pagination, missing ORDER BY/GROUP BY index)
 
 ### INFO (may vary with data volume)
 
@@ -459,10 +493,11 @@ Confirmed issues have either **ERROR** or **WARNING** severity:
 --- INFO (may vary with data volume) ---
 ```
 
-INFO-level issues come from EXPLAIN analysis and depend on the query planner's
-decisions, which can vary with data volume. These are shown for awareness but
-never cause a test failure. Examples include full table scans, filesort, and
-temporary table usage.
+INFO findings are advisory and do not fail a test at their default severity. They include
+structural or contextual suggestions such as `SELECT *`, `COUNT` where `EXISTS` may suffice, and
+covering-index opportunities; runtime heuristics such as suspected N+1 access; and EXPLAIN results
+such as full table scans, filesort, and temporary-table use. Some depend on data volume or planner
+state, while others need application context before a change is justified.
 
 !!! tip
     Set `report.show-info: false` in `application.yml` to hide this section if
@@ -475,7 +510,7 @@ temporary table usage.
 ### OK
 
 ```
-[OK] 5 queries passed
+[OK] 2 queries passed
 ```
 
 Shows how many queries had no detected issues.
@@ -483,10 +518,10 @@ Shows how many queries had no detected issues.
 ### Summary
 
 ```
-------------------------------------------------------------------------
-  4 unique patterns | 18 total queries | 342 ms total
-  2 errors | 1 warning | 1 info | 5 passed
-------------------------------------------------------------------------
+────────────────────────────────────────────────────────────────────────
+  2 unique patterns | 4 total queries | 342 ms total
+  1 error | 1 info | 2 passed
+────────────────────────────────────────────────────────────────────────
 ```
 
 The summary footer provides:
@@ -502,19 +537,19 @@ The summary footer provides:
 
 ## How to Read the Report Effectively
 
-1. **Start with the summary line.** If it says `0 errors | 0 warnings`, your queries
-   are clean.
+1. **Start with the summary line.** `0 errors | 0 warnings` means there are no confirmed findings
+   at the default severities; INFO advisories may still deserve review.
 
-2. **Focus on CONFIRMED errors first.** These are definite problems -- an N+1 that
-   fires 12 times, a WHERE column with no index, etc.
+2. **Focus on CONFIRMED errors first.** These are the configured actionable findings, such as a
+   repeated access pattern or a WHERE column with no matching index in the captured metadata.
 
-3. **Review warnings.** These may be intentional (e.g., `SELECT *` in a test helper
-   that actually needs all columns). If intentional, suppress them with
-   `@QueryAudit(suppress = {"select-all"})`.
+3. **Review warnings.** Rules such as large-offset pagination or excessive OR clauses can be
+   intentional. Suppress a reviewed case with its rule code or record it in the baseline with a
+   reason.
 
-4. **Glance at INFO.** INFO issues flag things like full table scans that are normal
-   on small test datasets. If your test uses realistic data volumes, these may be
-   worth investigating.
+4. **Glance at INFO.** `SELECT *` and other contextual suggestions are INFO by default. EXPLAIN
+   advisories such as a full table scan may be normal on a small test dataset and more useful when
+   the test has realistic volume and statistics.
 
 5. **Look at the Fix suggestion.** QueryAudit provides actionable suggestions like
    `CREATE INDEX` DDL or recommendations to use JOIN FETCH.

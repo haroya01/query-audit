@@ -1,49 +1,25 @@
 ---
 title: Quick Start
-description: Get your first QueryAudit report in under five minutes.
+description: Add one audited test, understand its first failure, and verify the fix.
 ---
 
 # Quick Start
 
-!!! abstract "What you'll learn"
-    How to add `@QueryAudit` to a test, trigger real detections (N+1, missing index, batch insert), read the report, and fix the issues.
+This walkthrough starts with one database-facing test. It reports every applicable finding but
+fails only on a query budget you chose, so the first result is easy to explain and fix.
 
-This guide walks you through adding QueryAudit to a Spring Boot test, triggering real detections, and reading the report.
+!!! note "Reporting behavior by version"
+    Dependency snippets use the current Maven Central release. QueryAudit 0.5.x writes HTML and
+    JSON after a session with at least one completed audited result. QueryAudit 0.6.0+ defaults to
+    console-only output and writes the selected JSON or HTML report when configured below.
 
----
+## 1. Add the test dependencies
 
-## The Simplest Example
-
-If you just want to see QueryAudit in action, this is all you need:
-
-```java
-@SpringBootTest
-@QueryAudit
-class MyServiceTest {
-
-    @Autowired
-    private MyService myService;
-
-    @Test
-    void myMethod_shouldNotHaveQueryIssues() {
-        myService.doSomething();
-        // That's it. QueryAudit analyzes every SQL query executed above
-        // and fails the test if it finds performance anti-patterns.
-    }
-}
-```
-
-No configuration. No extra beans. No proxy setup. Just the annotation.
-
----
-
-## Full Walkthrough
-
-### Step 1: Add Dependencies
+For a Spring Boot test, add the starter and the module for your test database:
 
 === "Gradle"
 
-    ```gradle
+    ```groovy
     dependencies {
         testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.5.0' // x-release-please-version
         testImplementation 'io.github.haroya01:query-audit-mysql:0.5.0' // x-release-please-version
@@ -53,213 +29,207 @@ No configuration. No extra beans. No proxy setup. Just the annotation.
 === "Maven"
 
     ```xml
-    <dependency>
-        <groupId>io.github.haroya01</groupId>
-        <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.5.0</version> <!-- x-release-please-version -->
-        <scope>test</scope>
-    </dependency>
-    <dependency>
-        <groupId>io.github.haroya01</groupId>
-        <artifactId>query-audit-mysql</artifactId>
-        <version>0.5.0</version> <!-- x-release-please-version -->
-        <scope>test</scope>
-    </dependency>
+    <dependencies>
+        <dependency>
+            <groupId>io.github.haroya01</groupId>
+            <artifactId>query-audit-spring-boot-starter</artifactId>
+            <version>0.5.0</version> <!-- x-release-please-version -->
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.haroya01</groupId>
+            <artifactId>query-audit-mysql</artifactId>
+            <version>0.5.0</version> <!-- x-release-please-version -->
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
     ```
 
-!!! tip "Using PostgreSQL?"
-    Replace `query-audit-mysql` with `query-audit-postgresql`. Everything else stays the same.
+Replace `query-audit-mysql` with `query-audit-postgresql` when the tests use PostgreSQL. Plain
+JUnit tests use one database module plus `datasource-proxy`; copy that setup from
+[Plain JUnit 5 installation](installation.md#plain-junit-5).
 
----
+## 2. Put a budget on one path
 
-### Step 2: Annotate Your Test
+Use `@EnableQueryInspector` while learning what the test does. It writes findings without making
+those findings fail the test. `@ExpectQueries` remains an explicit assertion and fails when the
+statement mix exceeds the declared limits.
+
+=== "Spring Boot"
+
+    ```java
+    import io.queryaudit.junit5.EnableQueryInspector;
+    import io.queryaudit.junit5.ExpectQueries;
+    import java.util.List;
+    import org.junit.jupiter.api.Test;
+    import org.springframework.beans.factory.annotation.Autowired;
+    import org.springframework.boot.test.context.SpringBootTest;
+
+    @SpringBootTest
+    @EnableQueryInspector
+    class OrderServiceQueryTest {
+
+        @Autowired
+        private OrderService orderService;
+
+        @Test
+        @ExpectQueries(select = 2, insert = 0, update = 0, delete = 0)
+        void loadsOrdersWithItemsWithinBudget() {
+            List<Order> orders = orderService.findRecentOrders();
+            orders.forEach(order -> assertThat(order.getItems()).isNotEmpty());
+        }
+    }
+    ```
+
+=== "Plain JUnit 5"
+
+    ```java
+    import io.queryaudit.junit5.EnableQueryInspector;
+    import io.queryaudit.junit5.ExpectQueries;
+    import javax.sql.DataSource;
+    import net.ttddyy.dsproxy.support.ProxyDataSourceBuilder;
+    import org.junit.jupiter.api.Test;
+
+    @EnableQueryInspector
+    class OrderRepositoryQueryTest {
+
+        static final DataSource DATA_SOURCE =
+                ProxyDataSourceBuilder.create(TestDatabase.dataSource())
+                        .name("query-audit")
+                        .build();
+
+        private final OrderRepository repository = new JdbcOrderRepository(DATA_SOURCE);
+
+        @Test
+        @ExpectQueries(select = 2, insert = 0, update = 0, delete = 0)
+        void loadsOrdersWithItemsWithinBudget() {
+            repository.findRecentOrdersWithItems();
+        }
+    }
+    ```
+
+The plain JUnit repository must use `DATA_SOURCE`. QueryAudit attaches its listener to that proxy;
+SQL executed through a different, raw `DataSource` is outside the capture path.
+
+The budget above says this path may issue at most two SELECTs and no writes. Choose a limit that
+describes the behavior you want, rather than copying `2` into every test.
+
+## 3. Run only that test
+
+=== "Gradle"
+
+    ```bash
+    ./gradlew test --tests OrderServiceQueryTest
+    ```
+
+=== "Maven"
+
+    ```bash
+    mvn -Dtest=OrderServiceQueryTest test
+    ```
+
+If the initial order query is followed by one item query per order, the assertion fails with a
+statement list and the first captured application frame for each statement:
+
+```text
+QueryAudit: loadsOrdersWithItemsWithinBudget() exceeded its query budget.
+SELECT: executed 6, expected at most 2.
+  select ... from orders ...
+    at com.example.OrderRepository.findRecentOrders(OrderRepository.java:31)
+  select ... from order_items where order_id=?
+    at com.example.OrderRepository.findItems(OrderRepository.java:42)
+```
+
+Before this assertion message, the console report groups confirmed findings and informational
+advice. Depending on the executed SQL and available metadata, it may also identify the repeated
+item lookup as N+1 or show an unindexed access path.
+
+## 4. Read the evidence, then fix the cause
+
+Use each field for a specific decision:
+
+| Output | What to do with it |
+|---|---|
+| Issue type or budget summary | Identify the contract that failed |
+| `Query` | Find the repeated or unsafe statement shape |
+| `Source` | Open the application call site that issued the statement |
+| `Target` and `Detail` | Check the table, column, threshold, or index evidence |
+| `Fix` or `Suggestion` | Start with the proposed query, mapping, or schema change and review it against the application semantics |
+
+For a JPA lazy-load loop, fetching the association with the parent is one common fix:
 
 ```java
-@SpringBootTest
-@QueryAudit
-class OrderServiceTest {
+public interface OrderRepository extends JpaRepository<Order, Long> {
 
-    @Autowired
-    private OrderService orderService;
-
-    @Test
-    void findRecentOrders() {
-        List<Order> orders = orderService.findRecentOrders(10);
-
-        assertThat(orders).isNotEmpty();
-        orders.forEach(order -> {
-            // This triggers lazy loading -- each order fires a separate
-            // SELECT to fetch its items. Classic N+1 problem.
-            assertThat(order.getItems()).isNotNull();
-        });
-    }
+    @EntityGraph(attributePaths = "items")
+    List<Order> findByCreatedAtAfterOrderByCreatedAtDesc(Instant cutoff);
 }
 ```
 
-!!! note "No other changes needed"
-    You don't need to change your `DataSource`, add a proxy bean, or modify `application.yml`. The `@QueryAudit` annotation handles everything.
+For JDBC, use one join or a bounded second query with an `IN` predicate instead of issuing the
+same child lookup once per order. Rerun the same test. The chosen behavior should now stay within
+the budget, and any N+1 finding should disappear from the report.
 
----
+Do not add an index only because a suggestion names one. Check existing composite indexes,
+write cost, and the production query shape first. The database module includes the collected index
+state in the machine report when it is available.
 
-### Step 3: Run Your Tests
+## 5. Decide what CI should enforce
 
-```bash
-./gradlew test --tests OrderServiceTest
-```
+Once you have reviewed the report, choose the contract for this test:
 
-QueryAudit automatically:
+- Keep `@EnableQueryInspector` when findings should remain advisory while explicit budgets fail.
+- Replace it with `@QueryAudit` when confirmed findings should fail the test.
+- Add `@ExpectMaxQueryCount` for a single total limit or keep `@ExpectQueries` for separate read and
+  write limits.
+- Record [query snapshot contracts](../guide/contracts.md) when a set of established tests should
+  keep its SELECT, INSERT, UPDATE, and DELETE counts across runs.
 
-1. **Intercepts** every SQL query (SELECT, INSERT, UPDATE, DELETE) executed during the test
-2. **Collects index metadata** via `SHOW INDEX` (MySQL) or `pg_catalog` (PostgreSQL) from your test database
-3. **Applies 67 detection rules** to the captured queries
-4. **Prints a report** to the console output
-5. **Fails the test** if confirmed issues are found (configurable)
-
----
-
-### Step 4: Read the Report
-
-```
-================================================================================
-                          QUERY AUDIT REPORT
-                   OrderServiceTest (12 queries analyzed)
-================================================================================
-
-CONFIRMED ISSUES (action required)
-────────────────────────────────────────────────────────────────────────────────
-
-[ERROR] N+1 Query Detected
-  Repeated query: select * from order_items where order_id = ?
-  Executions:     10 times (threshold: 3)
-  Source:         com.example.OrderService.findRecentOrders:42
-  Suggestion:     Use JOIN FETCH or @EntityGraph to load order_items
-                  with the parent query.
-
-[ERROR] Missing Index on WHERE column
-  Query:   select * from order_items where order_id = ?
-  Table:   order_items
-  Column:  order_id
-  Suggestion: CREATE INDEX idx_order_items_order_id
-              ON order_items (order_id);
-
-[WARNING] Repeated single-row INSERT should use batch insert
-  Query:   insert into audit_log (action, entity_id, ...) values (?, ?, ...)
-  Table:   audit_log
-  Detail:  Single-row INSERT executed 10 times on table 'audit_log'.
-  Suggestion: Use batch INSERT (saveAll() in JPA with hibernate.jdbc.batch_size).
-
-────────────────────────────────────────────────────────────────────────────────
-INFO (for review)
-────────────────────────────────────────────────────────────────────────────────
-
-[WARNING] SELECT * Usage
-  Query:   select * from orders where created_at > ?
-  Table:   orders
-  Suggestion: List only the columns you need
-
-================================================================================
-  3 confirmed issues | 1 info | 12 queries
-================================================================================
-```
-
-### Understanding the Sections
-
-#### CONFIRMED Issues (ERROR / WARNING)
-
-These are structural problems that **will cause performance degradation at scale**. They are verified by SQL pattern analysis and index metadata cross-referencing.
-
-| Severity | Meaning | Action |
-|----------|---------|--------|
-| **ERROR** | Critical -- logic bugs, full table locks, N+1 | Must fix before merge |
-| **WARNING** | Important -- missing indexes, inefficient patterns | Should fix |
-
-#### INFO Items
-
-Best-practice suggestions. Won't fail your build by default.
-
-!!! tip "You can promote INFO to CONFIRMED"
-    Change severity in the configuration. See [Configuration](../guide/configuration.md).
-
----
-
-### Step 5: Fix the Issues
-
-#### Fix N+1 Query
-
-```java
-// Before: lazy loading causes N+1
-@Query("SELECT o FROM Order o WHERE o.createdAt > :date")
-List<Order> findRecentOrders(@Param("date") LocalDateTime date);
-
-// After: JOIN FETCH loads items in a single query
-@Query("SELECT o FROM Order o JOIN FETCH o.items WHERE o.createdAt > :date")
-List<Order> findRecentOrders(@Param("date") LocalDateTime date);
-```
-
-#### Fix Missing Index
-
-```sql
-CREATE INDEX idx_order_items_order_id ON order_items (order_id);
-```
-
-#### Fix Repeated Single INSERT
+QueryAudit 0.5.x already writes both report files. With Spring Boot on 0.6.0+, select the report CI
+should retain in test configuration:
 
 ```yaml
-# application.yml
-spring:
-  jpa:
-    properties:
-      hibernate:
-        jdbc:
-          batch_size: 50
-        order_inserts: true
+# src/test/resources/application.yml
+query-audit:
+  report:
+    format: json
 ```
 
-```java
-// Use saveAll() instead of individual save() calls
-auditLogRepository.saveAll(auditLogs);
-```
+Run the test again. This writes `build/reports/query-audit/report.json`, the schema-versioned input
+for scripts, coding tools, and the
+[report comparator](../guide/reports.md#delta-verdict-compare-two-runs). Set `format: html` when
+reviewers need a browser artifact. A 0.6.0+ run selects one suite report format; the per-test
+console diagnostics remain available. Plain JUnit users can pass the same setting into the test JVM
+with the [Gradle or Maven setup in the CI guide](../guide/ci-cd.md#plain-junit-build-tool-setup). A
+change tool can use the JSON evidence locally, while CI independently reruns the tests and decides
+whether the build passes.
 
-#### Fix Repeated Single UPDATE
-
-When every row receives the same value, replace the per-entity loop with one set-based update:
-
-```java
-@Modifying
-@Query("UPDATE Order o SET o.status = :status WHERE o.id IN :ids")
-int updateStatus(@Param("ids") Collection<Long> ids, @Param("status") OrderStatus status);
-```
-
-If each row needs different values, enable Hibernate's JDBC update batching:
+Keep reports from failed builds by using `if: always()`:
 
 ```yaml
-spring:
-  jpa:
-    properties:
-      hibernate:
-        jdbc:
-          batch_size: 50
-        order_updates: true
+- name: Run tests
+  run: ./gradlew test
+
+- name: Upload QueryAudit reports
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: query-audit-reports
+    path: build/reports/query-audit/
+    if-no-files-found: error
 ```
 
----
+The [CI/CD guide](../guide/ci-cd.md) has complete MySQL and PostgreSQL service examples and GitHub
+Actions annotations.
 
-## More Annotations
+## Continue by task
 
-Once you're comfortable with `@QueryAudit`, explore the 4 annotations:
-
-| Annotation | Use when... |
+| Next task | Guide |
 |---|---|
-| `@QueryAudit` | You want full analysis with test failure on issues |
-| `@EnableQueryInspector` | You want report-only mode (same as `@QueryAudit(failOnDetection = BooleanOverride.FALSE)`) |
-| `@DetectNPlusOne` | You only care about N+1 patterns |
-| `@ExpectMaxQueryCount(5)` | You want to enforce a query budget |
-
----
-
-## Next Steps
-
-- :material-arrow-right: [Spring Boot Integration](spring-boot.md) -- Auto-configuration details and `application.yml` options
-- :material-arrow-right: [Annotations Guide](../guide/annotations.md) -- All 4 annotations and when to use each
-- :material-arrow-right: [Configuration](../guide/configuration.md) -- Tune thresholds, suppress issues
-- :material-arrow-right: [Detection Rules](../detections/overview.md) -- All 67 active detection rules explained
+| Understand which checks ran and what evidence they need | [Detection overview](../detections/overview.md) |
+| Configure the starter or an existing proxy | [Spring Boot integration](spring-boot.md) |
+| Choose budgets and focused annotations | [Annotations](../guide/annotations.md) |
+| Select a profile, suppression, or full-suite coverage | [Configuration](../guide/configuration.md) |
+| Record statement-count snapshots | [Query contracts](../guide/contracts.md) |
+| Parse JSON or compare two runs | [Reports](../guide/reports.md) |
+| Resolve missing capture or metadata | [Troubleshooting](../guide/troubleshooting.md) |
