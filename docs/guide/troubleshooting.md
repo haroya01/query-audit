@@ -451,11 +451,14 @@ changed on the audited class or method.
 
 **Symptom:** No `build/reports/query-audit/index.html` file after tests.
 
-**Cause:** HTML reports are generated in `@AfterAll`. If tests fail before
-that point (e.g., Spring context fails to start), no report is written.
+**Cause:** HTML reports are generated when the root test context closes. If tests fail before
+QueryAudit records a result (for example, while the Spring context starts), there is nothing to
+write. A read-only directory, an invalid output path, or a full disk also prevents the report from
+being created and fails the JUnit run.
 
-**Fix:** Check your test logs for startup failures. The HTML report is only
-generated when at least one test method completes.
+**Fix:** Check the test log for an earlier lifecycle failure or a `QueryAudit could not write the
+html report` error. The latter includes the target path; make sure its parent directory is writable
+and that no regular file occupies the configured `report.output-dir` path.
 
 ---
 

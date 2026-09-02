@@ -25,6 +25,7 @@ import io.queryaudit.core.reporter.HtmlReportAggregator;
 import io.queryaudit.core.reporter.JsonReporter;
 import java.awt.Desktop;
 import java.io.File;
+import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -582,6 +583,7 @@ public class QueryAuditExtension
       }
 
       printSummary(reports);
+      Path reportPath = reportPath();
       try {
         switch (reportFormat) {
           case CONSOLE -> {
@@ -590,7 +592,6 @@ public class QueryAuditExtension
           case JSON -> extension.writeJsonReport(reports, outputDirectory);
           case HTML -> {
             aggregator.writeReport(outputDirectory);
-            Path reportPath = outputDirectory.resolve("index.html");
             System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
             if (autoOpen) {
               extension.openReportInBrowser(reportPath);
@@ -598,9 +599,16 @@ public class QueryAuditExtension
           }
         }
       } catch (Exception e) {
-        System.err.println(
-            "[QueryAudit] Failed to write " + reportFormat.name() + " report: " + e.getMessage());
+        throw new ReportWriteException(reportFormat, reportPath, e);
       }
+    }
+
+    private Path reportPath() {
+      return switch (reportFormat) {
+        case CONSOLE -> outputDirectory;
+        case JSON -> outputDirectory.resolve("report.json");
+        case HTML -> outputDirectory.resolve("index.html");
+      };
     }
 
     private static void printSummary(List<QueryAuditReport> reports) {
@@ -1201,15 +1209,11 @@ public class QueryAuditExtension
 
   // ── JSON report ───────────────────────────────────────────────────
 
-  private void writeJsonReport(List<QueryAuditReport> reports, Path outputDir) {
-    try {
-      Files.createDirectories(outputDir);
-      Path jsonPath = outputDir.resolve("report.json");
-      Files.writeString(jsonPath, JsonReporter.toEnvelopeJson(reports));
-      System.out.println("[QueryAudit] JSON report: " + jsonPath.toAbsolutePath());
-    } catch (Exception e) {
-      System.err.println("[QueryAudit] Failed to write JSON report: " + e.getMessage());
-    }
+  private void writeJsonReport(List<QueryAuditReport> reports, Path outputDir) throws IOException {
+    Files.createDirectories(outputDir);
+    Path jsonPath = outputDir.resolve("report.json");
+    Files.writeString(jsonPath, JsonReporter.toEnvelopeJson(reports));
+    System.out.println("[QueryAudit] JSON report: " + jsonPath.toAbsolutePath());
   }
 
   // ── Baseline & report helpers ──────────────────────────────────────

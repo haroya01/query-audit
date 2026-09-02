@@ -17,6 +17,10 @@ All three reporters implement the `Reporter` interface from `query-audit-core`.
 no report files. Select `json` for `report.json` or `html` for the browser report. QueryAudit still
 prints each test's console diagnostics so failures remain readable in local and CI logs.
 
+When `json` or `html` is selected, that file is part of the audit result. If QueryAudit cannot
+write it, the JUnit run fails with the format and target path in the error message. This prevents a
+CI job from accepting a run whose report is missing.
+
 ---
 
 ## Console Report

@@ -12,6 +12,8 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -277,11 +279,64 @@ class QueryAuditExtensionAfterAllTest {
       assertThat(outputDirectory.resolve("report.json")).doesNotExist();
     }
 
+    @Test
+    @DisplayName("a JSON write failure invalidates the audit run")
+    void jsonWriteFailureInvalidatesRun(@TempDir Path tempDir) throws IOException {
+      addReports();
+      Path outputDirectory = blockDirectory(tempDir);
+      QueryAuditExtension.ReportFinalizer finalizer =
+          new QueryAuditExtension.ReportFinalizer(
+              new QueryAuditExtension(), outputDirectory, ReportFormat.JSON);
+
+      assertThatThrownBy(finalizer::close)
+          .isInstanceOf(ReportWriteException.class)
+          .hasMessageContaining("json report")
+          .hasMessageContaining(outputDirectory.resolve("report.json").toString())
+          .hasMessageContaining("audit run is incomplete")
+          .hasCauseInstanceOf(IOException.class)
+          .satisfies(
+              failure -> {
+                ReportWriteException exception = (ReportWriteException) failure;
+                assertThat(exception.format()).isEqualTo(ReportFormat.JSON);
+                assertThat(exception.reportPath())
+                    .isEqualTo(outputDirectory.resolve("report.json"));
+              });
+    }
+
+    @Test
+    @DisplayName("an HTML write failure invalidates the audit run")
+    void htmlWriteFailureInvalidatesRun(@TempDir Path tempDir) throws IOException {
+      addReports();
+      Path outputDirectory = blockDirectory(tempDir);
+      QueryAuditExtension.ReportFinalizer finalizer =
+          new QueryAuditExtension.ReportFinalizer(
+              new QueryAuditExtension(), outputDirectory, ReportFormat.HTML);
+
+      assertThatThrownBy(finalizer::close)
+          .isInstanceOf(ReportWriteException.class)
+          .hasMessageContaining("html report")
+          .hasMessageContaining(outputDirectory.resolve("index.html").toString())
+          .hasMessageContaining("audit run is incomplete")
+          .hasCauseInstanceOf(IOException.class)
+          .satisfies(
+              failure -> {
+                ReportWriteException exception = (ReportWriteException) failure;
+                assertThat(exception.format()).isEqualTo(ReportFormat.HTML);
+                assertThat(exception.reportPath()).isEqualTo(outputDirectory.resolve("index.html"));
+              });
+    }
+
     private void addReports() {
       HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
       aggregator.addReport(dummyReport("ClassA", "test1"));
       aggregator.addReport(dummyReport("ClassB", "test2"));
       aggregator.addReport(dummyReport("ClassC", "test3"));
+    }
+
+    private Path blockDirectory(Path tempDir) throws IOException {
+      Path outputDirectory = tempDir.resolve("not-a-directory");
+      Files.writeString(outputDirectory, "occupied");
+      return outputDirectory;
     }
 
     @Test
