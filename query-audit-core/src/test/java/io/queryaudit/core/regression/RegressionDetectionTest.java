@@ -204,6 +204,31 @@ class RegressionDetectionTest {
       assertThat(counts.updateCount()).isEqualTo(1);
       assertThat(counts.deleteCount()).isEqualTo(1);
     }
+
+    @Test
+    void commonTableExpressionsAreCountedByTheirMainStatement() {
+      List<QueryRecord> queries =
+          List.of(
+              record("WITH active AS (SELECT id FROM users) SELECT * FROM active"),
+              record(
+                  "WITH source AS (SELECT id, name FROM users) "
+                      + "INSERT INTO archive_users SELECT * FROM source"),
+              record(
+                  "WITH candidates AS (SELECT id FROM orders WHERE status = 'PENDING') "
+                      + "UPDATE orders SET status = 'PROCESSING' "
+                      + "WHERE id IN (SELECT id FROM candidates)"),
+              record(
+                  "WITH RECURSIVE descendants(id) AS (SELECT id FROM categories) "
+                      + "DELETE FROM categories WHERE id IN (SELECT id FROM descendants)"));
+
+      QueryCounts counts = QueryCounts.from(queries);
+
+      assertThat(counts.selectCount()).isEqualTo(1);
+      assertThat(counts.insertCount()).isEqualTo(1);
+      assertThat(counts.updateCount()).isEqualTo(1);
+      assertThat(counts.deleteCount()).isEqualTo(1);
+      assertThat(counts.totalCount()).isEqualTo(4);
+    }
   }
 
   // =====================================================================
