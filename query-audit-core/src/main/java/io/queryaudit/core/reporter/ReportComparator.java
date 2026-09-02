@@ -86,8 +86,8 @@ public final class ReportComparator {
 
   /** Compares two envelope documents (the string content of two {@code report.json} files). */
   public static Verdict compare(String beforeJson, String afterJson) {
-    List<Map<String, Object>> beforeReports = reports(beforeJson);
-    List<Map<String, Object>> afterReports = reports(afterJson);
+    List<Map<?, ?>> beforeReports = reports(beforeJson);
+    List<Map<?, ?>> afterReports = reports(afterJson);
     List<Finding> before = confirmedFindings(beforeReports);
     List<Finding> after = confirmedFindings(afterReports);
 
@@ -219,17 +219,94 @@ public final class ReportComparator {
 
   // ── Envelope reading ───────────────────────────────────────────────
 
-  @SuppressWarnings("unchecked")
-  private static List<Map<String, Object>> reports(String envelopeJson) {
+  private static List<Map<?, ?>> reports(String envelopeJson) {
     Object root = MiniJsonParser.parse(envelopeJson);
     if (!(root instanceof Map<?, ?> envelope)) {
       throw invalidEnvelope("expected a JSON object");
     }
     requireSupportedSchemaVersion(envelope);
-    if (!(envelope.get("reports") instanceof List<?>)) {
+    if (!(envelope.get("reports") instanceof List<?> entries)) {
       throw invalidEnvelope("reports must be an array");
     }
-    return (List<Map<String, Object>>) envelope.get("reports");
+
+    List<Map<?, ?>> reports = new ArrayList<>(entries.size());
+    for (int i = 0; i < entries.size(); i++) {
+      Object entry = entries.get(i);
+      if (!(entry instanceof Map<?, ?> report)) {
+        throw invalidEnvelope("reports[" + i + "] must be an object");
+      }
+      validateReport(report, i);
+      reports.add(report);
+    }
+    return reports;
+  }
+
+  private static void validateReport(Map<?, ?> report, int reportIndex) {
+    String path = "reports[" + reportIndex + "]";
+    requireNullableString(report, "testClass", path);
+    requireString(report, "testName", path);
+
+    Map<?, ?> summary = requireObject(report, "summary", path);
+    requireInteger(summary, "totalQueries", path + ".summary");
+    requireInteger(summary, "executionTimeMs", path + ".summary");
+
+    List<?> confirmedIssues = requireArray(report, "confirmedIssues", path);
+    for (int i = 0; i < confirmedIssues.size(); i++) {
+      Object entry = confirmedIssues.get(i);
+      String findingPath = path + ".confirmedIssues[" + i + "]";
+      if (!(entry instanceof Map<?, ?> finding)) {
+        throw invalidEnvelope(findingPath + " must be an object");
+      }
+      requireString(finding, "type", findingPath);
+      requireNullableString(finding, "query", findingPath);
+      requireNullableString(finding, "sourceLocation", findingPath);
+      requireNullableString(finding, "table", findingPath);
+      requireNullableString(finding, "detail", findingPath);
+    }
+  }
+
+  private static Map<?, ?> requireObject(Map<?, ?> object, String field, String path) {
+    Object value = requireField(object, field, path);
+    if (value instanceof Map<?, ?> map) {
+      return map;
+    }
+    throw invalidEnvelope(path + "." + field + " must be an object");
+  }
+
+  private static List<?> requireArray(Map<?, ?> object, String field, String path) {
+    Object value = requireField(object, field, path);
+    if (value instanceof List<?> list) {
+      return list;
+    }
+    throw invalidEnvelope(path + "." + field + " must be an array");
+  }
+
+  private static void requireString(Map<?, ?> object, String field, String path) {
+    Object value = requireField(object, field, path);
+    if (!(value instanceof String)) {
+      throw invalidEnvelope(path + "." + field + " must be a string");
+    }
+  }
+
+  private static void requireNullableString(Map<?, ?> object, String field, String path) {
+    Object value = requireField(object, field, path);
+    if (value != null && !(value instanceof String)) {
+      throw invalidEnvelope(path + "." + field + " must be a string or null");
+    }
+  }
+
+  private static void requireInteger(Map<?, ?> object, String field, String path) {
+    Object value = requireField(object, field, path);
+    if (!(value instanceof Long)) {
+      throw invalidEnvelope(path + "." + field + " must be an integer");
+    }
+  }
+
+  private static Object requireField(Map<?, ?> object, String field, String path) {
+    if (!object.containsKey(field)) {
+      throw invalidEnvelope(path + "." + field + " is required");
+    }
+    return object.get(field);
   }
 
   private static void requireSupportedSchemaVersion(Map<?, ?> envelope) {
@@ -253,18 +330,14 @@ public final class ReportComparator {
         "not a supported report.json envelope — " + reason + " (QueryAudit 0.5.0+)");
   }
 
-  @SuppressWarnings("unchecked")
-  private static List<Finding> confirmedFindings(List<Map<String, Object>> reports) {
+  private static List<Finding> confirmedFindings(List<Map<?, ?>> reports) {
     List<Finding> findings = new ArrayList<>();
-    for (Map<String, Object> report : reports) {
+    for (Map<?, ?> report : reports) {
       String testClass = (String) report.get("testClass");
       String testName = (String) report.get("testName");
-      Object confirmed = report.get("confirmedIssues");
-      if (!(confirmed instanceof List<?> list)) {
-        continue;
-      }
-      for (Object entry : list) {
-        Map<String, Object> issue = (Map<String, Object>) entry;
+      List<?> confirmed = (List<?>) report.get("confirmedIssues");
+      for (Object entry : confirmed) {
+        Map<?, ?> issue = (Map<?, ?>) entry;
         String type = (String) issue.get("type");
         String query = (String) issue.get("query");
         String sourceLocation = (String) issue.get("sourceLocation");
@@ -282,21 +355,19 @@ public final class ReportComparator {
     return findings;
   }
 
-  private static Set<TestRef> auditedTests(List<Map<String, Object>> reports) {
+  private static Set<TestRef> auditedTests(List<Map<?, ?>> reports) {
     Set<TestRef> tests = new LinkedHashSet<>();
-    for (Map<String, Object> report : reports) {
+    for (Map<?, ?> report : reports) {
       tests.add(new TestRef((String) report.get("testClass"), (String) report.get("testName")));
     }
     return tests;
   }
 
-  private static long sumSummary(List<Map<String, Object>> reports, String field) {
+  private static long sumSummary(List<Map<?, ?>> reports, String field) {
     long sum = 0;
-    for (Map<String, Object> report : reports) {
-      if (report.get("summary") instanceof Map<?, ?> summary
-          && summary.get(field) instanceof Long value) {
-        sum += value;
-      }
+    for (Map<?, ?> report : reports) {
+      Map<?, ?> summary = (Map<?, ?>) report.get("summary");
+      sum += (Long) summary.get(field);
     }
     return sum;
   }
