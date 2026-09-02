@@ -349,20 +349,22 @@ public class QueryAuditExtension
     // --- Connection-held-idle detection (issue #168) ---
     report = mergeConnectionHeldIdleIssues(report, interceptor, analyzer);
 
+    report = report.withIndexMetadata(indexMetadata);
+    QueryAuditReport outputReport = applyInfoVisibility(report, config.isShowInfo());
+
     List<BaselineEntry> baseline = analyzer.getBaseline();
     ConsoleReporter reporter =
         new ConsoleReporter(System.out, ConsoleReporter.detectColorSupport(), baseline);
-    reporter.report(report);
+    reporter.report(outputReport);
 
     // GitHub Actions annotations + step summary (issue #85).
     if ("true".equals(System.getenv("GITHUB_ACTIONS"))) {
-      new GitHubActionsReporter().report(report);
+      new GitHubActionsReporter().report(outputReport);
     }
 
-    // Attach the collected index metadata so report.json can embed the index state behind each
-    // finding (issue #165), then accumulate for the aggregated report.
-    report = report.withIndexMetadata(indexMetadata);
-    HtmlReportAggregator.getInstance().addReport(report);
+    // HTML and JSON are generated from this same accumulated view, keeping their visible findings
+    // and summary counts aligned with the console.
+    HtmlReportAggregator.getInstance().addReport(outputReport);
 
     // Query budgets and snapshot contracts are direct test assertions, not findings. They
     // intentionally bypass rule selection, suppressions, severity overrides, and issue baselines.
@@ -1103,6 +1105,30 @@ public class QueryAuditExtension
   }
 
   // ── Issue filtering & failure message ──────────────────────────────
+
+  /**
+   * Returns the report view used by every generated format. Hiding INFO findings does not alter the
+   * analysis result used for assertions, and the copy retains query statistics and index metadata.
+   */
+  static QueryAuditReport applyInfoVisibility(QueryAuditReport report, boolean showInfo) {
+    List<Issue> infoIssues = report.getInfoIssues();
+    if (showInfo || infoIssues == null || infoIssues.isEmpty()) {
+      return report;
+    }
+
+    QueryAuditReport visibleReport =
+        new QueryAuditReport(
+            report.getTestClass(),
+            report.getTestName(),
+            report.getConfirmedIssues(),
+            List.of(),
+            report.getAcknowledgedIssues(),
+            report.getAllQueries(),
+            report.getUniquePatternCount(),
+            report.getTotalQueryCount(),
+            report.getTotalExecutionTimeNanos());
+    return visibleReport.withIndexMetadata(report.getIndexMetadata());
+  }
 
   private List<Issue> filterFailableIssues(QueryAuditReport report, ExtensionContext context) {
     List<Issue> confirmed = report.getConfirmedIssues();

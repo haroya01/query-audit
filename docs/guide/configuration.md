@@ -36,7 +36,7 @@ All properties are optional. The table below lists every supported key under the
 | `max-queries` | `int` | `10000` | Maximum number of queries retained per test. If additional queries are dropped, the audit fails as incomplete. |
 | `report.format` | `String` | `"console"` | Report output format: `console`, `json`, or `html`. |
 | `report.output-dir` | `String` | `"build/reports/query-audit"` | Directory for HTML and JSON reports. |
-| `report.show-info` | `boolean` | `true` | Whether INFO-level issues appear in the report. |
+| `report.show-info` | `boolean` | `true` | Whether unacknowledged INFO findings appear in console, HTML, and JSON output. Visible summary counts follow this setting; analysis and query statistics are unchanged. |
 | `disabled-rules` | `List<String>` | `[]` | Rule codes to completely disable. |
 | `severity-overrides` | `Map<String,String>` | `{}` | Override severity per rule code (e.g., `select-all: WARNING`). |
 | `large-in-list.threshold` | `int` | `100` | Number of values in IN clause before flagging. |
