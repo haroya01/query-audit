@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 class AuditRunSchemaContractTest {
 
   private static final Path REPORT_SCHEMA =
-      Path.of("..", "docs", "schema", "report-1.1.schema.json");
+      Path.of("..", "docs", "schema", "report-1.2.schema.json");
 
   @Test
   void schemaRequiresTheSuiteResultFields() throws IOException {

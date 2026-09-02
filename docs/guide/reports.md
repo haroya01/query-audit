@@ -136,13 +136,18 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
 
 ```json
 {
-  "schemaVersion": "1.1.0",
+  "schemaVersion": "1.2.0",
   "outcome": "FAIL",
   "incompleteReasons": [],
   "reports": [
     {
-      "testClass": "com.example.OrderServiceTest",
+      "testId": "[engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:findRecentOrders()]",
+      "testClass": "OrderServiceTest",
       "testName": "findRecentOrders_shouldUseIndex",
+      "testSelector": {
+        "type": "junit-unique-id",
+        "value": "[engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:findRecentOrders()]"
+      },
       "summary": {
         "confirmedIssues": 2,
         "infoIssues": 1,
@@ -198,13 +203,15 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. The current version is **1.1.0**. QueryAudit 0.5.x wrote schema 1.0
+of silently misparsing it. The current version is **1.2.0**. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
-infer a trustworthy `PASS` from the per-test reports alone.
+infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, and
+schema 1.2 adds a stable test identity and reproducible selector to every per-test report.
 
-The published JSON Schemas validate both envelope versions. The deprecated Java method
-`JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` retains the legacy 1.0 shape because a list
-of reports cannot establish a run outcome. New callers should use
+The published JSON Schemas validate all three envelope versions. The deprecated Java method
+`JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` retains the exact legacy 1.0 shape, without
+run outcomes or stable identity fields. A list of reports cannot establish whether the audit
+completed or its policies passed. New callers should use
 `JsonReporter.toRunEnvelopeJson(AuditRunResult)`.
 
 ### Run outcomes
@@ -237,6 +244,18 @@ may be `null` when no additional context is available:
 
 Field notes for machine consumers:
 
+- `testId` is the machine identity. In JUnit reports it is the opaque value from
+  `ExtensionContext.getUniqueId()`, which distinguishes packages, nested classes, overloaded
+  methods, and test-template invocations. `testName` remains presentation text and may change
+  without changing the ID.
+- `testSelector.value` can be passed to JUnit Platform's
+  `DiscoverySelectors.selectUniqueId(...)` or the Console Launcher's `--select-unique-id` option.
+  Parameterized invocations use JUnit's invocation ordinal (`#1`, `#2`, and so on), so reordering
+  or inserting arguments can intentionally change those invocation IDs.
+- Reports created directly through `query-audit-core` have no framework selector. Their existing
+  constructors derive a deterministic `query-audit:core:v1:<sha256>` ID from the exact
+  `testClass` and `testName` inputs. Core callers should pass a fully qualified class name and a
+  stable logical test name when they need identity across runs.
 - Every finding carries `sourceLocation` (the innermost application stack frame of the
   offending query) and, for high-precision rules, a structured `remediation` hint
   (`kind` + `table` + `columns`) so tooling can act without parsing the prose `suggestion`.
@@ -246,10 +265,10 @@ Field notes for machine consumers:
   `null` means no metadata was collected (non-database test).
 
 The stable schema URLs are
-[`schema/report-1.0.schema.json`](https://github.com/haroya01/query-audit/blob/main/docs/schema/report-1.0.schema.json)
-and
-[`schema/report-1.1.schema.json`](https://github.com/haroya01/query-audit/blob/main/docs/schema/report-1.1.schema.json).
-[`schema/report.schema.json`](https://github.com/haroya01/query-audit/blob/main/docs/schema/report.schema.json)
+[`schema/report-1.0.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.0.schema.json),
+[`schema/report-1.1.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.1.schema.json), and
+[`schema/report-1.2.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.2.schema.json).
+[`schema/report.schema.json`](https://haroya01.github.io/query-audit/schema/report.schema.json)
 always points to the current version.
 
 !!! tip "CI artifact storage"
@@ -292,12 +311,25 @@ java -cp query-audit-core-<version>.jar \
 - **`verdict.json`**: `{outcome, incompleteReasons, newFindings, resolved, persisting, complete,
   missingTests, queryCountDelta, executionTimeMsDelta}` — the termination condition for automated
   fix loops.
+
+!!! warning "Java API compatibility in 0.6"
+    `ReportComparator.Finding` and `ReportComparator.TestRef` now prepend `testId` to their record
+    component lists. Their 0.5 six- and two-argument constructors remain and set `testId` to `null`,
+    so ordinary constructor calls continue to work. Record patterns and code that reflects on record
+    components or canonical constructors must adopt the new seven- and three-component shapes.
+    Generated `equals()`, `hashCode()`, and `toString()` methods now include `testId`.
+
 - Every test present in the baseline report must also appear in the candidate report. Otherwise,
   `complete` is `false`, `missingTests` identifies the absent tests, and their findings are not
-  classified as resolved. With the schema 1.x report fields, tests are matched by
-  `testClass|testName`.
-- **Matching key**: `testClass|testName|type|normalized-pattern|sourceLocation`, so findings
-  survive unrelated refactors as long as the statement shape and call site are stable.
+  classified as resolved. Schema 1.2 reports are matched by `testId`; verdict findings and missing
+  test entries carry that ID alongside their display fields.
+- **Matching key**: `testId|type|normalized-pattern|sourceLocation`, so findings survive display
+  name edits and unrelated refactors as long as the statement shape and call site are stable.
+- The comparator accepts schema 1.0 and 1.1 reports and uses an exact `testClass|testName` fallback
+  when one side lacks IDs. It rejects an ambiguous legacy match instead of assigning one old test
+  to multiple stable IDs. Re-record archived baselines with QueryAudit 0.6 when a suite contains
+  duplicate legacy identities. A display name changed before the first schema 1.2 run has no safe
+  fallback and is reported as a missing old test plus a new test.
 - Only **confirmed** findings participate; INFO advisories don't gate fix loops.
 - Schema 1.1+ inputs must carry a valid outcome and a consistent reason list. A valid
   `INCONCLUSIVE` input keeps its partial delta but forces comparison exit code `2`. Legacy schema

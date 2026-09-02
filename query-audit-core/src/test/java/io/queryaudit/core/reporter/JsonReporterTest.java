@@ -13,6 +13,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.model.TestSelector;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -271,6 +272,50 @@ class JsonReporterTest {
     assertThat(json).contains("\"testClass\": \"TC\"");
   }
 
+  @Test
+  void serializesStableIdentitySeparatelyFromDisplayName() {
+    String uniqueId = "[engine:junit-jupiter]/[class:com.example.OrderTest]/[method:loadsOrders()]";
+    QueryAuditReport report =
+        new QueryAuditReport(
+                "OrderTest",
+                "loads recent orders",
+                List.of(),
+                List.of(),
+                List.of(),
+                List.of(),
+                0,
+                0,
+                0L)
+            .withTestIdentity(uniqueId, new TestSelector("junit-unique-id", uniqueId));
+
+    String json = JsonReporter.toJson(report);
+
+    assertThat(json).contains("\"testId\": \"" + uniqueId.replace("/", "\\/") + "\"");
+    assertThat(json).contains("\"testName\": \"loads recent orders\"");
+    assertThat(json)
+        .contains(
+            "\"testSelector\": {\"type\": \"junit-unique-id\", \"value\": \""
+                + uniqueId.replace("/", "\\/")
+                + "\"}");
+  }
+
+  @Test
+  void legacyConstructorsUseADeterministicCoreIdentity() {
+    QueryAuditReport first =
+        new QueryAuditReport(
+            "com.example.OrderTest", "loadsOrders", List.of(), List.of(), List.of(), 0, 0, 0L);
+    QueryAuditReport same =
+        new QueryAuditReport(
+            "com.example.OrderTest", "loadsOrders", List.of(), List.of(), List.of(), 0, 0, 0L);
+    QueryAuditReport differentPackage =
+        new QueryAuditReport(
+            "org.example.OrderTest", "loadsOrders", List.of(), List.of(), List.of(), 0, 0, 0L);
+
+    assertThat(first.getTestId()).isEqualTo(same.getTestId()).startsWith("query-audit:core:v1:");
+    assertThat(first.getTestId()).isNotEqualTo(differentPackage.getTestId());
+    assertThat(first.getTestSelector()).isNull();
+  }
+
   // ------------------------------------------------------------------
   // Schema contract (issue #165)
   // ------------------------------------------------------------------
@@ -378,6 +423,8 @@ class JsonReporterTest {
     assertThat(json).contains("\"outcome\": \"PASS\"");
     assertThat(json).contains("\"incompleteReasons\": []");
     assertThat(json).contains("\"reports\": [");
+    assertThat(json).contains("\"testId\": \"");
+    assertThat(json).contains("\"testSelector\": null");
     assertThat(json).contains("\"testName\": \"first\"");
     assertThat(json).contains("\"testName\": \"second\"");
   }
@@ -385,10 +432,15 @@ class JsonReporterTest {
   @Test
   @SuppressWarnings("deprecation")
   void listOnlyEnvelopeRetainsTheLegacyShape() {
-    String json = JsonReporter.toEnvelopeJson(List.of());
+    QueryAuditReport report =
+        new QueryAuditReport("TC", "tm", List.of(), List.of(), List.of(), List.of(), 0, 0, 0L);
+
+    String json = JsonReporter.toEnvelopeJson(List.of(report));
 
     assertThat(json).contains("\"schemaVersion\": \"1.0.0\"");
     assertThat(json).doesNotContain("\"outcome\"").doesNotContain("\"incompleteReasons\"");
+    assertThat(json).doesNotContain("\"testId\"").doesNotContain("\"testSelector\"");
+    assertThat(json).contains("\"testClass\": \"TC\"").contains("\"testName\": \"tm\"");
   }
 
   @Test
@@ -417,6 +469,8 @@ class JsonReporterTest {
     IndexMetadata metadata = new IndexMetadata(Map.of());
     QueryAuditReport copy = report.withIndexMetadata(metadata);
     assertThat(copy.getIndexMetadata()).isSameAs(metadata);
+    assertThat(copy.getTestId()).isEqualTo(report.getTestId());
+    assertThat(copy.getTestSelector()).isEqualTo(report.getTestSelector());
     assertThat(copy.getTestClass()).isEqualTo("TC");
     assertThat(copy.getTestName()).isEqualTo("tm");
     assertThat(copy.getUniquePatternCount()).isEqualTo(3);

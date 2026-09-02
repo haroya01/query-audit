@@ -301,6 +301,12 @@ The separate query-count baseline uses `.query-audit-counts`. An existing malfor
 count file fails audit initialization. The error identifies the file and, for malformed entries,
 the line number. A missing file remains valid before the first count baseline is recorded.
 
+Count entries recorded by QueryAudit 0.6 use JUnit's stable unique ID in the existing seven-column
+file format: `@junit | <uniqueId> | select | insert | update | delete | total`. Older
+`testClass | displayName | ...` rows remain readable as a migration fallback. QueryAudit warns when
+it uses one and fails if that fallback also matches another stable test; re-run the full suite with
+`-DqueryAudit.updateBaseline=true` to record stable rows for every matching test.
+
 ---
 
 ## Severity Overrides

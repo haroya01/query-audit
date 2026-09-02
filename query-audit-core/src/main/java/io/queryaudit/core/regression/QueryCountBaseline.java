@@ -7,8 +7,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -19,13 +21,12 @@ import java.util.TreeMap;
  *
  * <pre>
  * # Query Guard Count Baseline
- * # Format: testClass | testMethod | selectCount | insertCount | updateCount | deleteCount | totalCount
- * RoomApiTest | testCreateRoom | 12 | 3 | 0 | 0 | 15
- * RoomApiTest | testDeleteRoom | 8 | 0 | 1 | 1 | 10
+ * # Format: identityType | identityValue | selectCount | insertCount | updateCount | deleteCount | totalCount
+ * &#64;junit | [engine:junit-jupiter]/[class:com.example.RoomApiTest]/[method:testCreateRoom()] | 12 | 3 | 0 | 0 | 15
  * </pre>
  *
- * <p>Blank lines and lines starting with {@code #} are ignored. Fields are separated by {@code |}
- * and trimmed.
+ * <p>The seven-field layout remains compatible with 0.5 files, whose first two fields are the test
+ * class and display name. Stable-ID entries always win when both formats identify the current test.
  *
  * @author haroya
  * @since 0.2.0
@@ -35,13 +36,52 @@ public final class QueryCountBaseline {
   /** Default baseline file name. */
   public static final String DEFAULT_FILE_NAME = ".query-audit-counts";
 
+  private static final String JUNIT_IDENTITY_TYPE = "@junit";
+
   private QueryCountBaseline() {
     /* utility class */
   }
 
-  /** Builds the lookup key for a test. */
+  /** Builds the stable lookup key for a test. */
+  public static String key(String testId) {
+    if (testId == null || testId.isBlank()) {
+      throw new IllegalArgumentException("testId must not be blank");
+    }
+    return legacyKey(JUNIT_IDENTITY_TYPE, testId);
+  }
+
+  /**
+   * Builds the legacy 0.5 lookup key. New integrations should use {@link #key(String)}.
+   *
+   * @deprecated display names do not uniquely identify parameterized, nested, or overloaded tests
+   */
+  @Deprecated(since = "0.6.0")
   public static String key(String testClass, String testMethod) {
-    return testClass + "|" + testMethod;
+    return legacyKey(testClass, testMethod);
+  }
+
+  /** Looks up a stable entry first, then an exact legacy class/display-name entry. */
+  public static QueryCounts find(
+      Map<String, QueryCounts> counts, String testId, String testClass, String testName) {
+    if (counts == null || counts.isEmpty()) {
+      return null;
+    }
+    QueryCounts stable = counts.get(key(testId));
+    return stable != null ? stable : counts.get(legacyKey(testClass, testName));
+  }
+
+  /** Returns whether lookup would need the ambiguous 0.5 class/display-name identity. */
+  public static boolean usesLegacyIdentity(
+      Map<String, QueryCounts> counts, String testId, String testClass, String testName) {
+    return counts != null
+        && !counts.containsKey(key(testId))
+        && hasLegacyIdentity(counts, testClass, testName);
+  }
+
+  /** Returns whether a 0.5 class/display-name entry exists for the supplied test. */
+  public static boolean hasLegacyIdentity(
+      Map<String, QueryCounts> counts, String testClass, String testName) {
+    return counts != null && counts.containsKey(legacyKey(testClass, testName));
   }
 
   /**
@@ -91,16 +131,22 @@ public final class QueryCountBaseline {
   }
 
   private static Map.Entry<String, QueryCounts> parseEntry(Path file, int lineNumber, String line) {
-    String[] parts = line.split("\\|", -1);
+    String[] parts = splitFields(line);
     if (parts.length != 7) {
       throw invalidFile(
           file, lineNumber, "expected 7 pipe-separated fields, found " + parts.length, null);
     }
 
-    String testClass = parts[0].trim();
-    String testMethod = parts[1].trim();
-    if (testClass.isEmpty() || testMethod.isEmpty()) {
-      throw invalidFile(file, lineNumber, "test class and test method must not be blank", null);
+    String identityType = parts[0].trim();
+    String identityValue = parts[1].trim();
+    if (identityType.isEmpty() || identityValue.isEmpty()) {
+      throw invalidFile(file, lineNumber, "test identity fields must not be blank", null);
+    }
+    if (JUNIT_IDENTITY_TYPE.equals(identityType)) {
+      identityValue = unescapeJunitIdentity(file, lineNumber, identityValue);
+      if (identityValue.isBlank()) {
+        throw invalidFile(file, lineNumber, "test identity fields must not be blank", null);
+      }
     }
 
     int selectCount = parseCount(file, lineNumber, "selectCount", parts[2]);
@@ -121,8 +167,72 @@ public final class QueryCountBaseline {
     }
 
     return Map.entry(
-        key(testClass, testMethod),
+        legacyKey(identityType, identityValue),
         new QueryCounts(selectCount, insertCount, updateCount, deleteCount, totalCount));
+  }
+
+  /**
+   * Splits stable-ID rows without treating an escaped pipe in the identity value as a delimiter.
+   * Legacy rows deliberately retain the original raw {@link String#split(String, int)} behavior so
+   * existing display names and backslashes keep their 0.5 meaning.
+   */
+  private static String[] splitFields(String line) {
+    int firstPipe = line.indexOf('|');
+    boolean stableEntry =
+        firstPipe >= 0 && JUNIT_IDENTITY_TYPE.equals(line.substring(0, firstPipe).trim());
+    if (!stableEntry) {
+      return line.split("\\|", -1);
+    }
+
+    List<String> fields = new ArrayList<>(7);
+    StringBuilder field = new StringBuilder();
+    for (int i = 0; i < line.length(); i++) {
+      char ch = line.charAt(i);
+      if (ch == '\\') {
+        field.append(ch);
+        if (i + 1 < line.length()) {
+          field.append(line.charAt(++i));
+        }
+      } else if (ch == '|') {
+        fields.add(field.toString());
+        field.setLength(0);
+      } else {
+        field.append(ch);
+      }
+    }
+    fields.add(field.toString());
+    return fields.toArray(String[]::new);
+  }
+
+  private static String unescapeJunitIdentity(Path file, int lineNumber, String value) {
+    StringBuilder unescaped = new StringBuilder(value.length());
+    for (int i = 0; i < value.length(); i++) {
+      char ch = value.charAt(i);
+      if (ch != '\\') {
+        unescaped.append(ch);
+        continue;
+      }
+      if (i + 1 >= value.length()) {
+        throw invalidFile(
+            file, lineNumber, "@junit identityValue ends with an incomplete escape", null);
+      }
+      char escaped = value.charAt(++i);
+      switch (escaped) {
+        case '|' -> unescaped.append('|');
+        case '\\' -> unescaped.append('\\');
+        case 'r' -> unescaped.append('\r');
+        case 'n' -> unescaped.append('\n');
+        default ->
+            throw invalidFile(
+                file,
+                lineNumber,
+                "unsupported @junit identityValue escape \\"
+                    + escaped
+                    + "; expected one of \\|, \\\\, \\r, \\n",
+                null);
+      }
+    }
+    return unescaped.toString();
   }
 
   private static int parseCount(Path file, int lineNumber, String field, String value) {
@@ -194,19 +304,28 @@ public final class QueryCountBaseline {
       writer.write("# " + headerTitle);
       writer.newLine();
       writer.write(
-          "# Format: testClass | testMethod | selectCount | insertCount | updateCount | deleteCount | totalCount");
+          "# Format: identityType | identityValue | selectCount | insertCount | updateCount | deleteCount | totalCount");
+      writer.newLine();
+      writer.write(
+          "# @junit identityValue escapes: \\| (pipe), \\\\ (backslash), \\r (CR), \\n (LF)");
       writer.newLine();
 
       for (Map.Entry<String, QueryCounts> entry : sorted.entrySet()) {
-        String[] keyParts = entry.getKey().split("\\|", 2);
-        if (keyParts.length < 2) continue;
-
         QueryCounts c = entry.getValue();
+        String[] keyParts = entry.getKey().split("\\|", 2);
+        if (keyParts.length < 2) {
+          continue;
+        }
+        String identityType = keyParts[0].trim();
+        String identityValue = keyParts[1].trim();
+        if (JUNIT_IDENTITY_TYPE.equals(identityType)) {
+          identityValue = escapeJunitIdentity(identityValue);
+        }
         writer.write(
             String.format(
                 "%s | %s | %d | %d | %d | %d | %d",
-                keyParts[0].trim(),
-                keyParts[1].trim(),
+                identityType,
+                identityValue,
                 c.selectCount(),
                 c.insertCount(),
                 c.updateCount(),
@@ -215,5 +334,23 @@ public final class QueryCountBaseline {
         writer.newLine();
       }
     }
+  }
+
+  private static String escapeJunitIdentity(String value) {
+    StringBuilder escaped = new StringBuilder(value.length());
+    for (int i = 0; i < value.length(); i++) {
+      switch (value.charAt(i)) {
+        case '|' -> escaped.append("\\|");
+        case '\\' -> escaped.append("\\\\");
+        case '\r' -> escaped.append("\\r");
+        case '\n' -> escaped.append("\\n");
+        default -> escaped.append(value.charAt(i));
+      }
+    }
+    return escaped.toString();
+  }
+
+  static String legacyKey(String identityType, String identityValue) {
+    return identityType + "|" + identityValue;
   }
 }

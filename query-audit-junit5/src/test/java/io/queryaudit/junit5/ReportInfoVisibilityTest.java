@@ -12,6 +12,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.model.TestSelector;
 import io.queryaudit.core.reporter.ConsoleReporter;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import io.queryaudit.core.reporter.JsonReporter;
@@ -33,6 +34,8 @@ class ReportInfoVisibilityTest {
 
   private static final String INFO_MARKER = "info-output-marker";
   private static final String CONFIRMED_MARKER = "confirmed-output-marker";
+  private static final String TEST_ID =
+      "[engine:junit-jupiter]/[class:VisibilityTest]/[method:showsConfiguredFindings()]";
 
   @TempDir Path tempDir;
 
@@ -128,6 +131,7 @@ class ReportInfoVisibilityTest {
             3,
             4,
             5_000_000L)
+        .withTestIdentity(TEST_ID, new TestSelector("junit-unique-id", TEST_ID))
         .withIndexMetadata(metadata);
   }
 
@@ -138,6 +142,8 @@ class ReportInfoVisibilityTest {
         .isEqualTo(analysisReport.getAcknowledgedIssues());
     assertThat(outputReport.getAllQueries()).isEqualTo(analysisReport.getAllQueries());
     assertThat(outputReport.getIndexMetadata()).isSameAs(analysisReport.getIndexMetadata());
+    assertThat(outputReport.getTestId()).isEqualTo(analysisReport.getTestId());
+    assertThat(outputReport.getTestSelector()).isEqualTo(analysisReport.getTestSelector());
     assertThat(outputReport.getUniquePatternCount()).isEqualTo(3);
     assertThat(outputReport.getTotalQueryCount()).isEqualTo(4);
     assertThat(outputReport.getTotalExecutionTimeNanos()).isEqualTo(5_000_000L);

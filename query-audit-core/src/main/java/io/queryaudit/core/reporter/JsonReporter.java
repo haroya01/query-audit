@@ -7,6 +7,7 @@ import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.model.TestSelector;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -32,7 +33,7 @@ public class JsonReporter implements Reporter {
    *
    * @since 0.5.0
    */
-  public static final String SCHEMA_VERSION = "1.1.0";
+  public static final String SCHEMA_VERSION = "1.2.0";
 
   private static final String LEGACY_SCHEMA_VERSION = "1.0.0";
 
@@ -53,7 +54,7 @@ public class JsonReporter implements Reporter {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
     sb.append("  \"schemaVersion\": \"").append(LEGACY_SCHEMA_VERSION).append("\",\n");
-    appendReports(sb, reports);
+    appendReports(sb, reports, false);
     sb.append("\n}");
     return sb.toString();
   }
@@ -71,15 +72,16 @@ public class JsonReporter implements Reporter {
     sb.append("  \"incompleteReasons\": ");
     appendIncompleteReasons(sb, runResult.incompleteReasons());
     sb.append(",\n");
-    appendReports(sb, runResult.reports());
+    appendReports(sb, runResult.reports(), true);
     sb.append("\n}");
     return sb.toString();
   }
 
-  private static void appendReports(StringBuilder sb, List<QueryAuditReport> reports) {
+  private static void appendReports(
+      StringBuilder sb, List<QueryAuditReport> reports, boolean includeIdentity) {
     sb.append("  \"reports\": [\n");
     for (int i = 0; i < reports.size(); i++) {
-      sb.append(toJson(reports.get(i)).indent(4).stripTrailing());
+      sb.append(toJson(reports.get(i), includeIdentity).indent(4).stripTrailing());
       if (i < reports.size() - 1) {
         sb.append(",");
       }
@@ -122,12 +124,24 @@ public class JsonReporter implements Reporter {
 
   /** Converts a report to its JSON representation. */
   public static String toJson(QueryAuditReport report) {
+    return toJson(report, true);
+  }
+
+  private static String toJson(QueryAuditReport report, boolean includeIdentity) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
 
+    if (includeIdentity) {
+      appendJsonString(sb, "  ", "testId", report.getTestId());
+      sb.append(",\n");
+    }
     appendJsonString(sb, "  ", "testClass", report.getTestClass());
     sb.append(",\n");
     appendJsonString(sb, "  ", "testName", report.getTestName());
+    if (includeIdentity) {
+      sb.append(",\n");
+      appendTestSelector(sb, report.getTestSelector());
+    }
     sb.append(",\n");
 
     // summary
@@ -262,6 +276,19 @@ public class JsonReporter implements Reporter {
       sb.append("\n");
     }
     sb.append(indent).append("]");
+  }
+
+  private static void appendTestSelector(StringBuilder sb, TestSelector selector) {
+    sb.append("  \"testSelector\": ");
+    if (selector == null) {
+      sb.append("null");
+      return;
+    }
+    sb.append("{");
+    appendJsonString(sb, "", "type", selector.type());
+    sb.append(", ");
+    appendJsonString(sb, "", "value", selector.value());
+    sb.append("}");
   }
 
   /**
