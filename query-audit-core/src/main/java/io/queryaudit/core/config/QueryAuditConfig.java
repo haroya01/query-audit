@@ -438,6 +438,7 @@ public class QueryAuditConfig {
       b.slowQueryWarningMs = source.slowQueryWarningMs;
       b.slowQueryErrorMs = source.slowQueryErrorMs;
       b.repositoryReturnTypeResolver = source.repositoryReturnTypeResolver;
+      b.includeSetupQueries = source.includeSetupQueries;
       b.countInsteadOfExistsEnabled = source.countInsteadOfExistsEnabled;
       b.auditMode = source.auditMode;
       b.connectionHeldIdleThresholdMs = source.connectionHeldIdleThresholdMs;

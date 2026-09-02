@@ -113,6 +113,7 @@ class AnnotationOverridesYmlReproductionTest {
               .writeAmplificationThreshold(22)
               .slowQueryWarningMs(1234L)
               .slowQueryErrorMs(5678L)
+              .includeSetupQueries(true)
               .auditMode(AuditMode.ALL)
               .ruleProfile(RuleProfile.RECOMMENDED)
               .addEnabledRule("force-index-hint")
@@ -175,6 +176,9 @@ class AnnotationOverridesYmlReproductionTest {
       assertThat(copy.getSlowQueryErrorMs())
           .as("slowQueryErrorMs")
           .isEqualTo(source.getSlowQueryErrorMs());
+      assertThat(copy.isIncludeSetupQueries())
+          .as("includeSetupQueries")
+          .isEqualTo(source.isIncludeSetupQueries());
       assertThat(copy.getAuditMode()).as("auditMode").isEqualTo(source.getAuditMode());
       assertThat(copy.getRuleProfile()).as("ruleProfile").isEqualTo(source.getRuleProfile());
       assertThat(copy.getEnabledRules()).as("enabledRules").isEqualTo(source.getEnabledRules());
