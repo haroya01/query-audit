@@ -38,6 +38,16 @@ class ReportComparatorTest {
     return JsonReporter.toEnvelopeJson(List.of(reports));
   }
 
+  private static String envelopeWithRawReport(String report) {
+    return "{\"schemaVersion\":\"1.0.0\",\"reports\":[" + report + "]}";
+  }
+
+  private static void assertInvalidReport(String report, String expectedMessage) {
+    assertThatThrownBy(() -> ReportComparator.compare(envelope(), envelopeWithRawReport(report)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(expectedMessage);
+  }
+
   private static QueryAuditReport report(String testName, List<Issue> confirmed, int queries) {
     return new QueryAuditReport(
         "OrderServiceTest",
@@ -236,6 +246,132 @@ class ReportComparatorTest {
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("invalid schemaVersion")
           .hasMessageContaining("major.minor.patch");
+    }
+
+    @Test
+    @DisplayName("does not treat a missing confirmedIssues array as a resolved finding")
+    void rejectsMissingConfirmedIssues() {
+      Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+      String baseline = envelope(report("findOrders", List.of(finding), 11));
+      String candidate =
+          envelopeWithRawReport(
+              """
+              {
+                "testClass": "OrderServiceTest",
+                "testName": "findOrders",
+                "summary": {"totalQueries": 7, "executionTimeMs": 2}
+              }
+              """);
+
+      assertThatThrownBy(() -> ReportComparator.compare(baseline, candidate))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("reports[0].confirmedIssues is required");
+    }
+
+    @Test
+    @DisplayName("rejects non-object report entries")
+    void rejectsNonObjectReportEntries() {
+      assertInvalidReport("42", "reports[0] must be an object");
+    }
+
+    @Test
+    @DisplayName("rejects non-object confirmed finding entries")
+    void rejectsNonObjectFindingEntries() {
+      assertInvalidReport(
+          """
+          {
+            "testClass": "OrderServiceTest",
+            "testName": "findOrders",
+            "summary": {"totalQueries": 7, "executionTimeMs": 2},
+            "confirmedIssues": [false]
+          }
+          """,
+          "reports[0].confirmedIssues[0] must be an object");
+    }
+
+    @Test
+    @DisplayName("requires correctly typed test identity fields")
+    void validatesTestIdentity() {
+      assertInvalidReport(
+          """
+          {
+            "testName": "findOrders",
+            "summary": {"totalQueries": 7, "executionTimeMs": 2},
+            "confirmedIssues": []
+          }
+          """,
+          "reports[0].testClass is required");
+      assertInvalidReport(
+          """
+          {
+            "testClass": "OrderServiceTest",
+            "testName": false,
+            "summary": {"totalQueries": 7, "executionTimeMs": 2},
+            "confirmedIssues": []
+          }
+          """,
+          "reports[0].testName must be a string");
+    }
+
+    @Test
+    @DisplayName("requires integer summary values used by the verdict")
+    void validatesSummaryValues() {
+      assertInvalidReport(
+          """
+          {
+            "testClass": "OrderServiceTest",
+            "testName": "findOrders",
+            "summary": {"totalQueries": "7", "executionTimeMs": 2},
+            "confirmedIssues": []
+          }
+          """,
+          "reports[0].summary.totalQueries must be an integer");
+      assertInvalidReport(
+          """
+          {
+            "testClass": "OrderServiceTest",
+            "testName": "findOrders",
+            "summary": {"totalQueries": 7},
+            "confirmedIssues": []
+          }
+          """,
+          "reports[0].summary.executionTimeMs is required");
+    }
+
+    @Test
+    @DisplayName("requires correctly typed confirmed finding fields used by the verdict")
+    void validatesFindingFields() {
+      assertInvalidReport(
+          """
+          {
+            "testClass": "OrderServiceTest",
+            "testName": "findOrders",
+            "summary": {"totalQueries": 7, "executionTimeMs": 2},
+            "confirmedIssues": [{
+              "query": "select * from order_items where order_id = ?",
+              "sourceLocation": null,
+              "table": "order_items",
+              "detail": "Query repeated 5 times"
+            }]
+          }
+          """,
+          "reports[0].confirmedIssues[0].type is required");
+      assertInvalidReport(
+          """
+          {
+            "testClass": "OrderServiceTest",
+            "testName": "findOrders",
+            "summary": {"totalQueries": 7, "executionTimeMs": 2},
+            "confirmedIssues": [{
+              "type": "n-plus-one",
+              "query": 7,
+              "sourceLocation": null,
+              "table": "order_items",
+              "detail": "Query repeated 5 times"
+            }]
+          }
+          """,
+          "reports[0].confirmedIssues[0].query must be a string or null");
     }
   }
 
