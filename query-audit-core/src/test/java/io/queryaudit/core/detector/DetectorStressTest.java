@@ -762,9 +762,17 @@ class DetectorStressTest {
     void baselineAcknowledgesAll_confirmedEmpty() {
       List<BaselineEntry> baseline =
           List.of(
-              new BaselineEntry("n-plus-one", null, null, null, "dev", "ok"),
-              new BaselineEntry("select-all", null, null, null, "dev", "ok"),
-              new BaselineEntry("unbounded-result-set", null, null, null, "dev", "ok"));
+              new BaselineEntry(
+                  "n-plus-one", null, null, "SELECT * FROM users WHERE id = ?", "dev", "ok"),
+              new BaselineEntry(
+                  "select-all", null, null, "SELECT * FROM users WHERE id = ?", "dev", "ok"),
+              new BaselineEntry(
+                  "unbounded-result-set",
+                  null,
+                  null,
+                  "SELECT * FROM users WHERE id = ?",
+                  "dev",
+                  "ok"));
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), baseline);
 
       List<QueryRecord> queries =
