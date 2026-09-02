@@ -1,5 +1,6 @@
 package io.queryaudit.spring;
 
+import io.queryaudit.core.config.QueryAuditConfig;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -309,7 +310,7 @@ public class QueryAuditProperties {
 
   public static class Report {
     private String format = "console";
-    private String outputDir = "build/reports/query-audit";
+    private String outputDir = QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR;
     private boolean showInfo = true;
 
     public String getFormat() {

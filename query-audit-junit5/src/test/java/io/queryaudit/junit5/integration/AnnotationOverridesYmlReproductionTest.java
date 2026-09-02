@@ -39,6 +39,7 @@ class AnnotationOverridesYmlReproductionTest {
 
       assertThat(config.getNPlusOneThreshold()).isEqualTo(defaults.getNPlusOneThreshold());
       assertThat(config.isFailOnDetection()).isEqualTo(defaults.isFailOnDetection());
+      assertThat(config.getReportOutputDir()).isEqualTo(QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR);
       assertThat(config.getSuppressPatterns()).isEmpty();
       assertThat(config.getDisabledRules()).isEmpty();
     }
@@ -97,6 +98,7 @@ class AnnotationOverridesYmlReproductionTest {
               .addSuppressPattern("pattern-b")
               .addSuppressQuery("SELECT 1")
               .showInfo(false)
+              .reportOutputDir("build/custom-query-reports")
               .baselinePath("/custom/baseline.json")
               .autoOpenReport(false)
               .maxQueries(555)
@@ -142,6 +144,9 @@ class AnnotationOverridesYmlReproductionTest {
           .as("suppressQueries")
           .isEqualTo(source.getSuppressQueries());
       assertThat(copy.isShowInfo()).as("showInfo").isEqualTo(source.isShowInfo());
+      assertThat(copy.getReportOutputDir())
+          .as("reportOutputDir")
+          .isEqualTo(source.getReportOutputDir());
       assertThat(copy.getBaselinePath()).as("baselinePath").isEqualTo(source.getBaselinePath());
       assertThat(copy.isAutoOpenReport()).as("autoOpenReport").isEqualTo(source.isAutoOpenReport());
       assertThat(copy.getMaxQueries()).as("maxQueries").isEqualTo(source.getMaxQueries());

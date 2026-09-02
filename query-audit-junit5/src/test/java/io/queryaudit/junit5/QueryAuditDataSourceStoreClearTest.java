@@ -2,12 +2,10 @@ package io.queryaudit.junit5;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.queryaudit.core.interceptor.QueryInterceptor;
-import java.util.Optional;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,12 +55,9 @@ class QueryAuditDataSourceStoreClearTest {
     when(ctx.getRequiredTestClass()).thenReturn((Class) String.class); // no enclosing class
     ExtensionContext root = mock(ExtensionContext.class);
     when(ctx.getRoot()).thenReturn(root);
-    when(ctx.getTestMethod()).thenReturn(Optional.empty());
     ExtensionContext.Store store = mock(ExtensionContext.Store.class);
     when(ctx.getStore(any(ExtensionContext.Namespace.class))).thenReturn(store);
     when(root.getStore(any(ExtensionContext.Namespace.class))).thenReturn(store);
-    when(store.getOrComputeIfAbsent(anyString(), any()))
-        .thenAnswer(inv -> mock(QueryAuditExtension.ReportFinalizer.class));
     return ctx;
   }
 

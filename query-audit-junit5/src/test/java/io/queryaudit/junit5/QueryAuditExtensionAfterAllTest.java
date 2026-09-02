@@ -1,14 +1,17 @@
 package io.queryaudit.junit5;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -18,7 +21,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtensionConfigurationException;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.io.TempDir;
 
 @DisplayName("QueryAuditExtension — afterAll report finalization (issue #41)")
 class QueryAuditExtensionAfterAllTest {
@@ -92,37 +97,98 @@ class QueryAuditExtensionAfterAllTest {
   // ── Tests ────────────────────────────────────────────────────────
 
   @Nested
-  @DisplayName("ReportFinalizer is registered once via getOrComputeIfAbsent")
+  @DisplayName("ReportFinalizer output directory")
   class FinalizerRegistration {
 
     @Test
-    @DisplayName("multiple afterAll calls register only one ReportFinalizer in root store")
-    void multipleAfterAllCalls_registerOneFinalizer() {
+    @DisplayName("plain JUnit uses the documented default directory")
+    void plainJUnitUsesDefaultDirectory() {
       ExtensionContext.Store rootStore = createRootStore();
       ExtensionContext root = mock(ExtensionContext.class);
       when(root.getStore(NAMESPACE)).thenReturn(rootStore);
 
       QueryAuditExtension extension = new QueryAuditExtension();
+      ExtensionContext context = mockContext(String.class, root, rootStore);
 
-      // Use top-level JDK classes (getEnclosingClass() == null) to pass the nested-class guard
-      Class<?>[] fakeClasses = {String.class, Integer.class, Long.class};
-      String[] classNames = {"String", "Integer", "Long"};
+      extension.registerReportFinalizer(context, QueryAuditConfig.defaults());
 
-      for (int i = 0; i < fakeClasses.length; i++) {
-        ExtensionContext ctx = mockContext(fakeClasses[i], root, rootStore);
-        HtmlReportAggregator.getInstance().addReport(dummyReport(classNames[i], "test1"));
-        extension.afterAll(ctx);
-      }
+      QueryAuditExtension.ReportFinalizer finalizer =
+          (QueryAuditExtension.ReportFinalizer)
+              rootStore.get(QueryAuditExtension.ReportFinalizer.class.getName());
+      assertThat(finalizer.outputDirectory())
+          .isEqualTo(
+              Path.of(QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR).toAbsolutePath().normalize());
+    }
 
-      // getOrComputeIfAbsent called 3 times (once per afterAll)
-      verify(rootStore, times(3))
+    @Test
+    @DisplayName("equivalent normalized directories share one finalizer")
+    void equivalentDirectoriesShareFinalizer(@TempDir Path tempDir) {
+      ExtensionContext.Store rootStore = createRootStore();
+      ExtensionContext root = mock(ExtensionContext.class);
+      when(root.getStore(NAMESPACE)).thenReturn(rootStore);
+
+      QueryAuditExtension extension = new QueryAuditExtension();
+      QueryAuditConfig directPath =
+          QueryAuditConfig.builder().reportOutputDir(tempDir.resolve("reports").toString()).build();
+      QueryAuditConfig equivalentPath =
+          QueryAuditConfig.builder()
+              .reportOutputDir(tempDir.resolve("nested/../reports").toString())
+              .build();
+
+      extension.registerReportFinalizer(mockContext(String.class, root, rootStore), directPath);
+      new QueryAuditExtension()
+          .registerReportFinalizer(mockContext(Integer.class, root, rootStore), equivalentPath);
+
+      verify(rootStore, times(2))
           .getOrComputeIfAbsent(eq(QueryAuditExtension.ReportFinalizer.class.getName()), any());
+      QueryAuditExtension.ReportFinalizer finalizer =
+          (QueryAuditExtension.ReportFinalizer)
+              rootStore.get(QueryAuditExtension.ReportFinalizer.class.getName());
+      assertThat(finalizer.outputDirectory()).isEqualTo(tempDir.resolve("reports"));
+    }
 
-      // But only one ReportFinalizer instance exists
-      Object finalizer = rootStore.get(QueryAuditExtension.ReportFinalizer.class.getName());
-      assertThat(finalizer)
-          .as("Only one ReportFinalizer should be registered")
-          .isInstanceOf(QueryAuditExtension.ReportFinalizer.class);
+    @Test
+    @DisplayName("different directories in one root fail with a clear configuration error")
+    void conflictingDirectoriesFail(@TempDir Path tempDir) {
+      ExtensionContext.Store rootStore = createRootStore();
+      ExtensionContext root = mock(ExtensionContext.class);
+      when(root.getStore(NAMESPACE)).thenReturn(rootStore);
+
+      QueryAuditExtension extension = new QueryAuditExtension();
+      Path firstDirectory = tempDir.resolve("first");
+      Path secondDirectory = tempDir.resolve("second");
+      QueryAuditConfig first =
+          QueryAuditConfig.builder().reportOutputDir(firstDirectory.toString()).build();
+      QueryAuditConfig second =
+          QueryAuditConfig.builder().reportOutputDir(secondDirectory.toString()).build();
+
+      extension.registerReportFinalizer(mockContext(String.class, root, rootStore), first);
+
+      assertThatThrownBy(
+              () ->
+                  extension.registerReportFinalizer(
+                      mockContext(Integer.class, root, rootStore), second))
+          .isInstanceOf(ExtensionConfigurationException.class)
+          .hasMessageContaining(firstDirectory.toString())
+          .hasMessageContaining(secondDirectory.toString())
+          .hasMessageContaining("query-audit.report.output-dir");
+    }
+
+    @Test
+    @DisplayName("a blank configured directory fails before the suite starts")
+    void blankDirectoryFails() {
+      ExtensionContext.Store rootStore = createRootStore();
+      ExtensionContext root = mock(ExtensionContext.class);
+      when(root.getStore(NAMESPACE)).thenReturn(rootStore);
+      QueryAuditConfig config = QueryAuditConfig.builder().reportOutputDir(" ").build();
+
+      assertThatThrownBy(
+              () ->
+                  new QueryAuditExtension()
+                      .registerReportFinalizer(mockContext(String.class, root, rootStore), config))
+          .isInstanceOf(ExtensionConfigurationException.class)
+          .hasMessageContaining("must not be blank")
+          .hasMessageContaining("query-audit.report.output-dir");
     }
   }
 
@@ -132,31 +198,36 @@ class QueryAuditExtensionAfterAllTest {
 
     @Test
     @DisplayName("close() writes complete report with all accumulated data")
-    void closeWritesCompleteReport() throws Exception {
+    void closeWritesCompleteReportToConfiguredDirectory(@TempDir Path tempDir) {
       HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
       aggregator.addReport(dummyReport("ClassA", "test1"));
       aggregator.addReport(dummyReport("ClassB", "test2"));
       aggregator.addReport(dummyReport("ClassC", "test3"));
 
       QueryAuditExtension extension = new QueryAuditExtension();
+      Path outputDirectory = tempDir.resolve("custom-reports");
       QueryAuditExtension.ReportFinalizer finalizer =
-          new QueryAuditExtension.ReportFinalizer(extension);
+          new QueryAuditExtension.ReportFinalizer(extension, outputDirectory);
 
       finalizer.close();
 
       assertThat(aggregator.getReports()).hasSize(3);
+      assertThat(outputDirectory.resolve("index.html")).exists();
+      assertThat(outputDirectory.resolve("report.json")).exists();
     }
 
     @Test
     @DisplayName("close() does nothing when no reports accumulated")
-    void closeWithNoReports_doesNothing() throws Exception {
+    void closeWithNoReports_doesNothing(@TempDir Path tempDir) {
       QueryAuditExtension extension = new QueryAuditExtension();
+      Path outputDirectory = tempDir.resolve("empty");
       QueryAuditExtension.ReportFinalizer finalizer =
-          new QueryAuditExtension.ReportFinalizer(extension);
+          new QueryAuditExtension.ReportFinalizer(extension, outputDirectory);
 
       finalizer.close();
 
       assertThat(HtmlReportAggregator.getInstance().getReports()).isEmpty();
+      assertThat(outputDirectory).doesNotExist();
     }
   }
 
