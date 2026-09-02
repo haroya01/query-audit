@@ -3,7 +3,10 @@ package io.queryaudit.junit5.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.queryaudit.junit5.DetectNPlusOne;
 import io.queryaudit.junit5.EnableQueryInspector;
+import io.queryaudit.junit5.ExpectMaxQueryCount;
+import io.queryaudit.junit5.ExpectQueries;
 import io.queryaudit.junit5.QueryAudit;
 import io.queryaudit.junit5.QueryAuditExclude;
 import io.queryaudit.junit5.QueryAuditExtension;
@@ -57,6 +60,37 @@ class AuditModeActivationTest {
   @EnableQueryInspector
   static class InspectorFixture {}
 
+  @DetectNPlusOne
+  static class DetectNPlusOneFixture {
+    @SuppressWarnings("unused")
+    void probe() {}
+
+    @QueryAuditExclude
+    @SuppressWarnings("unused")
+    void excludedProbe() {}
+  }
+
+  static class FocusedMethodFixture {
+    @DetectNPlusOne
+    @SuppressWarnings("unused")
+    void detectNPlusOne() {}
+
+    @ExpectQueries(select = 0)
+    @SuppressWarnings("unused")
+    void expectQueries() {}
+
+    @ExpectMaxQueryCount(0)
+    @SuppressWarnings("unused")
+    void expectMaxQueryCount() {}
+  }
+
+  @QueryAuditExclude
+  static class ExcludedFocusedFixture {
+    @ExpectQueries(select = 0)
+    @SuppressWarnings("unused")
+    void expectQueries() {}
+  }
+
   @QueryAudit
   static class AnnotatedOuterFixture {
     class NestedFixture {}
@@ -80,6 +114,15 @@ class AuditModeActivationTest {
       assertThat(computeActive(AnnotatedFixture.class)).isTrue();
       assertThat(computeActive(InspectorFixture.class)).isTrue();
       assertThat(computeActive(DirectExtendWithFixture.class)).isTrue();
+      assertThat(computeActive(DetectNPlusOneFixture.class)).isTrue();
+    }
+
+    @Test
+    @DisplayName("focused method annotations opt in without a class annotation")
+    void focusedMethodAnnotationsActivate() throws Exception {
+      assertThat(isAuditActive(FocusedMethodFixture.class, "detectNPlusOne")).isTrue();
+      assertThat(isAuditActive(FocusedMethodFixture.class, "expectQueries")).isTrue();
+      assertThat(isAuditActive(FocusedMethodFixture.class, "expectMaxQueryCount")).isTrue();
     }
 
     @Test
@@ -93,6 +136,13 @@ class AuditModeActivationTest {
     void methodExcludeWinsOverClassAnnotation() throws Exception {
       assertThat(isAuditActive(AnnotatedFixture.class, "probe")).isTrue();
       assertThat(isAuditActive(AnnotatedFixture.class, "excludedProbe")).isFalse();
+      assertThat(isAuditActive(DetectNPlusOneFixture.class, "excludedProbe")).isFalse();
+    }
+
+    @Test
+    @DisplayName("a class-level exclusion wins over a focused method annotation")
+    void classExcludeWinsOverFocusedAnnotation() throws Exception {
+      assertThat(isAuditActive(ExcludedFocusedFixture.class, "expectQueries")).isFalse();
     }
   }
 

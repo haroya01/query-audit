@@ -873,9 +873,10 @@ public class QueryAuditExtension
    * Decides whether this test class is audited. {@code @QueryAuditExclude} always wins. In {@link
    * AuditMode#ALL} every non-excluded class is audited; in {@link AuditMode#ANNOTATED} (the
    * default) only classes that opted in — via {@code @QueryAudit}, {@code @EnableQueryInspector},
-   * or a direct {@code @ExtendWith(QueryAuditExtension.class)} — are. The annotated-mode check
-   * exists because the ServiceLoader registration makes JUnit's extension autodetection register
-   * this extension suite-wide; without it, merely enabling autodetection would audit everything.
+   * one of the focused audit annotations, or a direct
+   * {@code @ExtendWith(QueryAuditExtension.class)} — are. The annotated-mode check exists because
+   * the ServiceLoader registration makes JUnit's extension autodetection register this extension
+   * suite-wide; without it, merely enabling autodetection would audit everything.
    */
   private boolean computeActive(ExtensionContext context) {
     if (isClassExcluded(context.getRequiredTestClass())) {
@@ -886,6 +887,7 @@ public class QueryAuditExtension
     }
     return findAnnotation(context) != null
         || hasEnableQueryInspector(context)
+        || hasFocusedAuditAnnotation(context)
         || hasDirectExtendWith(context);
   }
 
@@ -904,9 +906,9 @@ public class QueryAuditExtension
       return false;
     }
 
-    // A method-level @QueryAudit registers the extension too late for beforeAll. It must therefore
-    // opt the method in even if suite-wide autodetection cached the otherwise plain class as false.
-    if (method.isPresent() && method.get().isAnnotationPresent(QueryAudit.class)) {
+    // A method-level opt-in registers the extension too late for beforeAll. It must therefore opt
+    // the method in even if suite-wide autodetection cached the otherwise plain class as false.
+    if (method.isPresent() && isMethodLevelOptIn(method.get())) {
       return buildConfig(context).isEnabled();
     }
 
@@ -967,6 +969,32 @@ public class QueryAuditExtension
       clazz = clazz.getEnclosingClass();
     }
     return false;
+  }
+
+  private static boolean hasFocusedAuditAnnotation(ExtensionContext context) {
+    Optional<Method> method = context.getTestMethod();
+    if (method.isPresent() && hasFocusedAuditAnnotation(method.get())) {
+      return true;
+    }
+
+    Class<?> clazz = context.getRequiredTestClass();
+    while (clazz != null) {
+      if (clazz.isAnnotationPresent(DetectNPlusOne.class)) {
+        return true;
+      }
+      clazz = clazz.getEnclosingClass();
+    }
+    return false;
+  }
+
+  private static boolean isMethodLevelOptIn(Method method) {
+    return method.isAnnotationPresent(QueryAudit.class) || hasFocusedAuditAnnotation(method);
+  }
+
+  private static boolean hasFocusedAuditAnnotation(Method method) {
+    return method.isAnnotationPresent(DetectNPlusOne.class)
+        || method.isAnnotationPresent(ExpectQueries.class)
+        || method.isAnnotationPresent(ExpectMaxQueryCount.class);
   }
 
   // ── Config building ────────────────────────────────────────────────
