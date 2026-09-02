@@ -20,6 +20,11 @@ CREATE TABLE orders (
 CREATE INDEX idx_user_id ON orders (user_id);
 CREATE INDEX idx_status ON orders (status);
 
+CREATE TABLE audit_events (
+    event_type VARCHAR(64) NOT NULL,
+    payload TEXT
+);
+
 CREATE TABLE index_semantics (
     id BIGSERIAL PRIMARY KEY,
     tenant_id BIGINT NOT NULL,

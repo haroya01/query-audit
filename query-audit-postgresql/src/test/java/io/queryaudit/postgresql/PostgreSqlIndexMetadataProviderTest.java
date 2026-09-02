@@ -219,9 +219,7 @@ class PostgreSqlIndexMetadataProviderTest {
       for (String sql : sqlCaptor.getAllValues()) {
         if (sql.contains("reltuples")) cardinalitySqls.add(sql);
       }
-      assertThat(cardinalitySqls)
-          .as("cardinality query must be sent at least once")
-          .isNotEmpty();
+      assertThat(cardinalitySqls).as("cardinality query must be sent at least once").isNotEmpty();
 
       assertThat(cardinalitySqls.get(0))
           .as(
@@ -232,8 +230,8 @@ class PostgreSqlIndexMetadataProviderTest {
     }
 
     @Test
-    @DisplayName("skips tables that have no indexes")
-    void skipsTablesWithNoIndexes() throws SQLException {
+    @DisplayName("keeps tables that have no indexes")
+    void keepsTablesWithNoIndexes() throws SQLException {
       when(connection.createStatement()).thenReturn(statement);
       when(statement.executeQuery(contains("pg_tables"))).thenReturn(tableResultSet);
       when(tableResultSet.next()).thenReturn(true, false);
@@ -256,8 +254,9 @@ class PostgreSqlIndexMetadataProviderTest {
 
       IndexMetadata metadata = provider.getIndexMetadata(connection);
 
-      assertThat(metadata.isEmpty()).isTrue();
-      assertThat(metadata.hasTable("empty_table")).isFalse();
+      assertThat(metadata.isEmpty()).isFalse();
+      assertThat(metadata.hasTable("empty_table")).isTrue();
+      assertThat(metadata.getIndexesForTable("empty_table")).isEmpty();
     }
 
     @Test
