@@ -904,7 +904,12 @@ class EdgeCaseDetectorTest {
       List<BaselineEntry> baseline =
           List.of(
               new BaselineEntry(
-                  "n-plus-one", "users", null, null, "dev@example.com", "Independent calls"));
+                  "n-plus-one",
+                  "users",
+                  null,
+                  "select * from users where id = ?",
+                  "dev@example.com",
+                  "Independent calls"));
 
       Issue issue =
           new Issue(
@@ -924,7 +929,13 @@ class EdgeCaseDetectorTest {
     void issueDoesNotMatchBaseline_shouldNotBeAcknowledged() {
       List<BaselineEntry> baseline =
           List.of(
-              new BaselineEntry("n-plus-one", "orders", null, null, "dev@example.com", "Known"));
+              new BaselineEntry(
+                  "n-plus-one",
+                  "orders",
+                  null,
+                  "select * from users where id = ?",
+                  "dev@example.com",
+                  "Known"));
 
       Issue issue =
           new Issue(
@@ -941,16 +952,22 @@ class EdgeCaseDetectorTest {
 
     // --- Test 53: Baseline entry with null table = wildcard ---
     @Test
-    void baselineWithNullTable_matchesAnyTable() {
+    void baselineWithNullTable_matchesAnyTableForSameQuery() {
       List<BaselineEntry> baseline =
           List.of(
-              new BaselineEntry("n-plus-one", null, null, null, "dev@example.com", "All N+1 OK"));
+              new BaselineEntry(
+                  "n-plus-one",
+                  null,
+                  null,
+                  "select * from entities where id = ?",
+                  "dev@example.com",
+                  "Known query"));
 
       Issue issueUsers =
           new Issue(
               IssueType.N_PLUS_ONE,
               Severity.ERROR,
-              "select * from users where id = ?",
+              "select * from entities where id = ?",
               "users",
               null,
               "detail",
@@ -959,7 +976,7 @@ class EdgeCaseDetectorTest {
           new Issue(
               IssueType.N_PLUS_ONE,
               Severity.ERROR,
-              "select * from orders where id = ?",
+              "select * from entities where id = ?",
               "orders",
               null,
               "detail",
@@ -978,7 +995,7 @@ class EdgeCaseDetectorTest {
                   "missing-where-index",
                   "users",
                   "deleted_at",
-                  null,
+                  "select * from users where deleted_at is null",
                   "dev@example.com",
                   "Soft delete, low cardinality"));
 
@@ -995,7 +1012,7 @@ class EdgeCaseDetectorTest {
           new Issue(
               IssueType.MISSING_WHERE_INDEX,
               Severity.ERROR,
-              "select * from users where email = ?",
+              "select * from users where deleted_at is null",
               "users",
               "email",
               "detail",
@@ -1004,7 +1021,7 @@ class EdgeCaseDetectorTest {
           new Issue(
               IssueType.MISSING_WHERE_INDEX,
               Severity.ERROR,
-              "select * from orders where deleted_at is null",
+              "select * from users where deleted_at is null",
               "orders",
               "deleted_at",
               "detail",
@@ -1052,7 +1069,9 @@ class EdgeCaseDetectorTest {
 
     @Test
     void findMatch_returnsEntryWhenMatched() {
-      BaselineEntry entry = new BaselineEntry("n-plus-one", "users", null, null, "dev", "reason");
+      BaselineEntry entry =
+          new BaselineEntry(
+              "n-plus-one", "users", null, "select * from users where id = ?", "dev", "reason");
       List<BaselineEntry> baseline = List.of(entry);
 
       Issue issue =

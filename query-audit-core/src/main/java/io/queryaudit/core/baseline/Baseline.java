@@ -1,6 +1,7 @@
 package io.queryaudit.core.baseline;
 
 import io.queryaudit.core.model.Issue;
+import io.queryaudit.core.parser.SqlParser;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -18,13 +19,13 @@ import java.util.List;
  *
  * <pre>
  * # Query Guard Baseline — acknowledged issues
- * # Format: issue-code | table | column | acknowledged-by | reason
- * n-plus-one | user_suspensions | | dev@example.com | Independent login calls, not real N+1
- * missing-where-index | users | deleted_at | dev@example.com | Soft delete column, low cardinality
+ * # Format: issue-code | table | column | acknowledged-by | reason | query-pattern
+ * missing-where-index | users | deleted_at | dev@example.com | Low cardinality | select id from users where deleted_at is null
  * </pre>
  *
  * <p>Blank lines and lines starting with {@code #} are ignored. Fields are separated by {@code |}
- * and trimmed. An empty field is treated as {@code null}.
+ * and trimmed. An empty field is treated as {@code null}. Legacy five-field rows still load, but
+ * cannot acknowledge SQL-backed findings until a query pattern is added.
  *
  * @author haroya
  * @since 0.2.0
@@ -58,7 +59,7 @@ public final class Baseline {
           continue;
         }
 
-        String[] parts = trimmed.split("\\|", -1);
+        String[] parts = trimmed.split("\\|", 6);
         if (parts.length < 5) {
           // Malformed line — skip silently
           continue;
@@ -71,9 +72,10 @@ public final class Baseline {
         String column = blankToNull(parts[2]);
         String acknowledgedBy = blankToNull(parts[3]);
         String reason = blankToNull(parts[4]);
-        // queryPattern is not stored in this format (reserved for future use)
+        String queryPattern = parts.length == 6 ? SqlParser.normalize(blankToNull(parts[5])) : null;
 
-        entries.add(new BaselineEntry(issueCode, table, column, null, acknowledgedBy, reason));
+        entries.add(
+            new BaselineEntry(issueCode, table, column, queryPattern, acknowledgedBy, reason));
       }
     } catch (IOException e) {
       // Cannot read baseline — treat as empty
@@ -93,7 +95,8 @@ public final class Baseline {
     try (BufferedWriter writer = Files.newBufferedWriter(baselineFile, StandardCharsets.UTF_8)) {
       writer.write("# Query Guard Baseline — acknowledged issues");
       writer.newLine();
-      writer.write("# Format: issue-code | table | column | acknowledged-by | reason");
+      writer.write(
+          "# Format: issue-code | table | column | acknowledged-by | reason | query-pattern");
       writer.newLine();
 
       for (BaselineEntry entry : entries) {
@@ -106,6 +109,8 @@ public final class Baseline {
         writer.write(nullToEmpty(entry.acknowledgedBy()));
         writer.write(" | ");
         writer.write(nullToEmpty(entry.reason()));
+        writer.write(" | ");
+        writer.write(nullToEmpty(SqlParser.normalize(entry.queryPattern())));
         writer.newLine();
       }
     }
@@ -120,7 +125,7 @@ public final class Baseline {
     String table = issue.table();
     String column = issue.column();
     for (BaselineEntry entry : baseline) {
-      if (entry.matches(code, table, column)) {
+      if (entry.matches(code, table, column, issue.query())) {
         return true;
       }
     }
@@ -138,7 +143,7 @@ public final class Baseline {
     String table = issue.table();
     String column = issue.column();
     for (BaselineEntry entry : baseline) {
-      if (entry.matches(code, table, column)) {
+      if (entry.matches(code, table, column, issue.query())) {
         return entry;
       }
     }

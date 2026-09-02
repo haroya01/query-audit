@@ -268,7 +268,9 @@ class QueryAuditAnalyzerTest {
   void baselineAcknowledgedIssues_separatedFromConfirmed() {
     // Create a baseline entry that acknowledges "select-all" issues
     List<BaselineEntry> baseline =
-        List.of(new BaselineEntry("select-all", null, null, null, "dev", "acceptable"));
+        List.of(
+            new BaselineEntry(
+                "select-all", null, null, "SELECT * FROM users WHERE id = ?", "dev", "acceptable"));
     QueryAuditConfig config = QueryAuditConfig.defaults();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, baseline);
 

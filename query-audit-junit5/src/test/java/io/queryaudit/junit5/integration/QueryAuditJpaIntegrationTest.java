@@ -328,7 +328,13 @@ class QueryAuditJpaIntegrationTest {
       // With baseline acknowledging SELECT * on members
       List<BaselineEntry> baseline =
           List.of(
-              new BaselineEntry("select-all", "members", null, null, "dev", "JPA native query"));
+              new BaselineEntry(
+                  "select-all",
+                  "members",
+                  null,
+                  "SELECT * FROM members WHERE email = ?",
+                  "dev",
+                  "JPA native query"));
 
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), baseline);
       QueryAuditReport report = analyzer.analyze("baseline", queries, null);

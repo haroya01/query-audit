@@ -31,7 +31,7 @@ All properties are optional. The table below lists every supported key under the
 | `or-clause.threshold` | `int` | `3` | Number of OR conditions in a single WHERE clause before flagging. |
 | `suppress-patterns` | `List<String>` | `[]` | Issue codes or qualified patterns to suppress globally. See [Suppressing Issues](suppressing.md). |
 | `suppress-queries` | `List<String>` | `[]` | SQL query substrings to suppress (e.g., health-check queries). Case-insensitive substring match. |
-| `baseline-path` | `String` | `null` | Path to the query count baseline file. When `null`, uses `.query-audit-baseline` in the working directory. |
+| `baseline-path` | `String` | `null` | Path to the finding baseline file. When `null`, uses `.query-audit-baseline` in the working directory. |
 | `auto-open-report` | `boolean` | `true` | Whether to automatically open the HTML report in a browser after tests. |
 | `max-queries` | `int` | `10000` | Maximum number of queries retained per test. If additional queries are dropped, the audit fails as incomplete. |
 | `report.format` | `String` | `"console"` | Report output format: `console`, `json`, or `html`. |
