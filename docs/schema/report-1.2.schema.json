@@ -1,0 +1,207 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://haroya01.github.io/query-audit/schema/report-1.2.schema.json",
+  "title": "QueryAudit report.json schema 1.2",
+  "description": "Schema for the current 1.2 report.json envelope written in the configured output directory.",
+  "type": "object",
+  "required": ["schemaVersion", "outcome", "incompleteReasons", "reports"],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.2\\.\\d+$"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["PASS", "FAIL", "INCONCLUSIVE"]
+    },
+    "incompleteReasons": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/incompleteReason" }
+    },
+    "reports": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/testReport" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "outcome": { "const": "INCONCLUSIVE" } },
+        "required": ["outcome"]
+      },
+      "then": {
+        "properties": { "incompleteReasons": { "minItems": 1 } }
+      },
+      "else": {
+        "properties": { "incompleteReasons": { "maxItems": 0 } }
+      }
+    }
+  ],
+  "definitions": {
+    "incompleteReason": {
+      "type": "object",
+      "required": ["code", "detail"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "QUERY_LIMIT_REACHED",
+            "DATASOURCE_UNAVAILABLE",
+            "AUDIT_INITIALIZATION_FAILED",
+            "AUDIT_ANALYSIS_FAILED",
+            "CONTRACT_UNREADABLE",
+            "EXPECTED_TEST_MISSING",
+            "REPORT_WRITE_FAILED",
+            "UNSUPPORTED_SCHEMA"
+          ]
+        },
+        "detail": { "type": ["string", "null"] }
+      }
+    },
+    "testReport": {
+      "type": "object",
+      "required": [
+        "testId",
+        "testClass",
+        "testName",
+        "testSelector",
+        "summary",
+        "confirmedIssues",
+        "infoIssues",
+        "acknowledgedIssues",
+        "indexMetadata",
+        "queries"
+      ],
+      "properties": {
+        "testId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable test identity. JUnit reports use ExtensionContext.getUniqueId(); core-only reports use a deterministic fallback derived from testClass and testName."
+        },
+        "testClass": { "type": ["string", "null"] },
+        "testName": {
+          "type": "string",
+          "description": "Human-readable display name. Do not use this field as a machine identity."
+        },
+        "testSelector": {
+          "description": "Selector that reproduces this test through its originating framework, or null for core-only reports.",
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["type", "value"],
+              "properties": {
+                "type": { "type": "string", "minLength": 1 },
+                "value": { "type": "string", "minLength": 1 }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "summary": {
+          "type": "object",
+          "required": [
+            "confirmedIssues",
+            "infoIssues",
+            "acknowledgedIssues",
+            "uniquePatterns",
+            "totalQueries",
+            "executionTimeMs"
+          ],
+          "properties": {
+            "confirmedIssues": { "type": "integer" },
+            "infoIssues": { "type": "integer" },
+            "acknowledgedIssues": { "type": "integer" },
+            "uniquePatterns": { "type": "integer" },
+            "totalQueries": { "type": "integer" },
+            "executionTimeMs": { "type": "integer" }
+          }
+        },
+        "confirmedIssues": { "$ref": "#/definitions/issueArray" },
+        "infoIssues": { "$ref": "#/definitions/issueArray" },
+        "acknowledgedIssues": { "$ref": "#/definitions/issueArray" },
+        "indexMetadata": {
+          "description": "Index state of every table referenced by a finding, or null when no metadata was collected (non-database test). Keys are table names.",
+          "type": ["object", "null"],
+          "additionalProperties": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/index" }
+          }
+        },
+        "queries": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/query" }
+        }
+      }
+    },
+    "issueArray": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/issue" }
+    },
+    "issue": {
+      "type": "object",
+      "required": ["type", "severity", "query", "table", "column", "detail", "suggestion", "sourceLocation"],
+      "properties": {
+        "type": { "type": "string", "description": "Issue code, e.g. n-plus-one, missing-where-index." },
+        "severity": { "type": "string", "enum": ["ERROR", "WARNING", "INFO"] },
+        "query": { "type": ["string", "null"] },
+        "table": { "type": ["string", "null"] },
+        "column": { "type": ["string", "null"] },
+        "detail": { "type": ["string", "null"] },
+        "suggestion": { "type": ["string", "null"] },
+        "sourceLocation": {
+          "type": ["string", "null"],
+          "description": "Innermost application stack frame of the offending query."
+        },
+        "remediation": {
+          "description": "Structured fix hint, present only for high-precision rules.",
+          "type": "object",
+          "required": ["kind"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "add-index",
+                "batch-fetch",
+                "batch-insert",
+                "batch-update",
+                "add-where-clause",
+                "add-limit",
+                "select-explicit-columns"
+              ]
+            },
+            "table": { "type": "string" },
+            "columns": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    },
+    "index": {
+      "type": "object",
+      "required": ["name", "unique", "columns", "cardinality"],
+      "properties": {
+        "name": { "type": "string" },
+        "unique": { "type": "boolean" },
+        "columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Column names in index order."
+        },
+        "cardinality": {
+          "type": "integer",
+          "description": "Whole-index cardinality (SHOW INDEX semantics: the last column entry's cardinality)."
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "required": ["sql", "normalizedSql", "executionTimeNanos", "stackTrace"],
+      "properties": {
+        "sql": { "type": "string" },
+        "normalizedSql": { "type": ["string", "null"] },
+        "executionTimeNanos": { "type": "integer" },
+        "stackTrace": { "type": ["string", "null"] }
+      }
+    }
+  }
+}

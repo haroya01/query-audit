@@ -38,8 +38,10 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import javax.sql.DataSource;
+import org.junit.jupiter.api.TestFactory;
 import org.junit.jupiter.api.extension.*;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.platform.commons.support.AnnotationSupport;
 
 /**
  * JUnit 5 extension that intercepts SQL queries during test execution, analyzes them for
@@ -76,6 +78,7 @@ public class QueryAuditExtension
   private static final String KEY_RETURN_TYPE_RESOLVER = "returnTypeResolver";
   private static final String KEY_DATASOURCE_HOOK_CLEANUP = "dataSourceHookCleanup";
   private static final String KEY_METHOD_SCOPED_CLEANUP = "methodScopedCleanup";
+  private static final String KEY_AUDIT_RESOURCE_OWNER = "auditResourceOwner";
   private static final String KEY_ACTIVE = "auditActive";
   private static final String KEY_METHOD_ACTIVE = "methodAuditActive";
   private static final String KEY_AFTER_EACH_DONE = "afterEachDone";
@@ -83,6 +86,7 @@ public class QueryAuditExtension
   private static final String KEY_INITIALIZATION_FAILURE_RECORDED = "initializationFailureRecorded";
   private static final String KEY_CONTRACTS = "queryContracts";
   private static final String KEY_RUN_STATE = AuditRunState.class.getName();
+  private static final String KEY_LEGACY_IDENTITY_CLAIMS = "legacyIdentityClaims";
 
   private static final QueryCountRegressionDetector REGRESSION_DETECTOR =
       new QueryCountRegressionDetector();
@@ -213,6 +217,7 @@ public class QueryAuditExtension
     store.put(KEY_INTERCEPTOR, interceptor);
     store.put(KEY_DATASOURCE, dataSource);
     store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
+    store.put(KEY_AUDIT_RESOURCE_OWNER, contextIdentity(context));
 
     LazyLoadTracker tracker = null;
     try {
@@ -246,19 +251,7 @@ public class QueryAuditExtension
         store.put(
             KEY_METHOD_SCOPED_CLEANUP,
             (ExtensionContext.Store.CloseableResource)
-                () -> {
-                  try {
-                    if (methodTracker != null) {
-                      hibernateIntegration.unregisterTracker(context, methodTracker);
-                    }
-                  } finally {
-                    try {
-                      hookCleanup.run();
-                    } finally {
-                      QueryAuditDataSourceStore.clear();
-                    }
-                  }
-                });
+                () -> closeAuditScope(context, methodTracker, hookCleanup));
       }
     } catch (RuntimeException | Error failure) {
       rollbackInitialization(context, store, hookCleanup, tracker, failure);
@@ -281,6 +274,7 @@ public class QueryAuditExtension
     store.remove(KEY_INTERCEPTOR);
     store.remove(KEY_DATASOURCE);
     store.remove(KEY_DATASOURCE_HOOK_CLEANUP);
+    store.remove(KEY_AUDIT_RESOURCE_OWNER);
     store.remove(KEY_INDEX_METADATA);
     store.remove(KEY_RETURN_TYPE_RESOLVER);
     store.remove(KEY_COUNT_BASELINE);
@@ -290,17 +284,73 @@ public class QueryAuditExtension
     store.remove(KEY_METHOD_SCOPED_CLEANUP);
   }
 
-  private static void runCleanup(Throwable failure, Runnable cleanup) {
+  private static Throwable runCleanup(Throwable failure, Runnable cleanup) {
     try {
       cleanup.run();
+      return failure;
     } catch (RuntimeException | Error cleanupFailure) {
+      if (failure == null) {
+        return cleanupFailure;
+      }
       failure.addSuppressed(cleanupFailure);
+      return failure;
     }
+  }
+
+  private void closeAuditScope(
+      ExtensionContext context, LazyLoadTracker tracker, Runnable hookCleanup) {
+    Throwable failure = null;
+    if (tracker != null) {
+      failure = runCleanup(failure, () -> hibernateIntegration.unregisterTracker(context, tracker));
+    }
+    if (hookCleanup != null) {
+      failure = runCleanup(failure, hookCleanup);
+    }
+    failure = runCleanup(failure, QueryAuditDataSourceStore::clear);
+    failure = runCleanup(failure, () -> writeCountBaselineIfRequested(context));
+    failure = runCleanup(failure, () -> writeContractsIfRequested(context));
+
+    if (failure == null) {
+      return;
+    }
+
+    markIncomplete(
+        context,
+        IncompleteReasonCode.AUDIT_ANALYSIS_FAILED,
+        "Could not clean up QueryAudit for "
+            + auditTarget(context)
+            + ": "
+            + failureMessage(failure));
+    if (failure instanceof RuntimeException runtimeFailure) {
+      throw runtimeFailure;
+    }
+    throw (Error) failure;
   }
 
   private static String auditTarget(ExtensionContext context) {
     String target = context.getRequiredTestClass().getName();
     return context.getTestMethod().map(method -> target + "#" + method.getName()).orElse(target);
+  }
+
+  private static String contextIdentity(ExtensionContext context) {
+    String uniqueId = context.getUniqueId();
+    if (uniqueId != null && !uniqueId.isBlank()) {
+      return uniqueId;
+    }
+    String className = context.getRequiredTestClass().getName();
+    return context
+        .getTestMethod()
+        .map(method -> className + "#" + method.toGenericString())
+        .orElse(className);
+  }
+
+  private static boolean ownsAuditResources(ExtensionContext context) {
+    ExtensionContext.Store store = context.getStore(NAMESPACE);
+    if (store == null) {
+      return false;
+    }
+    String owner = store.get(KEY_AUDIT_RESOURCE_OWNER, String.class);
+    return contextIdentity(context).equals(owner);
   }
 
   private static void requireSameThreadExecution(ExtensionContext context) {
@@ -341,6 +391,7 @@ public class QueryAuditExtension
         return;
       }
       registerReportFinalizer(context, auditConfig);
+      rejectDynamicTestFactoryAudit(context);
       requireSameThreadExecution(context);
       initializeAudit(context, auditConfig, InitializationScope.METHOD);
 
@@ -356,6 +407,28 @@ public class QueryAuditExtension
       recordUnexpectedInitializationFailure(context, failure);
       throw failure;
     }
+  }
+
+  private static void rejectDynamicTestFactoryAudit(ExtensionContext context) {
+    Method method = context.getRequiredTestMethod();
+    if (!AnnotationSupport.isAnnotated(method, TestFactory.class)) {
+      return;
+    }
+
+    String target = auditTarget(context);
+    String detail =
+        "Dynamic-test audit rejected for "
+            + target
+            + ": JUnit lifecycle callbacks do not expose a separate audit boundary for each"
+            + " DynamicTest child.";
+    recordInitializationFailure(context, IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED, detail);
+    throw new ExtensionConfigurationException(
+        "QueryAudit: cannot audit @TestFactory method "
+            + target
+            + ". JUnit lifecycle callbacks surround the factory method, but do not expose a"
+            + " separate audit boundary for each DynamicTest child. Use ordinary @Test or"
+            + " @ParameterizedTest methods for audited cases, or add @QueryAuditExclude to this"
+            + " factory.");
   }
 
   // ── BeforeTestExecutionCallback ─────────────────────────────────────
@@ -470,6 +543,7 @@ public class QueryAuditExtension
     }
     String testClass = cls.getSimpleName();
     String testName = context.getDisplayName();
+    JUnitTestIdentity identity = JUnitTestIdentity.from(context);
     QueryAuditReport report = analyzer.analyze(testClass, testName, queries, indexMetadata);
 
     // Merge Hibernate-level N+1 issues if tracker is available
@@ -484,7 +558,9 @@ public class QueryAuditExtension
 
     // A truncated capture cannot be compared with a complete count baseline.
     if (!captureIncomplete) {
-      report = detectQueryCountRegression(context, report, queries, testClass, testName, analyzer);
+      report =
+          detectQueryCountRegression(
+              context, report, queries, identity.testId(), testClass, testName, analyzer);
     }
 
     // --- EXPLAIN-based detection ---
@@ -492,6 +568,7 @@ public class QueryAuditExtension
 
     // --- Connection-held-idle detection (issue #168) ---
     report = mergeConnectionHeldIdleIssues(report, interceptor, analyzer);
+    report = report.withTestIdentity(identity.testId(), identity.selector());
 
     report = report.withIndexMetadata(indexMetadata);
     QueryAuditReport outputReport = applyInfoVisibility(report, config.isShowInfo());
@@ -526,7 +603,7 @@ public class QueryAuditExtension
       checkExpectQueries(context, queries, testName);
 
       // --- Query snapshot contracts (issue #166) ---
-      checkQueryContracts(context, queries, testClass, testName);
+      checkQueryContracts(context, queries, identity.testId(), testClass, testName);
 
       // --- @DetectNPlusOne ---
       checkDetectNPlusOne(context, report, testName);
@@ -593,6 +670,7 @@ public class QueryAuditExtension
       ExtensionContext context,
       QueryAuditReport report,
       List<QueryRecord> queries,
+      String testId,
       String testClass,
       String testName,
       QueryAuditAnalyzer analyzer) {
@@ -601,7 +679,7 @@ public class QueryAuditExtension
 
     Map<String, QueryCounts> currentCounts = getCurrentCounts(context);
     if (currentCounts != null) {
-      currentCounts.put(QueryCountBaseline.key(testClass, testName), current);
+      currentCounts.put(QueryCountBaseline.key(testId), current);
     }
 
     Map<String, QueryCounts> countBaseline = getCountBaseline(context);
@@ -609,8 +687,10 @@ public class QueryAuditExtension
       return report;
     }
 
-    String key = QueryCountBaseline.key(testClass, testName);
-    QueryCounts baselineCounts = countBaseline.get(key);
+    trackLegacyIdentity(
+        context, "count baseline", countBaseline, testId, testClass, testName, true);
+    QueryCounts baselineCounts =
+        QueryCountBaseline.find(countBaseline, testId, testClass, testName);
 
     List<Issue> regressionIssues =
         REGRESSION_DETECTOR.detect(testClass, testName, current, baselineCounts);
@@ -621,25 +701,17 @@ public class QueryAuditExtension
 
   @Override
   public void afterAll(ExtensionContext context) {
-    if (context.getRequiredTestClass().getEnclosingClass() != null) {
+    if (context.getRequiredTestClass().getEnclosingClass() != null
+        && !ownsAuditResources(context)) {
       return;
     }
 
     // Release per-class resources so shared SessionFactory / reused worker threads don't leak
     // listeners or ThreadLocal holders across classes (issues #100, #101).
     LazyLoadTracker tracker = getLazyLoadTracker(context);
-    if (tracker != null) {
-      hibernateIntegration.unregisterTracker(context, tracker);
-    }
     Runnable hookCleanup =
         context.getStore(NAMESPACE).get(KEY_DATASOURCE_HOOK_CLEANUP, Runnable.class);
-    if (hookCleanup != null) {
-      hookCleanup.run();
-    }
-    QueryAuditDataSourceStore.clear();
-
-    writeCountBaselineIfRequested(context);
-    writeContractsIfRequested(context);
+    closeAuditScope(context, tracker, hookCleanup);
 
     Object storedFinalizer =
         context.getRoot().getStore(NAMESPACE).get(ReportFinalizer.class.getName());
@@ -947,20 +1019,29 @@ public class QueryAuditExtension
    * — the inline budget is the more specific contract and wins.
    */
   private void checkQueryContracts(
-      ExtensionContext context, List<QueryRecord> queries, String testClass, String testName) {
+      ExtensionContext context,
+      List<QueryRecord> queries,
+      String testId,
+      String testClass,
+      String testName) {
     if (isContractRecordMode()) {
-      return;
-    }
-    Optional<Method> method = context.getTestMethod();
-    if (method.isPresent() && method.get().getAnnotation(ExpectQueries.class) != null) {
       return;
     }
     Map<String, QueryCounts> contracts = getContracts(context);
     if (contracts == null || contracts.isEmpty()) {
       return;
     }
+    Optional<Method> method = context.getTestMethod();
+    boolean inlineContract =
+        method.isPresent() && method.get().getAnnotation(ExpectQueries.class) != null;
+    trackLegacyIdentity(
+        context, "query contract", contracts, testId, testClass, testName, !inlineContract);
+    if (inlineContract) {
+      return;
+    }
     String failure =
-        QueryContracts.verify(testClass, testName, QueryCounts.from(queries), contracts, queries);
+        QueryContracts.verify(
+            testId, testClass, testName, QueryCounts.from(queries), contracts, queries);
     if (failure != null) {
       throw new AuditCheckFailure(failure);
     }
@@ -1003,6 +1084,89 @@ public class QueryAuditExtension
       return Path.of(sysProp);
     }
     return Path.of(QueryContracts.DEFAULT_FILE_NAME);
+  }
+
+  private static void trackLegacyIdentity(
+      ExtensionContext context,
+      String policy,
+      Map<String, QueryCounts> entries,
+      String testId,
+      String testClass,
+      String testName,
+      boolean legacyFallbackEnabled) {
+    if (!QueryCountBaseline.hasLegacyIdentity(entries, testClass, testName)) {
+      return;
+    }
+    boolean usesLegacyIdentity =
+        legacyFallbackEnabled
+            && QueryCountBaseline.usesLegacyIdentity(entries, testId, testClass, testName);
+    String warningKey = policy + "|" + testClass + "|" + testName;
+    LegacyIdentityRegistry registry =
+        claimLegacyIdentity(context, warningKey, testId, usesLegacyIdentity, testClass, testName);
+    if (!usesLegacyIdentity) {
+      return;
+    }
+    if (registry.markWarning(warningKey)) {
+      System.err.println(
+          "[QueryAudit] Legacy 0.5 "
+              + policy
+              + " entry matched "
+              + testClass
+              + "."
+              + testName
+              + " by display name. Re-record the file to migrate this test to its stable JUnit"
+              + " ID; legacy entries cannot distinguish packages or duplicate display names.");
+    }
+  }
+
+  static LegacyIdentityRegistry claimLegacyIdentity(
+      ExtensionContext context,
+      String claimKey,
+      String testId,
+      boolean usesLegacyIdentity,
+      String testClass,
+      String testName) {
+    LegacyIdentityRegistry registry =
+        context
+            .getRoot()
+            .getStore(NAMESPACE)
+            .getOrComputeIfAbsent(
+                KEY_LEGACY_IDENTITY_CLAIMS,
+                ignored -> new LegacyIdentityRegistry(),
+                LegacyIdentityRegistry.class);
+    List<String> conflictingIds = registry.register(claimKey, testId, usesLegacyIdentity);
+    if (!conflictingIds.isEmpty()) {
+      throw new ExtensionConfigurationException(
+          "QueryAudit: ambiguous 0.5 identity for "
+              + testClass
+              + "."
+              + testName
+              + ". Stable JUnit IDs "
+              + String.join(", ", conflictingIds)
+              + " match the same legacy entry while at least one test still depends on that"
+              + " fallback. Re-record the policy file with QueryAudit"
+              + " 0.6+.");
+    }
+    return registry;
+  }
+
+  static final class LegacyIdentityRegistry {
+
+    private final Map<String, Map<String, Boolean>> claims = new HashMap<>();
+    private final Set<String> warnings = new HashSet<>();
+
+    synchronized List<String> register(String claimKey, String testId, boolean usesLegacyIdentity) {
+      Map<String, Boolean> claimsForEntry =
+          claims.computeIfAbsent(claimKey, ignored -> new LinkedHashMap<>());
+      claimsForEntry.merge(testId, usesLegacyIdentity, Boolean::logicalOr);
+      boolean fallbackIsAmbiguous =
+          claimsForEntry.size() > 1 && claimsForEntry.containsValue(Boolean.TRUE);
+      return fallbackIsAmbiguous ? List.copyOf(claimsForEntry.keySet()) : List.of();
+    }
+
+    synchronized boolean markWarning(String warningKey) {
+      return warnings.add(warningKey);
+    }
   }
 
   @SuppressWarnings("unchecked")
@@ -1430,7 +1594,9 @@ public class QueryAuditExtension
             report.getUniquePatternCount(),
             report.getTotalQueryCount(),
             report.getTotalExecutionTimeNanos());
-    return visibleReport.withIndexMetadata(report.getIndexMetadata());
+    return visibleReport
+        .withTestIdentity(report.getTestId(), report.getTestSelector())
+        .withIndexMetadata(report.getIndexMetadata());
   }
 
   private List<Issue> filterFailableIssues(QueryAuditReport report, ExtensionContext context) {

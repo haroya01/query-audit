@@ -8,6 +8,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,10 +25,11 @@ import java.util.regex.Pattern;
  * which confirmed findings were resolved, which are new, which persist, and how the query profile
  * moved.
  *
- * <p><strong>Matching key:</strong> {@code testClass|testName|type|query|sourceMethod}. The query
- * field holds the normalized statement pattern, and source line numbers are removed before
- * matching, so findings survive line-only refactors while still distinguishing different call
- * sites. Only <em>confirmed</em> findings participate — INFO advisories don't gate fix loops.
+ * <p><strong>Matching key:</strong> {@code testId|type|query|sourceMethod}. The query field holds
+ * the normalized statement pattern, and source line numbers are removed before matching, so
+ * findings survive display-name and line-only changes while still distinguishing different tests
+ * and call sites. Only <em>confirmed</em> findings participate — INFO advisories don't gate fix
+ * loops.
  *
  * <p><strong>Exit contract</strong> (CLI): {@code 0} for {@link AuditOutcome#PASS}, {@code 1} for
  * {@link AuditOutcome#FAIL}, and {@code 2} for {@link AuditOutcome#INCONCLUSIVE} or usage/parse
@@ -39,6 +42,7 @@ public final class ReportComparator {
 
   private static final int SUPPORTED_SCHEMA_MAJOR = 1;
   private static final int FIRST_OUTCOME_SCHEMA_MINOR = 1;
+  private static final int FIRST_STABLE_IDENTITY_SCHEMA_MINOR = 2;
   private static final Pattern SCHEMA_VERSION_PATTERN = Pattern.compile("^(\\d+)\\.(\\d+)\\.\\d+$");
   private static final Pattern SOURCE_LINE_NUMBER = Pattern.compile("(?m):-?\\d+$");
 
@@ -46,17 +50,46 @@ public final class ReportComparator {
     // static entry points only
   }
 
-  /** One confirmed finding, reduced to its matching key plus display fields. */
+  /** One confirmed finding, reduced to its stable identity, matching key, and display fields. */
   public record Finding(
-      String testClass, String testName, String type, String table, String detail, String key) {}
+      String testId,
+      String testClass,
+      String testName,
+      String type,
+      String table,
+      String detail,
+      String key) {
+
+    /** Retains the 0.5 constructor signature for ordinary constructor calls. */
+    public Finding(
+        String testClass, String testName, String type, String table, String detail, String key) {
+      this(null, testClass, testName, type, table, detail, key);
+    }
+  }
 
   /** Identifies an audited test using the fields available in the schema 1.x report envelope. */
-  public record TestRef(String testClass, String testName) {}
+  public record TestRef(String testId, String testClass, String testName) {
+
+    /** Retains the 0.5 constructor signature for ordinary constructor calls. */
+    public TestRef(String testClass, String testName) {
+      this(null, testClass, testName);
+    }
+  }
+
+  private record LegacyRef(String testClass, String testName) {}
+
+  private record ParsedReport(Map<?, ?> value, String testId, TestRef ref) {
+    boolean hasStableId() {
+      return testId != null;
+    }
+  }
+
+  private record ComparedFinding(Finding finding, String testIdentity) {}
 
   private record Envelope(
       AuditOutcome outcome,
       List<AuditIncompleteReason> incompleteReasons,
-      List<Map<?, ?>> reports) {}
+      List<ParsedReport> reports) {}
 
   /** The comparison result; incomplete comparisons cannot produce a trustworthy success signal. */
   public record Verdict(
@@ -147,28 +180,42 @@ public final class ReportComparator {
           new AuditIncompleteReason(IncompleteReasonCode.UNSUPPORTED_SCHEMA, e.getMessage()));
     }
 
-    List<Map<?, ?>> beforeReports = beforeEnvelope.reports();
-    List<Map<?, ?>> afterReports = afterEnvelope.reports();
-    List<Finding> before = confirmedFindings(beforeReports);
-    List<Finding> after = confirmedFindings(afterReports);
+    List<ParsedReport> beforeReports = beforeEnvelope.reports();
+    List<ParsedReport> afterReports = afterEnvelope.reports();
+    Map<ParsedReport, String> beforeIdentities = comparisonIdentities(beforeReports, afterReports);
+    Map<ParsedReport, String> afterIdentities = comparisonIdentities(afterReports, beforeReports);
+    List<ComparedFinding> before = confirmedFindings(beforeReports, beforeIdentities);
+    List<ComparedFinding> after = confirmedFindings(afterReports, afterIdentities);
 
     Set<String> beforeKeys = new LinkedHashSet<>();
-    before.forEach(f -> beforeKeys.add(f.key()));
+    before.forEach(f -> beforeKeys.add(f.finding().key()));
     Set<String> afterKeys = new LinkedHashSet<>();
-    after.forEach(f -> afterKeys.add(f.key()));
+    after.forEach(f -> afterKeys.add(f.finding().key()));
 
-    Set<TestRef> beforeTests = auditedTests(beforeReports);
-    Set<TestRef> afterTests = auditedTests(afterReports);
+    Map<String, TestRef> beforeTests = auditedTests(beforeReports, beforeIdentities);
+    Map<String, TestRef> afterTests = auditedTests(afterReports, afterIdentities);
     List<TestRef> missingTests =
-        beforeTests.stream().filter(test -> !afterTests.contains(test)).toList();
+        beforeTests.entrySet().stream()
+            .filter(test -> !afterTests.containsKey(test.getKey()))
+            .map(Map.Entry::getValue)
+            .toList();
 
     List<Finding> resolved =
         before.stream()
-            .filter(f -> afterTests.contains(new TestRef(f.testClass(), f.testName())))
-            .filter(f -> !afterKeys.contains(f.key()))
+            .filter(f -> afterTests.containsKey(f.testIdentity()))
+            .filter(f -> !afterKeys.contains(f.finding().key()))
+            .map(ComparedFinding::finding)
             .toList();
-    List<Finding> fresh = after.stream().filter(f -> !beforeKeys.contains(f.key())).toList();
-    List<Finding> persisting = after.stream().filter(f -> beforeKeys.contains(f.key())).toList();
+    List<Finding> fresh =
+        after.stream()
+            .filter(f -> !beforeKeys.contains(f.finding().key()))
+            .map(ComparedFinding::finding)
+            .toList();
+    List<Finding> persisting =
+        after.stream()
+            .filter(f -> beforeKeys.contains(f.finding().key()))
+            .map(ComparedFinding::finding)
+            .toList();
 
     List<AuditIncompleteReason> incompleteReasons = new ArrayList<>();
     incompleteReasons.addAll(beforeEnvelope.incompleteReasons());
@@ -337,18 +384,25 @@ public final class ReportComparator {
       throw invalidEnvelope("expected a JSON object");
     }
     SchemaVersion schemaVersion = requireSupportedSchemaVersion(envelope);
+    boolean stableIdentityRequired = schemaVersion.minor() >= FIRST_STABLE_IDENTITY_SCHEMA_MINOR;
     if (!(envelope.get("reports") instanceof List<?> entries)) {
       throw invalidEnvelope("reports must be an array");
     }
 
-    List<Map<?, ?>> reports = new ArrayList<>(entries.size());
+    List<ParsedReport> reports = new ArrayList<>(entries.size());
     for (int i = 0; i < entries.size(); i++) {
       Object entry = entries.get(i);
       if (!(entry instanceof Map<?, ?> report)) {
         throw invalidEnvelope("reports[" + i + "] must be an object");
       }
-      validateReport(report, i);
-      reports.add(report);
+      validateReport(report, i, stableIdentityRequired);
+      String testId = optionalString(report, "testId");
+      reports.add(
+          new ParsedReport(
+              report,
+              testId,
+              new TestRef(
+                  testId, (String) report.get("testClass"), (String) report.get("testName"))));
     }
 
     if (schemaVersion.minor() < FIRST_OUTCOME_SCHEMA_MINOR) {
@@ -420,8 +474,18 @@ public final class ReportComparator {
     return reasons;
   }
 
-  private static void validateReport(Map<?, ?> report, int reportIndex) {
+  private static void validateReport(
+      Map<?, ?> report, int reportIndex, boolean stableIdentityRequired) {
     String path = "reports[" + reportIndex + "]";
+    if (stableIdentityRequired) {
+      requireNonBlankString(report, "testId", path);
+      requireTestSelector(report, path);
+    } else if (report.containsKey("testId")) {
+      requireNonBlankString(report, "testId", path);
+      if (report.containsKey("testSelector")) {
+        requireTestSelector(report, path);
+      }
+    }
     requireNullableString(report, "testClass", path);
     requireString(report, "testName", path);
 
@@ -465,6 +529,30 @@ public final class ReportComparator {
     if (!(value instanceof String)) {
       throw invalidEnvelope(path + "." + field + " must be a string");
     }
+  }
+
+  private static void requireNonBlankString(Map<?, ?> object, String field, String path) {
+    Object value = requireField(object, field, path);
+    if (!(value instanceof String text) || text.isBlank()) {
+      throw invalidEnvelope(path + "." + field + " must be a non-blank string");
+    }
+  }
+
+  private static void requireTestSelector(Map<?, ?> report, String path) {
+    Object value = requireField(report, "testSelector", path);
+    if (value == null) {
+      return;
+    }
+    if (!(value instanceof Map<?, ?> selector)) {
+      throw invalidEnvelope(path + ".testSelector must be an object or null");
+    }
+    requireNonBlankString(selector, "type", path + ".testSelector");
+    requireNonBlankString(selector, "value", path + ".testSelector");
+  }
+
+  private static String optionalString(Map<?, ?> object, String field) {
+    Object value = object.get(field);
+    return value instanceof String text ? text : null;
   }
 
   private static void requireNullableString(Map<?, ?> object, String field, String path) {
@@ -530,26 +618,115 @@ public final class ReportComparator {
     }
   }
 
-  private static List<Finding> confirmedFindings(List<Map<?, ?>> reports) {
-    List<Finding> findings = new ArrayList<>();
-    for (Map<?, ?> report : reports) {
-      String testClass = (String) report.get("testClass");
-      String testName = (String) report.get("testName");
+  private static Map<ParsedReport, String> comparisonIdentities(
+      List<ParsedReport> reports, List<ParsedReport> otherReports) {
+    validateUniqueIdentities(reports);
+    validateLegacyMatches(reports, otherReports);
+
+    Set<String> otherStableIds = new LinkedHashSet<>();
+    Set<LegacyRef> otherLegacyIds = new LinkedHashSet<>();
+    for (ParsedReport other : otherReports) {
+      if (other.hasStableId()) {
+        otherStableIds.add(other.testId());
+      } else {
+        otherLegacyIds.add(legacyRef(other.ref()));
+      }
+    }
+
+    Map<ParsedReport, String> identities = new IdentityHashMap<>();
+    for (ParsedReport report : reports) {
+      if (!report.hasStableId()) {
+        identities.put(report, legacyIdentity(report.ref()));
+        continue;
+      }
+
+      boolean stableMatch = otherStableIds.contains(report.testId());
+      boolean legacyMatch = !stableMatch && otherLegacyIds.contains(legacyRef(report.ref()));
+      identities.put(
+          report, legacyMatch ? legacyIdentity(report.ref()) : stableIdentity(report.testId()));
+    }
+    return identities;
+  }
+
+  private static void validateUniqueIdentities(List<ParsedReport> reports) {
+    Set<String> stableIds = new LinkedHashSet<>();
+    Set<LegacyRef> legacyIds = new LinkedHashSet<>();
+    for (ParsedReport report : reports) {
+      if (report.hasStableId()) {
+        if (!stableIds.add(report.testId())) {
+          throw invalidEnvelope("duplicate testId " + report.testId());
+        }
+      } else if (!legacyIds.add(legacyRef(report.ref()))) {
+        throw ambiguousLegacyIdentity(report.ref());
+      }
+    }
+  }
+
+  private static void validateLegacyMatches(
+      List<ParsedReport> reports, List<ParsedReport> otherReports) {
+    Map<LegacyRef, Integer> otherIdentityCounts = new LinkedHashMap<>();
+    for (ParsedReport other : otherReports) {
+      otherIdentityCounts.merge(legacyRef(other.ref()), 1, Integer::sum);
+    }
+    for (ParsedReport report : reports) {
+      if (report.hasStableId()) {
+        continue;
+      }
+      if (otherIdentityCounts.getOrDefault(legacyRef(report.ref()), 0) > 1) {
+        throw ambiguousLegacyIdentity(report.ref());
+      }
+    }
+  }
+
+  private static IllegalArgumentException ambiguousLegacyIdentity(TestRef test) {
+    return invalidEnvelope(
+        "legacy test identity is ambiguous for "
+            + describe(test)
+            + "; regenerate the 0.5 report with QueryAudit 0.6+");
+  }
+
+  private static String stableIdentity(String testId) {
+    return "stable:" + testId;
+  }
+
+  private static String legacyIdentity(TestRef ref) {
+    return "legacy:" + lengthPrefixed(ref.testClass()) + lengthPrefixed(ref.testName());
+  }
+
+  private static LegacyRef legacyRef(TestRef ref) {
+    return new LegacyRef(ref.testClass(), ref.testName());
+  }
+
+  private static String lengthPrefixed(String value) {
+    return value == null ? "-:" : value.length() + ":" + value;
+  }
+
+  private static List<ComparedFinding> confirmedFindings(
+      List<ParsedReport> reports, Map<ParsedReport, String> identities) {
+    List<ComparedFinding> findings = new ArrayList<>();
+    for (ParsedReport parsedReport : reports) {
+      Map<?, ?> report = parsedReport.value();
+      String testClass = parsedReport.ref().testClass();
+      String testName = parsedReport.ref().testName();
+      String testIdentity = identities.get(parsedReport);
       List<?> confirmed = (List<?>) report.get("confirmedIssues");
       for (Object entry : confirmed) {
         Map<?, ?> issue = (Map<?, ?>) entry;
         String type = (String) issue.get("type");
         String query = (String) issue.get("query");
         String sourceLocation = stableSourceLocation((String) issue.get("sourceLocation"));
-        String key = testClass + "|" + testName + "|" + type + "|" + query + "|" + sourceLocation;
+        String key = testIdentity + "|" + type + "|" + query + "|" + sourceLocation;
         findings.add(
-            new Finding(
-                testClass,
-                testName,
-                type,
-                (String) issue.get("table"),
-                (String) issue.get("detail"),
-                key));
+            new ComparedFinding(
+                new Finding(
+                    parsedReport.testId(),
+                    testClass,
+                    testName,
+                    type,
+                    (String) issue.get("table"),
+                    (String) issue.get("detail"),
+                    key),
+                testIdentity));
       }
     }
     return findings;
@@ -562,18 +739,19 @@ public final class ReportComparator {
     return SOURCE_LINE_NUMBER.matcher(sourceLocation).replaceAll("");
   }
 
-  private static Set<TestRef> auditedTests(List<Map<?, ?>> reports) {
-    Set<TestRef> tests = new LinkedHashSet<>();
-    for (Map<?, ?> report : reports) {
-      tests.add(new TestRef((String) report.get("testClass"), (String) report.get("testName")));
+  private static Map<String, TestRef> auditedTests(
+      List<ParsedReport> reports, Map<ParsedReport, String> identities) {
+    Map<String, TestRef> tests = new LinkedHashMap<>();
+    for (ParsedReport report : reports) {
+      tests.put(identities.get(report), report.ref());
     }
     return tests;
   }
 
-  private static long sumSummary(List<Map<?, ?>> reports, String field) {
+  private static long sumSummary(List<ParsedReport> reports, String field) {
     long sum = 0;
-    for (Map<?, ?> report : reports) {
-      Map<?, ?> summary = (Map<?, ?>) report.get("summary");
+    for (ParsedReport report : reports) {
+      Map<?, ?> summary = (Map<?, ?>) report.value().get("summary");
       sum += (Long) summary.get(field);
     }
     return sum;
@@ -609,7 +787,9 @@ public final class ReportComparator {
     sb.append("[\n");
     for (int i = 0; i < findings.size(); i++) {
       Finding f = findings.get(i);
-      sb.append("    {\"test\": \"")
+      sb.append("    {\"testId\": ");
+      appendString(sb, f.testId());
+      sb.append(", \"test\": \"")
           .append(JsonReporter.escapeJson(f.testClass() + "." + f.testName()))
           .append("\", \"type\": \"")
           .append(JsonReporter.escapeJson(f.type()))
@@ -637,7 +817,9 @@ public final class ReportComparator {
     sb.append("[\n");
     for (int i = 0; i < tests.size(); i++) {
       TestRef test = tests.get(i);
-      sb.append("    {\"testClass\": ");
+      sb.append("    {\"testId\": ");
+      appendString(sb, test.testId());
+      sb.append(", \"testClass\": ");
       appendString(sb, test.testClass());
       sb.append(", \"testName\": ");
       appendString(sb, test.testName());

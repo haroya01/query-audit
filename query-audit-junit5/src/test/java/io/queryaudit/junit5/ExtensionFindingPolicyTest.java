@@ -36,6 +36,8 @@ class ExtensionFindingPolicyTest {
 
   private static final String TEST_CLASS = "PolicyTest";
   private static final String TEST_NAME = "auditedMethod()";
+  private static final String TEST_ID =
+      "[engine:junit-jupiter]/[class:example.PolicyTest]/[method:auditedMethod()]";
   private static final IndexMetadata INDEX_METADATA = new IndexMetadata(Map.of());
 
   private final QueryAuditExtension extension = new QueryAuditExtension();
@@ -127,6 +129,7 @@ class ExtensionFindingPolicyTest {
               regressionContext(),
               baseReport(),
               regressionQueries(),
+              TEST_ID,
               TEST_CLASS,
               TEST_NAME,
               analyzer);
@@ -165,7 +168,7 @@ class ExtensionFindingPolicyTest {
   }
 
   private static ExtensionContext regressionContext() {
-    String key = QueryCountBaseline.key(TEST_CLASS, TEST_NAME);
+    String key = QueryCountBaseline.key(TEST_ID);
     ExtensionContext.Store store = mock(ExtensionContext.Store.class);
     when(store.get("countBaseline")).thenReturn(Map.of(key, new QueryCounts(1, 0, 0, 0, 1)));
     when(store.get("currentCounts")).thenReturn(new HashMap<String, QueryCounts>());

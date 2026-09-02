@@ -34,6 +34,8 @@ class QueryAuditExtensionTruncatedCaptureTest {
 
   private static final ExtensionContext.Namespace NAMESPACE =
       ExtensionContext.Namespace.create(QueryAuditExtension.class);
+  private static final String TEST_ID =
+      "[engine:junit-jupiter]/[class:io.queryaudit.junit5.QueryAuditExtensionTruncatedCaptureTest]/[method:auditedMethod()]";
 
   @BeforeEach
   void setUp() {
@@ -132,12 +134,12 @@ class QueryAuditExtensionTruncatedCaptureTest {
     when(methodContext.getRequiredTestMethod()).thenReturn(testMethod);
     when(methodContext.getTestMethod()).thenReturn(Optional.of(testMethod));
     when(methodContext.getDisplayName()).thenReturn("auditedMethod()");
+    when(methodContext.getUniqueId()).thenReturn(TEST_ID);
     return new AuditFixture(methodContext, interceptor, currentCounts);
   }
 
   private static String contractKey() {
-    return QueryCountBaseline.key(
-        QueryAuditExtensionTruncatedCaptureTest.class.getSimpleName(), "auditedMethod()");
+    return QueryCountBaseline.key(TEST_ID);
   }
 
   private static QueryAuditExtension.AuditRunState runState(ExtensionContext context) {

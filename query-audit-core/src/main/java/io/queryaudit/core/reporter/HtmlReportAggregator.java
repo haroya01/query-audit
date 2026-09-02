@@ -146,14 +146,16 @@ public final class HtmlReportAggregator {
    */
   private static QueryAuditReport toLightweight(QueryAuditReport report) {
     return new QueryAuditReport(
-        report.getTestClass(),
-        report.getTestName(),
-        report.getConfirmedIssues(),
-        report.getInfoIssues(),
-        report.getAcknowledgedIssues(),
-        List.of(), // drop query list to save memory
-        report.getUniquePatternCount(),
-        report.getTotalQueryCount(),
-        report.getTotalExecutionTimeNanos());
+            report.getTestClass(),
+            report.getTestName(),
+            report.getConfirmedIssues(),
+            report.getInfoIssues(),
+            report.getAcknowledgedIssues(),
+            List.of(), // drop query list to save memory
+            report.getUniquePatternCount(),
+            report.getTotalQueryCount(),
+            report.getTotalExecutionTimeNanos())
+        .withTestIdentity(report.getTestId(), report.getTestSelector())
+        .withIndexMetadata(report.getIndexMetadata());
   }
 }

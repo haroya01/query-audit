@@ -1,5 +1,9 @@
 package io.queryaudit.core.model;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 
 /**
@@ -12,6 +16,10 @@ import java.util.List;
  */
 public class QueryAuditReport {
 
+  private static final String CORE_ID_PREFIX = "query-audit:core:v1:";
+
+  private final String testId;
+  private final TestSelector testSelector;
   private final String testClass;
   private final String testName;
   private final List<Issue> confirmedIssues;
@@ -33,6 +41,37 @@ public class QueryAuditReport {
       int uniquePatternCount,
       int totalQueryCount,
       long totalExecutionTimeNanos) {
+    this(
+        fallbackTestId(testClass, testName),
+        null,
+        testClass,
+        testName,
+        confirmedIssues,
+        infoIssues,
+        acknowledgedIssues,
+        allQueries,
+        uniquePatternCount,
+        totalQueryCount,
+        totalExecutionTimeNanos);
+  }
+
+  private QueryAuditReport(
+      String testId,
+      TestSelector testSelector,
+      String testClass,
+      String testName,
+      List<Issue> confirmedIssues,
+      List<Issue> infoIssues,
+      List<Issue> acknowledgedIssues,
+      List<QueryRecord> allQueries,
+      int uniquePatternCount,
+      int totalQueryCount,
+      long totalExecutionTimeNanos) {
+    if (testId == null || testId.isBlank()) {
+      throw new IllegalArgumentException("testId must not be blank");
+    }
+    this.testId = testId;
+    this.testSelector = testSelector;
     this.testClass = testClass;
     this.testName = testName;
     this.confirmedIssues = confirmedIssues;
@@ -93,6 +132,31 @@ public class QueryAuditReport {
   private IndexMetadata indexMetadata;
 
   /**
+   * Returns a copy carrying an identity supplied by a test framework. Core-only callers may keep
+   * using the existing constructors, which derive a deterministic ID from the exact {@code
+   * testClass} and {@code testName} values they receive.
+   *
+   * @since 0.6.0
+   */
+  public QueryAuditReport withTestIdentity(String testId, TestSelector testSelector) {
+    QueryAuditReport copy =
+        new QueryAuditReport(
+            testId,
+            testSelector,
+            testClass,
+            testName,
+            confirmedIssues,
+            infoIssues,
+            getAcknowledgedIssues(),
+            allQueries,
+            uniquePatternCount,
+            totalQueryCount,
+            totalExecutionTimeNanos);
+    copy.indexMetadata = indexMetadata;
+    return copy;
+  }
+
+  /**
    * Returns a copy of this report carrying the index metadata collected for the test's DataSource,
    * or {@code this} when {@code metadata} is {@code null}. The JSON reporter serializes the subset
    * relevant to the findings so report consumers can act without separate database access.
@@ -105,6 +169,8 @@ public class QueryAuditReport {
     }
     QueryAuditReport copy =
         new QueryAuditReport(
+            testId,
+            testSelector,
             testClass,
             testName,
             confirmedIssues,
@@ -146,6 +212,16 @@ public class QueryAuditReport {
     return testClass;
   }
 
+  /** Stable identity used by machine reports, comparisons, contracts, and count baselines. */
+  public String getTestId() {
+    return testId;
+  }
+
+  /** Returns a reproducible framework selector, or {@code null} for core-only reports. */
+  public TestSelector getTestSelector() {
+    return testSelector;
+  }
+
   public String getTestName() {
     return testName;
   }
@@ -180,5 +256,20 @@ public class QueryAuditReport {
 
   public long getTotalExecutionTimeNanos() {
     return totalExecutionTimeNanos;
+  }
+
+  private static String fallbackTestId(String testClass, String testName) {
+    String source = lengthPrefixed(testClass) + lengthPrefixed(testName);
+    try {
+      byte[] digest =
+          MessageDigest.getInstance("SHA-256").digest(source.getBytes(StandardCharsets.UTF_8));
+      return CORE_ID_PREFIX + HexFormat.of().formatHex(digest);
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is unavailable", e);
+    }
+  }
+
+  private static String lengthPrefixed(String value) {
+    return value == null ? "-:" : value.length() + ":" + value;
   }
 }

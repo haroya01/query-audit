@@ -28,10 +28,17 @@ Every audited test's SELECT/INSERT/UPDATE/DELETE counts are written to
 
 ```
 # QueryAudit Query Contracts
-# Format: testClass | testMethod | selectCount | insertCount | updateCount | deleteCount | totalCount
-OrderServiceTest | findOrders() | 3 | 0 | 0 | 0 | 3
-OrderServiceTest | placeOrder() | 2 | 1 | 1 | 0 | 4
+# Format: identityType | identityValue | selectCount | insertCount | updateCount | deleteCount | totalCount
+# @junit identityValue escapes: \| (pipe), \\ (backslash), \r (CR), \n (LF)
+@junit | [engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:findOrders()] | 3 | 0 | 0 | 0 | 3
+@junit | [engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:placeOrder()] | 2 | 1 | 1 | 0 | 4
 ```
+
+Stable JUnit IDs remain one human-readable row when an identity contains policy-file delimiters or
+line breaks. In an `@junit` identity value, QueryAudit writes `\|` for a pipe, `\\` for a backslash,
+`\r` for a carriage return, and `\n` for a line feed. These escapes apply only to the `@junit`
+identity value; the five count fields and legacy rows remain unescaped. Unknown or incomplete
+stable-ID escapes make the policy file invalid and the diagnostic identifies the affected line.
 
 Commit the file. Pair with [`mode: all`](configuration.md#audit-coverage-mode) to freeze the
 whole suite's behavior in one run.
@@ -92,6 +99,23 @@ git diff .query-audit-contracts
 ```
 
 Recording merges: tests that ran are updated, entries for tests that didn't run are kept.
+
+### Migrating files recorded by 0.5
+
+QueryAudit 0.6 continues to read the 0.5 `testClass | displayName | ...` rows. An exact legacy row
+can be enforced while a test has no stable row, and QueryAudit prints a migration warning because
+that identity cannot distinguish packages or duplicate display names. Recording with 0.6 adds an
+`@junit | <uniqueId>` row; subsequent runs prefer it. Old rows stay in the file so partial recording
+does not discard tests that did not run. QueryAudit 0.5 can read the resulting seven-column file as
+long as its stable IDs do not require 0.6 escaping; it does not understand the new syntax when an ID
+contains a pipe or line break. Backslash sequences in legacy rows retain their original literal
+meaning, and stable-ID escaping is not applied retroactively.
+
+If a test still needs a legacy row that also matches another stable JUnit ID, the run fails with an
+ambiguity diagnostic. Once every matching test has its own stable row, the preserved legacy row is
+ignored. Run the complete audited suite in record mode and review the new stable rows instead of
+letting one old contract apply to two tests. A display name changed before the first 0.6 recording
+cannot be linked to its old row safely, so re-record the complete suite once when upgrading.
 
 ## Configuration
 

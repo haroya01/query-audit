@@ -21,19 +21,23 @@ class QueryCountBaselineTest {
     Path file = tempDir.resolve(".query-audit-counts");
 
     Map<String, QueryCounts> counts = new LinkedHashMap<>();
-    counts.put(
-        QueryCountBaseline.key("RoomApiTest", "testCreateRoom"), new QueryCounts(12, 3, 0, 0, 15));
-    counts.put(
-        QueryCountBaseline.key("MessageApiTest", "testSendMessage"),
-        new QueryCounts(15, 2, 1, 0, 18));
+    String roomId =
+        "[engine:junit-jupiter]/[class:com.example.RoomApiTest]/[method:testCreateRoom()]";
+    String messageId =
+        "[engine:junit-jupiter]/[class:com.example.MessageApiTest]/[method:testSendMessage()]";
+    counts.put(QueryCountBaseline.key(roomId), new QueryCounts(12, 3, 0, 0, 15));
+    counts.put(QueryCountBaseline.key(messageId), new QueryCounts(15, 2, 1, 0, 18));
 
     QueryCountBaseline.save(file, counts);
 
     Map<String, QueryCounts> loaded = QueryCountBaseline.load(file);
+    String saved = Files.readString(file);
 
     assertThat(loaded).hasSize(2);
+    assertThat(saved).contains("# Format: identityType | identityValue");
+    assertThat(saved).contains("@junit | " + roomId + " | 12 | 3 | 0 | 0 | 15");
 
-    QueryCounts room = loaded.get(QueryCountBaseline.key("RoomApiTest", "testCreateRoom"));
+    QueryCounts room = loaded.get(QueryCountBaseline.key(roomId));
     assertThat(room).isNotNull();
     assertThat(room.selectCount()).isEqualTo(12);
     assertThat(room.insertCount()).isEqualTo(3);
@@ -41,10 +45,54 @@ class QueryCountBaselineTest {
     assertThat(room.deleteCount()).isEqualTo(0);
     assertThat(room.totalCount()).isEqualTo(15);
 
-    QueryCounts message = loaded.get(QueryCountBaseline.key("MessageApiTest", "testSendMessage"));
+    QueryCounts message = loaded.get(QueryCountBaseline.key(messageId));
     assertThat(message).isNotNull();
     assertThat(message.selectCount()).isEqualTo(15);
     assertThat(message.totalCount()).isEqualTo(18);
+  }
+
+  @Test
+  void stableIdentitySpecialCharactersRoundTripThroughReadableEscapes() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    String testId = "[engine:junit-jupiter]/[method:case|path\\segment\rfirst line\nsecond line()]";
+    QueryCounts expectedCounts = new QueryCounts(2, 1, 0, 0, 3);
+
+    QueryCountBaseline.save(file, Map.of(QueryCountBaseline.key(testId), expectedCounts));
+
+    String saved = Files.readString(file);
+    assertThat(saved)
+        .contains(
+            "@junit | [engine:junit-jupiter]/[method:case\\|path\\\\segment\\rfirst line\\nsecond line()] | 2 | 1 | 0 | 0 | 3")
+        .contains(
+            "# @junit identityValue escapes: \\| (pipe), \\\\ (backslash), \\r (CR), \\n (LF)");
+    assertThat(Files.readAllLines(file)).hasSize(4);
+    assertThat(QueryCountBaseline.load(file))
+        .containsEntry(QueryCountBaseline.key(testId), expectedCounts);
+  }
+
+  @Test
+  void loadDecodesEscapedStableIdentityFields() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    Files.writeString(
+        file,
+        "@junit | [engine:junit-jupiter]/[method:pipe\\|slash\\\\cr\\rline\\n()]"
+            + " | 1 | 0 | 0 | 0 | 1\n");
+    String testId = "[engine:junit-jupiter]/[method:pipe|slash\\cr\rline\n()]";
+
+    assertThat(QueryCountBaseline.load(file))
+        .containsEntry(QueryCountBaseline.key(testId), new QueryCounts(1, 0, 0, 0, 1));
+  }
+
+  @Test
+  void legacyRowsKeepRawBackslashSequences() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    String legacyDisplayName = "windows\\path\\nremains-raw";
+    Files.writeString(file, "LegacyTest | " + legacyDisplayName + " | 1 | 0 | 0 | 0 | 1\n");
+
+    assertThat(QueryCountBaseline.load(file))
+        .containsEntry(
+            QueryCountBaseline.key("LegacyTest", legacyDisplayName),
+            new QueryCounts(1, 0, 0, 0, 1));
   }
 
   @Test
@@ -87,6 +135,21 @@ class QueryCountBaselineTest {
         .hasMessageContaining(file.toAbsolutePath().toString())
         .hasMessageContaining("line 1")
         .hasMessageContaining("selectCount must be an integer: not-a-number");
+  }
+
+  @Test
+  void loadRejectsUnknownStableIdentityEscapesWithLocation() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    Files.writeString(
+        file,
+        "@junit | [engine:junit-jupiter]/[method:unsupported\\q()]" + " | 1 | 0 | 0 | 0 | 1\n");
+
+    assertThatThrownBy(() -> QueryCountBaseline.load(file))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining(file.toAbsolutePath().toString())
+        .hasMessageContaining("line 1")
+        .hasMessageContaining("unsupported @junit identityValue escape \\q")
+        .hasMessageContaining("expected one of \\|, \\\\, \\r, \\n");
   }
 
   @Test
@@ -185,6 +248,52 @@ class QueryCountBaselineTest {
   }
 
   @Test
+  void stableEntriesDistinguishTestsWithTheSameLegacyName() throws IOException {
+    Path file = tempDir.resolve(".query-audit-counts");
+    String firstId = "[engine:junit-jupiter]/[class:com.alpha.OrderTest]/[method:loadsOrders()]";
+    String secondId = "[engine:junit-jupiter]/[class:com.beta.OrderTest]/[method:loadsOrders()]";
+
+    QueryCountBaseline.save(
+        file,
+        Map.of(
+            QueryCountBaseline.key(firstId), new QueryCounts(1, 0, 0, 0, 1),
+            QueryCountBaseline.key(secondId), new QueryCounts(2, 0, 0, 0, 2)));
+
+    Map<String, QueryCounts> loaded = QueryCountBaseline.load(file);
+    assertThat(QueryCountBaseline.find(loaded, firstId, "OrderTest", "loadsOrders"))
+        .isEqualTo(new QueryCounts(1, 0, 0, 0, 1));
+    assertThat(QueryCountBaseline.find(loaded, secondId, "OrderTest", "loadsOrders"))
+        .isEqualTo(new QueryCounts(2, 0, 0, 0, 2));
+  }
+
+  @Test
+  void stableIdentityWinsOverALegacyDisplayNameEntry() {
+    String testId = "[engine:junit-jupiter]/[class:example.OrderTest]/[method:loadsOrders()]";
+    Map<String, QueryCounts> counts =
+        Map.of(
+            QueryCountBaseline.key(testId), new QueryCounts(1, 0, 0, 0, 1),
+            QueryCountBaseline.key("OrderTest", "loads orders"), new QueryCounts(9, 0, 0, 0, 9));
+
+    assertThat(QueryCountBaseline.find(counts, testId, "OrderTest", "loads orders"))
+        .isEqualTo(new QueryCounts(1, 0, 0, 0, 1));
+    assertThat(QueryCountBaseline.hasLegacyIdentity(counts, "OrderTest", "loads orders")).isTrue();
+    assertThat(QueryCountBaseline.usesLegacyIdentity(counts, testId, "OrderTest", "loads orders"))
+        .isFalse();
+  }
+
+  @Test
+  void legacyEntryRemainsAnExplicitFallback() {
+    String testId = "[engine:junit-jupiter]/[class:example.OrderTest]/[method:loadsOrders()]";
+    Map<String, QueryCounts> counts =
+        Map.of(QueryCountBaseline.key("OrderTest", "loads orders"), new QueryCounts(4, 0, 0, 0, 4));
+
+    assertThat(QueryCountBaseline.find(counts, testId, "OrderTest", "loads orders"))
+        .isEqualTo(new QueryCounts(4, 0, 0, 0, 4));
+    assertThat(QueryCountBaseline.usesLegacyIdentity(counts, testId, "OrderTest", "loads orders"))
+        .isTrue();
+  }
+
+  @Test
   void savedFileIsSortedByKey() throws IOException {
     Path file = tempDir.resolve(".query-audit-counts");
 
@@ -204,5 +313,12 @@ class QueryCountBaselineTest {
   void keyFormatIsCorrect() {
     String key = QueryCountBaseline.key("RoomApiTest", "testCreateRoom");
     assertThat(key).isEqualTo("RoomApiTest|testCreateRoom");
+  }
+
+  @Test
+  void stableKeyUsesTheBackwardCompatibleIdentityPair() {
+    String testId = "[engine:junit-jupiter]/[class:example.RoomApiTest]/[method:create()]";
+
+    assertThat(QueryCountBaseline.key(testId)).isEqualTo("@junit|" + testId);
   }
 }

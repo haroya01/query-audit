@@ -228,7 +228,9 @@ public class QueryAuditAnalyzer {
             report.getUniquePatternCount(),
             report.getTotalQueryCount(),
             report.getTotalExecutionTimeNanos());
-    return mergedReport.withIndexMetadata(report.getIndexMetadata());
+    return mergedReport
+        .withTestIdentity(report.getTestId(), report.getTestSelector())
+        .withIndexMetadata(report.getIndexMetadata());
   }
 
   private void classifyIssues(

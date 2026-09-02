@@ -75,10 +75,7 @@ class QueryAuditParallelExecutionTest {
     assertThat(interceptor.isActive()).isFalse();
     assertThat(currentCounts)
         .containsOnly(
-            Map.entry(
-                QueryCountBaseline.key(
-                    QueryAuditParallelExecutionTest.class.getSimpleName(), "firstMethod()"),
-                new QueryCounts(2, 0, 0, 0, 2)));
+            Map.entry(QueryCountBaseline.key(first.getUniqueId()), new QueryCounts(2, 0, 0, 0, 2)));
     assertThat(HtmlReportAggregator.getInstance().getReports())
         .singleElement()
         .satisfies(

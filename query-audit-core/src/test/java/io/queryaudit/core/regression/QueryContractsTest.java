@@ -41,6 +41,19 @@ class QueryContractsTest {
   }
 
   @Test
+  @DisplayName("stable ID keeps the contract when the display name changes")
+  void stableIdSurvivesDisplayNameChanges() {
+    String testId = "[engine:junit-jupiter]/[class:example.OrderTest]/[method:findOrders()]";
+    QueryCounts counts = new QueryCounts(3, 0, 0, 0, 3);
+    Map<String, QueryCounts> contracts = Map.of(QueryCountBaseline.key(testId), counts);
+
+    String failure =
+        QueryContracts.verify(testId, KEY_CLASS, "renamed display", counts, contracts, List.of());
+
+    assertThat(failure).isNull();
+  }
+
+  @Test
   @DisplayName("an increase fails with the delta and the offending SQL + call site")
   void increaseFailsWithDelta() {
     QueryRecord select =

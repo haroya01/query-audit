@@ -164,6 +164,26 @@ class QueryAuditExtensionRunOutcomeTest {
   }
 
   @Test
+  void cleanupFailureMakesTheRootRunInconclusive() throws Exception {
+    AuditContext fixture = contextFor(PolicyFixture.class, "audited", null);
+    fixture.classStore().put("auditResourceOwner", fixture.classContext().getUniqueId());
+    fixture
+        .classStore()
+        .put(
+            "dataSourceHookCleanup",
+            (Runnable)
+                () -> {
+                  throw new IllegalStateException("broken cleanup");
+                });
+
+    assertThatThrownBy(() -> new QueryAuditExtension().afterAll(fixture.classContext()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("broken cleanup");
+
+    assertIncomplete(fixture, IncompleteReasonCode.AUDIT_ANALYSIS_FAILED);
+  }
+
+  @Test
   void failOnDetectionMarksACompletedRunAsFailed() throws Exception {
     QueryInterceptor interceptor = new QueryInterceptor();
     interceptor.start();
@@ -239,6 +259,10 @@ class QueryAuditExtensionRunOutcomeTest {
     when(classContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(classStore);
     when(classContext.getRoot()).thenReturn(rootContext);
     when(classContext.getParent()).thenReturn(Optional.of(rootContext));
+    doReturn(testClass).when(classContext).getRequiredTestClass();
+    when(classContext.getTestMethod()).thenReturn(Optional.empty());
+    when(classContext.getUniqueId())
+        .thenReturn("[engine:junit-jupiter]/[class:" + testClass.getName() + "]");
 
     Method method = testClass.getDeclaredMethod(methodName);
     ExtensionContext methodContext = mock(ExtensionContext.class);
@@ -249,8 +273,15 @@ class QueryAuditExtensionRunOutcomeTest {
     when(methodContext.getRequiredTestMethod()).thenReturn(method);
     when(methodContext.getTestMethod()).thenReturn(Optional.of(method));
     when(methodContext.getDisplayName()).thenReturn(methodName + "()");
+    when(methodContext.getUniqueId())
+        .thenReturn(
+            "[engine:junit-jupiter]/[class:"
+                + testClass.getName()
+                + "]/[method:"
+                + methodName
+                + "()]");
     when(methodContext.getExecutionMode()).thenReturn(ExecutionMode.SAME_THREAD);
-    return new AuditContext(methodContext, rootStore, methodStore);
+    return new AuditContext(classContext, methodContext, rootStore, classStore, methodStore);
   }
 
   private static void restoreProperty(String key, String value) {
@@ -303,7 +334,11 @@ class QueryAuditExtensionRunOutcomeTest {
   }
 
   private record AuditContext(
-      ExtensionContext methodContext, MapStore rootStore, MapStore methodStore) {}
+      ExtensionContext classContext,
+      ExtensionContext methodContext,
+      MapStore rootStore,
+      MapStore classStore,
+      MapStore methodStore) {}
 
   private static final class MapStore implements ExtensionContext.Store {
     private final Map<Object, Object> values = new ConcurrentHashMap<>();

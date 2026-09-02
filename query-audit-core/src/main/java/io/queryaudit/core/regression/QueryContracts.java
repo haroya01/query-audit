@@ -43,7 +43,26 @@ public final class QueryContracts {
       QueryCounts actual,
       Map<String, QueryCounts> contracts,
       List<QueryRecord> queries) {
-    QueryCounts contract = contracts.get(QueryCountBaseline.key(testClass, testName));
+    return verify(null, testClass, testName, actual, contracts, queries);
+  }
+
+  /**
+   * Compares a test using its stable ID, with an exact 0.5 class/display-name fallback for legacy
+   * contract files.
+   *
+   * @since 0.6.0
+   */
+  public static String verify(
+      String testId,
+      String testClass,
+      String testName,
+      QueryCounts actual,
+      Map<String, QueryCounts> contracts,
+      List<QueryRecord> queries) {
+    QueryCounts contract =
+        testId == null
+            ? contracts.get(QueryCountBaseline.legacyKey(testClass, testName))
+            : QueryCountBaseline.find(contracts, testId, testClass, testName);
     if (contract == null || contract.equals(actual)) {
       return null;
     }

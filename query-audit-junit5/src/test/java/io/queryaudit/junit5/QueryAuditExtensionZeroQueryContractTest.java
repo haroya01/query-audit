@@ -30,6 +30,9 @@ import org.junit.jupiter.api.parallel.Resources;
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 class QueryAuditExtensionZeroQueryContractTest {
 
+  private static final String TEST_ID =
+      "[engine:junit-jupiter]/[class:io.queryaudit.junit5.QueryAuditExtensionZeroQueryContractTest]/[method:auditedMethod()]";
+
   private static final ExtensionContext.Namespace NAMESPACE =
       ExtensionContext.Namespace.create(QueryAuditExtension.class);
 
@@ -93,6 +96,9 @@ class QueryAuditExtensionZeroQueryContractTest {
         .singleElement()
         .satisfies(
             report -> {
+              assertThat(report.getTestId()).isEqualTo(TEST_ID);
+              assertThat(report.getTestSelector().type()).isEqualTo("junit-unique-id");
+              assertThat(report.getTestSelector().value()).isEqualTo(TEST_ID);
               assertThat(report.getTestName()).isEqualTo("auditedMethod()");
               assertThat(report.getTotalQueryCount()).isZero();
             });
@@ -133,12 +139,12 @@ class QueryAuditExtensionZeroQueryContractTest {
     when(methodContext.getRequiredTestMethod()).thenReturn(testMethod);
     when(methodContext.getTestMethod()).thenReturn(Optional.of(testMethod));
     when(methodContext.getDisplayName()).thenReturn("auditedMethod()");
+    when(methodContext.getUniqueId()).thenReturn(TEST_ID);
     return new ContractContext(methodContext, currentCounts);
   }
 
   private static String contractKey() {
-    return QueryCountBaseline.key(
-        QueryAuditExtensionZeroQueryContractTest.class.getSimpleName(), "auditedMethod()");
+    return QueryCountBaseline.key(TEST_ID);
   }
 
   private static QueryAuditExtension.AuditRunState runState(ExtensionContext context) {

@@ -63,6 +63,13 @@ and the full lifecycle of a query from execution to report.
       +- 19. Auto-open report in browser (if configured)
 ```
 
+QueryAudit supports ordinary `@Test` methods and each `@ParameterizedTest` invocation as a
+separate audit boundary. An active `@TestFactory` is rejected before query capture because JUnit's
+lifecycle callbacks surround the factory method but do not expose a separate boundary for each
+`DynamicTest` child. The run is reported as `INCONCLUSIVE` with
+`AUDIT_INITIALIZATION_FAILED`. Move audited cases to `@Test` or `@ParameterizedTest`, or add
+`@QueryAuditExclude` to a factory that should run without auditing.
+
 ---
 
 ## Module Structure
@@ -479,8 +486,8 @@ QueryAudit tracks query counts per test method across runs using a baseline file
 (`.query-audit-counts`).
 
 ```
-  Run 1:  OrderServiceTest.findOrders -> 5 SELECT, 0 INSERT -> saved to baseline
-  Run 2:  OrderServiceTest.findOrders -> 15 SELECT, 0 INSERT -> regression detected!
+  Run 1:  JUnit unique ID for OrderServiceTest.findOrders -> 5 SELECT, 0 INSERT -> saved
+  Run 2:  same stable test ID -> 15 SELECT, 0 INSERT -> regression detected!
           (3x increase, +10 queries)
 ```
 
