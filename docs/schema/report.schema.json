@@ -97,6 +97,7 @@
                 "add-index",
                 "batch-fetch",
                 "batch-insert",
+                "batch-update",
                 "add-where-clause",
                 "add-limit",
                 "select-explicit-columns"
