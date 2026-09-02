@@ -339,13 +339,13 @@ public class QueryAuditExtension
     }
 
     // --- Query count regression detection ---
-    report = detectQueryCountRegression(context, report, queries, testClass, testName);
+    report = detectQueryCountRegression(context, report, queries, testClass, testName, analyzer);
 
     // --- EXPLAIN-based detection ---
-    report = runExplainAnalysis(context, report, queries);
+    report = runExplainAnalysis(context, report, queries, analyzer);
 
     // --- Connection-held-idle detection (issue #168) ---
-    report = mergeConnectionHeldIdleIssues(report, interceptor, config);
+    report = mergeConnectionHeldIdleIssues(report, interceptor, analyzer);
 
     List<BaselineEntry> baseline = analyzer.getBaseline();
     ConsoleReporter reporter =
@@ -362,6 +362,8 @@ public class QueryAuditExtension
     report = report.withIndexMetadata(indexMetadata);
     HtmlReportAggregator.getInstance().addReport(report);
 
+    // Query budgets and snapshot contracts are direct test assertions, not findings. They
+    // intentionally bypass rule selection, suppressions, severity overrides, and issue baselines.
     // --- @ExpectMaxQueryCount ---
     checkMaxQueryCount(context, queries, testName);
 
@@ -398,8 +400,11 @@ public class QueryAuditExtension
 
   // ── EXPLAIN-based analysis ───────────────────────────────────────
 
-  private QueryAuditReport runExplainAnalysis(
-      ExtensionContext context, QueryAuditReport report, List<QueryRecord> queries) {
+  QueryAuditReport runExplainAnalysis(
+      ExtensionContext context,
+      QueryAuditReport report,
+      List<QueryRecord> queries,
+      QueryAuditAnalyzer analyzer) {
     DataSource dataSource = getDataSource(context);
     if (dataSource == null || queries.isEmpty()) {
       return report;
@@ -412,29 +417,7 @@ public class QueryAuditExtension
       for (ExplainAnalyzer explainAnalyzer : loader) {
         if (dbProduct.contains(explainAnalyzer.supportedDatabase())) {
           List<Issue> explainIssues = explainAnalyzer.analyze(connection, queries);
-          // EXPLAIN-based issues bypass the detector registry, so the profile/disabled-rules
-          // decision is applied here.
-          QueryAuditConfig explainConfig = buildConfig(context);
-          explainIssues =
-              explainIssues.stream()
-                  .filter(issue -> !explainConfig.isRuleExcluded(issue.type().getCode()))
-                  .toList();
-          if (!explainIssues.isEmpty()) {
-            List<Issue> mergedInfo = new ArrayList<>(report.getInfoIssues());
-            mergedInfo.addAll(explainIssues);
-
-            report =
-                new QueryAuditReport(
-                    report.getTestClass(),
-                    report.getTestName(),
-                    report.getConfirmedIssues(),
-                    mergedInfo,
-                    report.getAcknowledgedIssues(),
-                    report.getAllQueries(),
-                    report.getUniquePatternCount(),
-                    report.getTotalQueryCount(),
-                    report.getTotalExecutionTimeNanos());
-          }
+          report = analyzer.mergeDetectedIssues(report, explainIssues);
           break;
         }
       }
@@ -447,13 +430,13 @@ public class QueryAuditExtension
 
   // ── Query count regression detection ────────────────────────────────
 
-  @SuppressWarnings("unchecked")
-  private QueryAuditReport detectQueryCountRegression(
+  QueryAuditReport detectQueryCountRegression(
       ExtensionContext context,
       QueryAuditReport report,
       List<QueryRecord> queries,
       String testClass,
-      String testName) {
+      String testName,
+      QueryAuditAnalyzer analyzer) {
 
     QueryCounts current = QueryCounts.from(queries);
 
@@ -472,23 +455,7 @@ public class QueryAuditExtension
 
     List<Issue> regressionIssues =
         REGRESSION_DETECTOR.detect(testClass, testName, current, baselineCounts);
-    if (regressionIssues.isEmpty()) {
-      return report;
-    }
-
-    List<Issue> mergedConfirmed = new ArrayList<>(report.getConfirmedIssues());
-    mergedConfirmed.addAll(regressionIssues);
-
-    return new QueryAuditReport(
-        report.getTestClass(),
-        report.getTestName(),
-        mergedConfirmed,
-        report.getInfoIssues(),
-        report.getAcknowledgedIssues(),
-        report.getAllQueries(),
-        report.getUniquePatternCount(),
-        report.getTotalQueryCount(),
-        report.getTotalExecutionTimeNanos());
+    return analyzer.mergeDetectedIssues(report, regressionIssues);
   }
 
   // ── AfterAllCallback ──────────────────────────────────────────────
@@ -607,11 +574,9 @@ public class QueryAuditExtension
    * slow non-DB work (HTTP call, push send, file I/O) runs. Sessions never released by the end of
    * the test are the worst offenders and are flagged with their full held time.
    */
-  private QueryAuditReport mergeConnectionHeldIdleIssues(
-      QueryAuditReport report, QueryInterceptor interceptor, QueryAuditConfig config) {
-    if (config.isRuleExcluded(IssueType.CONNECTION_HELD_IDLE.getCode())) {
-      return report;
-    }
+  QueryAuditReport mergeConnectionHeldIdleIssues(
+      QueryAuditReport report, QueryInterceptor interceptor, QueryAuditAnalyzer analyzer) {
+    QueryAuditConfig config = analyzer.getConfig();
     List<Issue> idleIssues = new ArrayList<>();
     for (ConnectionUsageTracker.ConnectionSession session :
         interceptor.getConnectionTracker().getCompletedSessions()) {
@@ -642,21 +607,7 @@ public class QueryAuditExtension
                   + " them",
               session.acquireCallSite()));
     }
-    if (idleIssues.isEmpty()) {
-      return report;
-    }
-    List<Issue> mergedInfo = new ArrayList<>(report.getInfoIssues());
-    mergedInfo.addAll(idleIssues);
-    return new QueryAuditReport(
-        report.getTestClass(),
-        report.getTestName(),
-        report.getConfirmedIssues(),
-        mergedInfo,
-        report.getAcknowledgedIssues(),
-        report.getAllQueries(),
-        report.getUniquePatternCount(),
-        report.getTotalQueryCount(),
-        report.getTotalExecutionTimeNanos());
+    return analyzer.mergeDetectedIssues(report, idleIssues);
   }
 
   // ── Query snapshot contracts (issue #166) ─────────────────────────
