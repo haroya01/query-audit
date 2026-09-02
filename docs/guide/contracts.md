@@ -62,6 +62,11 @@ QueryAudit: placeOrder() deviates from its recorded query contract (.query-audit
 If the change is intended, re-record the contracts with -DqueryAudit.contracts.record=true and review the file diff.
 ```
 
+Failures from `@ExpectMaxQueryCount`, `@ExpectQueries`, and snapshot contracts are test assertions
+rather than findings. Rule profiles, `disabled-rules`, `suppress-patterns`, severity overrides, and
+the issue baseline do not change their result. Update the declared budget or re-record the contract
+when the database behavior change is intentional.
+
 Rules of enforcement:
 
 - **Both directions fail.** Fewer queries than the contract also fails — snapshot semantics.
