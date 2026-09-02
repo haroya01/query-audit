@@ -26,6 +26,7 @@ import java.awt.Desktop;
 import java.io.File;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.*;
@@ -231,6 +232,7 @@ public class QueryAuditExtension
       context.getStore(NAMESPACE).put(KEY_ACTIVE, Boolean.FALSE);
       return;
     }
+    registerReportFinalizer(context, auditConfig);
     requireSameThreadExecution(context);
     initializeAudit(context, auditConfig, InitializationScope.METHOD);
 
@@ -461,7 +463,6 @@ public class QueryAuditExtension
   // ── AfterAllCallback ──────────────────────────────────────────────
 
   @Override
-  @SuppressWarnings("unchecked")
   public void afterAll(ExtensionContext context) {
     if (context.getRequiredTestClass().getEnclosingClass() != null) {
       return;
@@ -483,18 +484,37 @@ public class QueryAuditExtension
     writeCountBaselineIfRequested(context);
     writeContractsIfRequested(context);
 
-    // Register a ReportFinalizer in the root context store so that
-    // writeReport + openReportInBrowser runs exactly once after ALL test classes finish,
-    // instead of once per test class (see issue #41).
-    boolean autoOpen = shouldAutoOpenReport(context);
+    Object storedFinalizer =
+        context.getRoot().getStore(NAMESPACE).get(ReportFinalizer.class.getName());
+    if (storedFinalizer instanceof ReportFinalizer finalizer && shouldAutoOpenReport(context)) {
+      finalizer.enableAutoOpen();
+    }
+  }
+
+  void registerReportFinalizer(ExtensionContext context, QueryAuditConfig auditConfig) {
+    Path outputDirectory = resolveReportOutputDirectory(auditConfig);
     ExtensionContext root = context.getRoot();
     ReportFinalizer finalizer =
         (ReportFinalizer)
             root.getStore(NAMESPACE)
                 .getOrComputeIfAbsent(
-                    ReportFinalizer.class.getName(), key -> new ReportFinalizer(this));
-    if (autoOpen) {
-      finalizer.enableAutoOpen();
+                    ReportFinalizer.class.getName(),
+                    key -> new ReportFinalizer(this, outputDirectory));
+    finalizer.requireOutputDirectory(outputDirectory);
+  }
+
+  private static Path resolveReportOutputDirectory(QueryAuditConfig config) {
+    String configuredPath = config.getReportOutputDir();
+    if (configuredPath == null || configuredPath.isBlank()) {
+      throw new ExtensionConfigurationException(
+          "QueryAudit: report output directory must not be blank. Configure"
+              + " query-audit.report.output-dir with a valid directory.");
+    }
+    try {
+      return Path.of(configuredPath).toAbsolutePath().normalize();
+    } catch (InvalidPathException e) {
+      throw new ExtensionConfigurationException(
+          "QueryAudit: invalid report output directory '" + configuredPath + "'.", e);
     }
   }
 
@@ -506,10 +526,28 @@ public class QueryAuditExtension
   static final class ReportFinalizer implements ExtensionContext.Store.CloseableResource {
 
     private final QueryAuditExtension extension;
+    private final Path outputDirectory;
     private volatile boolean autoOpen;
 
-    ReportFinalizer(QueryAuditExtension extension) {
+    ReportFinalizer(QueryAuditExtension extension, Path outputDirectory) {
       this.extension = extension;
+      this.outputDirectory = outputDirectory.toAbsolutePath().normalize();
+    }
+
+    void requireOutputDirectory(Path requestedDirectory) {
+      Path normalizedRequest = requestedDirectory.toAbsolutePath().normalize();
+      if (!outputDirectory.equals(normalizedRequest)) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: conflicting report output directories in the same test run: '"
+                + outputDirectory
+                + "' and '"
+                + normalizedRequest
+                + "'. Use one query-audit.report.output-dir value for all active test contexts.");
+      }
+    }
+
+    Path outputDirectory() {
+      return outputDirectory;
     }
 
     void enableAutoOpen() {
@@ -524,9 +562,8 @@ public class QueryAuditExtension
       }
 
       try {
-        java.nio.file.Path outputDir = java.nio.file.Path.of("build", "reports", "query-audit");
-        aggregator.writeReport(outputDir);
-        java.nio.file.Path reportPath = outputDir.toAbsolutePath().resolve("index.html");
+        aggregator.writeReport(outputDirectory);
+        Path reportPath = outputDirectory.resolve("index.html");
 
         // Summary line — visible even without opening the report
         long totalErrors =
@@ -555,7 +592,7 @@ public class QueryAuditExtension
         System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
         System.out.println();
 
-        extension.writeJsonReport(aggregator.getReports(), outputDir);
+        extension.writeJsonReport(aggregator.getReports(), outputDirectory);
 
         if (autoOpen) {
           extension.openReportInBrowser(reportPath);

@@ -25,6 +25,13 @@ import java.util.regex.Pattern;
  */
 public class QueryAuditConfig {
 
+  /**
+   * Default directory for the suite HTML and JSON reports.
+   *
+   * @since 0.6.0
+   */
+  public static final String DEFAULT_REPORT_OUTPUT_DIR = "build/reports/query-audit";
+
   private final boolean enabled;
   private final boolean failOnDetection;
   private final int nPlusOneThreshold;
@@ -33,6 +40,7 @@ public class QueryAuditConfig {
   private final Set<String> suppressPatterns;
   private final Set<String> suppressQueries;
   private final boolean showInfo;
+  private final String reportOutputDir;
   private final String baselinePath;
   private final boolean autoOpenReport;
   private final int maxQueries;
@@ -65,6 +73,7 @@ public class QueryAuditConfig {
     this.suppressPatterns = Collections.unmodifiableSet(new HashSet<>(builder.suppressPatterns));
     this.suppressQueries = Collections.unmodifiableSet(new HashSet<>(builder.suppressQueries));
     this.showInfo = builder.showInfo;
+    this.reportOutputDir = builder.reportOutputDir;
     this.baselinePath = builder.baselinePath;
     this.autoOpenReport = builder.autoOpenReport;
     this.maxQueries = builder.maxQueries;
@@ -129,6 +138,15 @@ public class QueryAuditConfig {
 
   public boolean isShowInfo() {
     return showInfo;
+  }
+
+  /**
+   * Returns the directory where the suite HTML and JSON reports are written.
+   *
+   * @since 0.6.0
+   */
+  public String getReportOutputDir() {
+    return reportOutputDir;
   }
 
   /**
@@ -382,6 +400,7 @@ public class QueryAuditConfig {
     private Set<String> suppressPatterns = new HashSet<>();
     private Set<String> suppressQueries = new HashSet<>();
     private boolean showInfo = true;
+    private String reportOutputDir = DEFAULT_REPORT_OUTPUT_DIR;
     private String baselinePath = null;
     private boolean autoOpenReport = true;
     private int maxQueries = 10_000;
@@ -422,6 +441,7 @@ public class QueryAuditConfig {
       b.suppressPatterns = new HashSet<>(source.suppressPatterns);
       b.suppressQueries = new HashSet<>(source.suppressQueries);
       b.showInfo = source.showInfo;
+      b.reportOutputDir = source.reportOutputDir;
       b.baselinePath = source.baselinePath;
       b.autoOpenReport = source.autoOpenReport;
       b.maxQueries = source.maxQueries;
@@ -494,6 +514,16 @@ public class QueryAuditConfig {
 
     public Builder showInfo(boolean showInfo) {
       this.showInfo = showInfo;
+      return this;
+    }
+
+    /**
+     * Sets the directory where the suite HTML and JSON reports are written.
+     *
+     * @since 0.6.0
+     */
+    public Builder reportOutputDir(String reportOutputDir) {
+      this.reportOutputDir = reportOutputDir;
       return this;
     }
 

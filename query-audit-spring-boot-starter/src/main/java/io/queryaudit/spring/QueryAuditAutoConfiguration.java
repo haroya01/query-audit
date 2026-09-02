@@ -51,6 +51,7 @@ public class QueryAuditAutoConfiguration {
         .suppressPatterns(new HashSet<>(properties.getSuppressPatterns()))
         .suppressQueries(new HashSet<>(properties.getSuppressQueries()))
         .showInfo(properties.getReport().isShowInfo())
+        .reportOutputDir(properties.getReport().getOutputDir())
         .baselinePath(properties.getBaselinePath())
         .autoOpenReport(properties.isAutoOpenReport())
         .maxQueries(properties.getMaxQueries())
