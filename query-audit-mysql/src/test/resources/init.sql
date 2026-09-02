@@ -17,3 +17,8 @@ CREATE TABLE orders (
     INDEX idx_user_id (user_id),
     INDEX idx_status (status)
 );
+
+CREATE TABLE audit_events (
+    event_type VARCHAR(64) NOT NULL,
+    payload TEXT
+);

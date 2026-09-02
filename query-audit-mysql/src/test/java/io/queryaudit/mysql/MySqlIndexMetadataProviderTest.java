@@ -191,8 +191,8 @@ class MySqlIndexMetadataProviderTest {
     }
 
     @Test
-    @DisplayName("skips tables that have no indexes")
-    void skipsTablesWithNoIndexes() throws SQLException {
+    @DisplayName("keeps tables that have no indexes")
+    void keepsTablesWithNoIndexes() throws SQLException {
       Statement stmt1 = mock(Statement.class);
       Statement stmt2 = mock(Statement.class);
       ResultSet emptyIndexRs = mock(ResultSet.class);
@@ -210,8 +210,9 @@ class MySqlIndexMetadataProviderTest {
 
       IndexMetadata metadata = provider.getIndexMetadata(connection);
 
-      assertThat(metadata.isEmpty()).isTrue();
-      assertThat(metadata.hasTable("empty_table")).isFalse();
+      assertThat(metadata.isEmpty()).isFalse();
+      assertThat(metadata.hasTable("empty_table")).isTrue();
+      assertThat(metadata.getIndexesForTable("empty_table")).isEmpty();
     }
   }
 

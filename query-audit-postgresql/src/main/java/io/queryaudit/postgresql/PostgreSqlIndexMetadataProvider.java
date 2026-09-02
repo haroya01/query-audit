@@ -76,9 +76,7 @@ public class PostgreSqlIndexMetadataProvider implements IndexMetadataProvider {
     for (String tableName : tableNames) {
       long cardinality = getCardinality(connection, tableName);
       List<IndexInfo> indexes = collectIndexes(connection, tableName, cardinality);
-      if (!indexes.isEmpty()) {
-        indexesByTable.put(tableName, indexes);
-      }
+      indexesByTable.put(tableName, indexes);
     }
 
     return new IndexMetadata(indexesByTable);

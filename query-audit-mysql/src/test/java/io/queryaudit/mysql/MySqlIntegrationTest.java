@@ -53,6 +53,29 @@ class MySqlIntegrationTest {
   }
 
   @Test
+  @DisplayName("keeps a table that has no indexes")
+  void keepsTableWithoutIndexes() {
+    assertThat(metadata.hasTable("audit_events")).isTrue();
+    assertThat(metadata.getIndexesForTable("audit_events")).isEmpty();
+
+    MissingIndexDetector detector = new MissingIndexDetector();
+    List<QueryRecord> queries =
+        List.of(
+            new QueryRecord(
+                "SELECT payload FROM audit_events WHERE event_type = 'login'",
+                1_000_000L,
+                System.nanoTime(),
+                null));
+
+    assertThat(detector.evaluate(queries, metadata))
+        .anyMatch(
+            issue ->
+                issue.type() == IssueType.MISSING_WHERE_INDEX
+                    && "audit_events".equals(issue.table())
+                    && "event_type".equals(issue.column()));
+  }
+
+  @Test
   @DisplayName("users table has correct number of index entries")
   void usersTableIndexCount() {
     // PRIMARY(id), idx_email(email), idx_username(username), idx_status_created(status,
