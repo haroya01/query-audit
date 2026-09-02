@@ -373,6 +373,10 @@ temporary table usage.
     Set `report.show-info: false` in `application.yml` to hide this section if
     your tests use small datasets where these findings are not actionable.
 
+    The setting applies to console, HTML, and JSON output, including aggregate summary counts.
+    It does not disable INFO detectors or change test failure behavior. Confirmed and acknowledged
+    findings, captured queries, query totals, timings, and index metadata remain available.
+
 ### OK
 
 ```
