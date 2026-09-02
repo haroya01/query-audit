@@ -29,7 +29,9 @@ class DataSourceResolverListenerLifecycleTest {
     QueryInterceptor interceptor = new QueryInterceptor();
 
     int before = listenerCount(proxy);
-    Runnable cleanup = resolver.hookInterceptor(proxy, interceptor);
+    Runnable cleanup =
+        resolver.hookInterceptor(
+            DataSourceResolver.ResolvedDataSource.fromSpring(proxy), interceptor);
 
     assertThat(cleanup).as("Strategy 1 must return a non-null cleanup").isNotNull();
     assertThat(listenerCount(proxy)).isEqualTo(before + 1);
@@ -52,7 +54,9 @@ class DataSourceResolverListenerLifecycleTest {
 
     for (int i = 0; i < 5; i++) {
       QueryInterceptor interceptor = new QueryInterceptor();
-      Runnable cleanup = resolver.hookInterceptor(proxy, interceptor);
+      Runnable cleanup =
+          resolver.hookInterceptor(
+              DataSourceResolver.ResolvedDataSource.fromSpring(proxy), interceptor);
       assertThat(cleanup).isNotNull();
       cleanup.run();
     }

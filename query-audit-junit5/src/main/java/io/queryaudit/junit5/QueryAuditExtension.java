@@ -123,8 +123,8 @@ public class QueryAuditExtension
       return;
     }
 
-    DataSource dataSource = dataSourceResolver.resolve(context);
-    if (dataSource == null) {
+    DataSourceResolver.ResolvedDataSource resolvedDataSource = dataSourceResolver.resolve(context);
+    if (resolvedDataSource == null) {
       if (scope == InitializationScope.METHOD) {
         throw new ExtensionConfigurationException(
             "QueryAudit: DataSource unavailable for active audit of "
@@ -134,6 +134,7 @@ public class QueryAuditExtension
       }
       return;
     }
+    DataSource dataSource = resolvedDataSource.dataSource();
 
     Path countBaselinePath = resolveCountBaselinePath(context);
     Map<String, QueryCounts> countBaseline = QueryCountBaseline.load(countBaselinePath);
@@ -145,7 +146,7 @@ public class QueryAuditExtension
     ExtensionContext.Store store = context.getStore(NAMESPACE);
     store.put(KEY_INTERCEPTOR, interceptor);
     store.put(KEY_DATASOURCE, dataSource);
-    Runnable hookCleanup = dataSourceResolver.hookInterceptor(dataSource, interceptor);
+    Runnable hookCleanup = dataSourceResolver.hookInterceptor(resolvedDataSource, interceptor);
     store.put(KEY_DATASOURCE_HOOK_CLEANUP, hookCleanup);
 
     IndexMetadata metadata = metadataCollector.collect(dataSource);

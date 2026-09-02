@@ -16,6 +16,7 @@ import net.ttddyy.dsproxy.listener.CompositeMethodListener;
 import net.ttddyy.dsproxy.listener.MethodExecutionListener;
 import net.ttddyy.dsproxy.listener.QueryExecutionListener;
 import net.ttddyy.dsproxy.support.ProxyDataSource;
+import org.junit.jupiter.api.extension.ExtensionConfigurationException;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
@@ -31,11 +32,11 @@ class DataSourceResolver {
    * Resolves a DataSource from the given extension context. Tries Spring ApplicationContext first,
    * then falls back to static DataSource fields on the test class.
    */
-  DataSource resolve(ExtensionContext context) {
+  ResolvedDataSource resolve(ExtensionContext context) {
     // Strategy 1: Spring ApplicationContext
     try {
       DataSource ds = resolveFromSpringContext(context);
-      if (ds != null) return ds;
+      if (ds != null) return ResolvedDataSource.fromSpring(ds);
     } catch (Exception | NoClassDefFoundError ignored) {
     }
 
@@ -48,7 +49,7 @@ class DataSourceResolver {
           field.setAccessible(true);
           Object value = field.get(null);
           if (value instanceof DataSource ds) {
-            return ds;
+            return ResolvedDataSource.fromStaticField(ds, field);
           }
         } catch (IllegalAccessException ignored) {
         }
@@ -63,11 +64,14 @@ class DataSourceResolver {
    * invoked from {@code afterAll} so that listeners do not accumulate on a shared proxy across test
    * classes. If the DataSource is already a {@link ProxyDataSource}, the interceptor is added as a
    * listener (Strategy 1). Otherwise, a fresh proxy is created via {@link DataSourceProxyFactory}
-   * and stored in {@link QueryAuditDataSourceStore} (Strategy 2).
+   * and installed in the mutable static field used by a plain JUnit test (Strategy 2). Cleanup
+   * restores the original field value.
    *
    * @return a cleanup callback that detaches the interceptor; never {@code null}
    */
-  Runnable hookInterceptor(DataSource dataSource, QueryInterceptor interceptor) {
+  Runnable hookInterceptor(ResolvedDataSource resolved, QueryInterceptor interceptor) {
+    DataSource dataSource = resolved.dataSource();
+
     // Strategy 1: DataSource is already a ProxyDataSource (e.g., gavlyukovskiy)
     ProxyDataSource proxy = findProxyDataSource(dataSource);
     if (proxy != null) {
@@ -81,10 +85,76 @@ class DataSourceResolver {
       };
     }
 
-    // Strategy 2: Wrap with our own proxy via DataSourceProxyFactory
-    QueryAuditDataSourceStore.set(
-        dataSource, DataSourceProxyFactory.wrap(dataSource, interceptor), interceptor);
-    return QueryAuditDataSourceStore::clear;
+    // Strategy 2: Replace a plain JUnit static field with our own proxy.
+    Field field = resolved.staticField();
+    if (field == null) {
+      throw new ExtensionConfigurationException(
+          "QueryAudit: the Spring DataSource is not query-aware. Add the QueryAudit Spring Boot"
+              + " starter or register a datasource-proxy DataSource bean.");
+    }
+    if (Modifier.isFinal(field.getModifiers())) {
+      throw unsupportedStaticField(field, "is final");
+    }
+
+    DataSource proxied = DataSourceProxyFactory.wrap(dataSource, interceptor);
+    if (!field.getType().isInstance(proxied)) {
+      throw unsupportedStaticField(
+          field,
+          "is declared as " + field.getType().getName() + " instead of javax.sql.DataSource");
+    }
+
+    setStaticField(field, proxied);
+    QueryAuditDataSourceStore.set(dataSource, proxied, interceptor);
+    return () -> {
+      try {
+        restoreStaticField(field, dataSource, proxied);
+      } finally {
+        QueryAuditDataSourceStore.clear();
+      }
+    };
+  }
+
+  private static ExtensionConfigurationException unsupportedStaticField(
+      Field field, String reason) {
+    return new ExtensionConfigurationException(
+        "QueryAudit: static DataSource field "
+            + field.getDeclaringClass().getName()
+            + "."
+            + field.getName()
+            + " "
+            + reason
+            + ". Declare it as a mutable javax.sql.DataSource field so QueryAudit can install its"
+            + " recording proxy.");
+  }
+
+  private static void setStaticField(Field field, DataSource value) {
+    try {
+      field.setAccessible(true);
+      field.set(null, value);
+    } catch (IllegalAccessException | RuntimeException e) {
+      throw new ExtensionConfigurationException(
+          "QueryAudit: could not install the recording proxy in static DataSource field "
+              + field.getDeclaringClass().getName()
+              + "."
+              + field.getName(),
+          e);
+    }
+  }
+
+  private static void restoreStaticField(Field field, DataSource original, DataSource proxied) {
+    try {
+      field.setAccessible(true);
+      if (field.get(null) == proxied) {
+        field.set(null, original);
+      }
+    } catch (IllegalAccessException | RuntimeException e) {
+      throw new ExtensionConfigurationException(
+          "QueryAudit: could not restore static DataSource field "
+              + field.getDeclaringClass().getName()
+              + "."
+              + field.getName(),
+          e);
+    }
   }
 
   /**
@@ -172,5 +242,16 @@ class DataSourceResolver {
       current = current.getSuperclass();
     }
     return fields;
+  }
+
+  record ResolvedDataSource(DataSource dataSource, Field staticField) {
+
+    static ResolvedDataSource fromSpring(DataSource dataSource) {
+      return new ResolvedDataSource(dataSource, null);
+    }
+
+    static ResolvedDataSource fromStaticField(DataSource dataSource, Field field) {
+      return new ResolvedDataSource(dataSource, field);
+    }
   }
 }
