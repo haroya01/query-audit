@@ -57,10 +57,9 @@ and the full lifecycle of a query from execution to report.
 
   @AfterAll
       |
-      +- 16. Write HTML report to build/reports/query-audit/
-      +- 17. Write JSON report (if configured)
-      +- 18. Update query count baseline (if -DqueryAudit.updateBaseline=true)
-      +- 19. Auto-open report in browser (if configured)
+      +- 16. Write the selected JSON or HTML suite artifact (if configured)
+      +- 17. Update query count baseline (if queryAudit.updateBaseline=true in the test JVM)
+      +- 18. Auto-open the selected HTML report (if configured)
 ```
 
 QueryAudit supports ordinary `@Test` methods and each `@ParameterizedTest` invocation as a
@@ -508,8 +507,17 @@ QueryAudit tracks query counts per test method across runs using a baseline file
 
 ### Updating the Baseline
 
+QueryAudit reads the update flag from the test JVM. With the
+[Gradle property bridge](../guide/ci-cd.md#plain-junit-build-tool-setup), run:
+
 ```bash
-./gradlew test -DqueryAudit.updateBaseline=true
+./gradlew test -PqueryAuditUpdateBaseline=true
+```
+
+Maven users can pass the system property directly:
+
+```bash
+mvn test -DqueryAudit.updateBaseline=true
 ```
 
 ---

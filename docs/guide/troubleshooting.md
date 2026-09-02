@@ -31,10 +31,11 @@ If you can't upgrade yet, the surgical escape hatch from #134/#142 still works:
 # application-test.yml
 query-audit:
   wrap-data-source:
-    enabled: false   # Skip the auto-wrap. Note: @QueryAudit annotation still
-                     # triggers the same wrap path internally, so this only helps
-                     # if you don't use the annotation.
+    enabled: false   # Use only when another query-aware DataSource bean is already registered.
 ```
+
+An active audit still needs a query-aware Spring `DataSource`. If no other datasource-proxy bean
+is present, disabling the wrapper prevents reliable capture.
 
 ---
 
@@ -57,22 +58,35 @@ query-audit:
     class OrderServiceTest { ... }
     ```
 
-=== "Non-Spring: DataSource not found"
+=== "Non-Spring: SQL bypasses the proxy"
 
-    QueryAudit needs a `static DataSource` field in the test class.
+    Expose a static `ProxyDataSource` field and make the repository under test use that same
+    object. SQL sent through another raw `DataSource` does not reach the capture listener.
 
     ```java
     @QueryAudit
     class OrderRepositoryTest {
-        // Must be static for QueryAuditExtension to find it
-        static DataSource dataSource = createDataSource();
+        static DataSource dataSource =
+                ProxyDataSourceBuilder.create(createDataSource())
+                        .name("query-audit")
+                        .build();
+
+        private final OrderRepository repository =
+                new JdbcOrderRepository(dataSource);
     }
     ```
 
+    See [Plain JUnit installation](../getting-started/installation.md#plain-junit-5) for the
+    required dependency and a complete capture check.
+
+    QueryAudit 0.6 can also wrap a raw `static DataSource` field automatically when the field is
+    mutable and declared as `javax.sql.DataSource`. A `static final` raw field cannot be replaced.
+
 === "Queries executed outside test method"
 
-    QueryAudit only captures queries between `@BeforeEach` and `@AfterEach`.
-    Queries in `@BeforeAll` or static initializers are not captured.
+    QueryAudit captures from `@BeforeEach` through `@AfterEach`; queries in `@BeforeAll` or static
+    initializers are outside that window. Setup and teardown statements are excluded from analysis
+    by default. Use `@QueryAudit(includeSetupQueries = true)` when they should be analyzed too.
 
 === "QueryAudit disabled"
 
@@ -219,7 +233,7 @@ were counted. Look for unexpected queries from:
 **Cause:** Both QueryAudit and spring-boot-data-source-decorator are wrapping
 the DataSource.
 
-**Fix:** See [Spring Boot Integration - Using with existing datasource-proxy](../getting-started/spring-boot.md#using-with-an-existing-datasource-proxy-gavlyukovskiy).
+**Fix:** See [Spring Boot Integration - Reuse an existing datasource-proxy](../getting-started/spring-boot.md#reuse-an-existing-datasource-proxy).
 
 ---
 
@@ -387,8 +401,10 @@ should be optimized. Add the missing index or use `@Query` with optimized SQL.
 2. **Test ordering:** Tests run in a different order in CI, causing different
    query patterns.
 
-3. **Baseline drift:** The `.query-audit-counts` baseline file is out of date.
-   Update it: `./gradlew test -DqueryAudit.updateBaseline=true`
+3. **Baseline drift:** The `.query-audit-counts` baseline file is out of date. Regenerate it
+   locally and review the diff. With the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), use
+   `./gradlew test -PqueryAuditUpdateBaseline=true`; with Maven, use
+   `mvn test -DqueryAudit.updateBaseline=true`.
 
 4. **Schema differences:** The CI database may have different indexes or table
    definitions than your local environment.

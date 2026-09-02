@@ -1,83 +1,53 @@
 ---
 title: Installation
-description: Add QueryAudit to your Java project with Gradle or Maven.
+description: Choose the Spring Boot or plain JUnit setup and verify SQL capture.
 ---
 
 # Installation
 
-!!! abstract "What you'll learn"
-    How to add QueryAudit to your project, choose the right database module, and verify the installation works.
+QueryAudit belongs on the test classpath. Choose one database module for the database used by
+your tests; it provides the JUnit extension and the matching index metadata provider.
 
----
+!!! note "Choose the setup for your version"
+    Dependency snippets use the current Maven Central release. The manual plain-JUnit proxy works
+    with 0.5.x and 0.6.0+; the simpler mutable-field setup requires QueryAudit 0.6.0 or later.
 
-## Prerequisites
+## Compatibility
 
-| Requirement | Version |
+| Layer | Project baseline and coverage |
 |---|---|
-| **Java** | 17+ |
-| **JUnit** | 5.9+ |
-| **MySQL** | 5.7+ / 8.0+ |
-| **PostgreSQL** | 12+ |
-| **Spring Boot** *(optional)* | 3.x or 4.x (4.x requires query-audit 0.3.2+) |
+| Java | Requires 17; CI runs on 17 and 21 |
+| JUnit | JUnit 5 extension; built and tested with 5.11.4 |
+| Spring Boot | 3.x and 4.x; the current suite covers 3.4.1 and 4.0.6 |
+| Database metadata | MySQL and PostgreSQL; integration tests run MySQL 8.0 and PostgreSQL 16 |
 
-!!! note "Database requirement"
-    You need either MySQL **or** PostgreSQL -- not both. Pick the tab that matches your database below.
+You still need your normal JDBC driver and a test database. QueryAudit does not create the
+database or replace your migration and fixture setup.
 
----
+## Spring Boot
 
-## Dependencies
+Add the starter and either the MySQL or PostgreSQL module. The starter discovers and wraps the
+Spring `DataSource`; no proxy bean is needed in the test.
 
-QueryAudit uses a **database-module-centric** dependency model.
-Each database module (e.g. `query-audit-mysql`, `query-audit-postgresql`) transitively pulls in `query-audit-core` and `query-audit-junit5`,
-so you only need **one or two** dependencies depending on your setup.
+=== "Gradle · MySQL"
 
-Choose the tab that matches your database and build tool:
-
-=== "Gradle -- MySQL (Spring Boot)"
-
-    ```gradle
+    ```groovy
     dependencies {
         testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.5.0' // x-release-please-version
         testImplementation 'io.github.haroya01:query-audit-mysql:0.5.0' // x-release-please-version
     }
     ```
 
-    !!! tip "That's all you need"
-        The starter auto-discovers your `DataSource` bean, wraps it in a capturing proxy, and registers the JUnit 5 extension. No additional configuration required.
+=== "Gradle · PostgreSQL"
 
-=== "Gradle -- MySQL (without Spring Boot)"
-
-    ```gradle
-    dependencies {
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.5.0' // x-release-please-version
-    }
-    ```
-
-    `query-audit-mysql` transitively includes `query-audit-core` and `query-audit-junit5`.
-
-=== "Gradle -- PostgreSQL (Spring Boot)"
-
-    ```gradle
+    ```groovy
     dependencies {
         testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.5.0' // x-release-please-version
         testImplementation 'io.github.haroya01:query-audit-postgresql:0.5.0' // x-release-please-version
     }
     ```
 
-    !!! tip "That's all you need"
-        The starter auto-discovers your `DataSource` bean, wraps it in a capturing proxy, and registers the JUnit 5 extension. No additional configuration required.
-
-=== "Gradle -- PostgreSQL (without Spring Boot)"
-
-    ```gradle
-    dependencies {
-        testImplementation 'io.github.haroya01:query-audit-postgresql:0.5.0' // x-release-please-version
-    }
-    ```
-
-    `query-audit-postgresql` transitively includes `query-audit-core` and `query-audit-junit5`.
-
-=== "Maven -- MySQL (Spring Boot)"
+=== "Maven · MySQL"
 
     ```xml
     <dependencies>
@@ -96,20 +66,7 @@ Choose the tab that matches your database and build tool:
     </dependencies>
     ```
 
-=== "Maven -- MySQL (without Spring Boot)"
-
-    ```xml
-    <dependencies>
-        <dependency>
-            <groupId>io.github.haroya01</groupId>
-            <artifactId>query-audit-mysql</artifactId>
-            <version>0.5.0</version> <!-- x-release-please-version -->
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-    ```
-
-=== "Maven -- PostgreSQL (Spring Boot)"
+=== "Maven · PostgreSQL"
 
     ```xml
     <dependencies>
@@ -128,7 +85,81 @@ Choose the tab that matches your database and build tool:
     </dependencies>
     ```
 
-=== "Maven -- PostgreSQL (without Spring Boot)"
+Verify the wiring with a test that executes one statement:
+
+```java
+@SpringBootTest
+@EnableQueryInspector
+class QueryAuditInstallationTest {
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Test
+    @ExpectMaxQueryCount(1)
+    void capturesJdbcWork() {
+        assertThat(jdbc.queryForObject("select 1", Integer.class)).isEqualTo(1);
+    }
+}
+```
+
+Run `./gradlew test --tests QueryAuditInstallationTest` or
+`mvn -Dtest=QueryAuditInstallationTest test`. The console report should show one captured query.
+QueryAudit 0.5.x also writes `build/reports/query-audit/report.json` after the session. With Spring
+Boot on 0.6.0+, select the machine report in `src/test/resources/application.yml`, rerun the test,
+and check the same path:
+
+```yaml
+query-audit:
+  report:
+    format: json
+```
+
+## Plain JUnit 5
+
+The portable plain JUnit setup exposes a `ProxyDataSource` on the test class. The repository or
+JDBC code under test must use that same object so the extension can attach its capture listener.
+
+Add the database module and a compile-time dependency on `datasource-proxy`:
+
+=== "Gradle · MySQL"
+
+    ```groovy
+    dependencies {
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.5.0' // x-release-please-version
+        testImplementation 'net.ttddyy:datasource-proxy:1.10'
+    }
+    ```
+
+=== "Gradle · PostgreSQL"
+
+    ```groovy
+    dependencies {
+        testImplementation 'io.github.haroya01:query-audit-postgresql:0.5.0' // x-release-please-version
+        testImplementation 'net.ttddyy:datasource-proxy:1.10'
+    }
+    ```
+
+=== "Maven · MySQL"
+
+    ```xml
+    <dependencies>
+        <dependency>
+            <groupId>io.github.haroya01</groupId>
+            <artifactId>query-audit-mysql</artifactId>
+            <version>0.5.0</version> <!-- x-release-please-version -->
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>net.ttddyy</groupId>
+            <artifactId>datasource-proxy</artifactId>
+            <version>1.10</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+    ```
+
+=== "Maven · PostgreSQL"
 
     ```xml
     <dependencies>
@@ -138,87 +169,93 @@ Choose the tab that matches your database and build tool:
             <version>0.5.0</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>net.ttddyy</groupId>
+            <artifactId>datasource-proxy</artifactId>
+            <version>1.10</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
     ```
 
----
+Wrap the existing test `DataSource` once, expose the proxy as a static field, and pass that proxy
+to the code under test:
 
-## Module Overview
+```java
+import io.queryaudit.junit5.EnableQueryInspector;
+import io.queryaudit.junit5.ExpectMaxQueryCount;
+import java.sql.Connection;
+import java.sql.ResultSet;
+import java.sql.Statement;
+import javax.sql.DataSource;
+import net.ttddyy.dsproxy.support.ProxyDataSourceBuilder;
+import org.junit.jupiter.api.Test;
 
-```
-query-audit-mysql              <-- Add this for MySQL
-  +-- query-audit-core              (transitive)
-  +-- query-audit-junit5            (transitive)
+@EnableQueryInspector
+class OrderRepositoryQueryTest {
 
-query-audit-postgresql         <-- Add this for PostgreSQL
-  +-- query-audit-core              (transitive)
-  +-- query-audit-junit5            (transitive)
+    static final DataSource DATA_SOURCE =
+            ProxyDataSourceBuilder.create(TestDatabase.dataSource())
+                    .name("query-audit")
+                    .build();
 
-query-audit-spring-boot-starter  <-- Add this too if using Spring Boot
-  +-- query-audit-core              (transitive)
-  +-- query-audit-junit5            (transitive)
-```
-
-| Module | Artifact ID | Description |
-|---|---|---|
-| **Core** | `query-audit-core` | Detection engine (67 rules), SQL parser, report generator. Always required (pulled transitively). |
-| **MySQL** | `query-audit-mysql` | MySQL `IndexMetadataProvider` via `SHOW INDEX`. Includes core + junit5 transitively. |
-| **PostgreSQL** | `query-audit-postgresql` | PostgreSQL `IndexMetadataProvider` via `pg_catalog`. Includes core + junit5 transitively. |
-| **JUnit 5** | `query-audit-junit5` | JUnit 5 extension, `@QueryAudit` / `@DetectNPlusOne` / `@ExpectMaxQueryCount` annotations. |
-| **Spring Boot Starter** | `query-audit-spring-boot-starter` | Auto-configuration for Spring Boot tests. Wraps `DataSource`, binds `application.yml` settings. |
-
----
-
-## Verify Installation
-
-Run a quick smoke test to confirm everything is wired correctly.
-
-=== "Spring Boot"
-
-    ```java
-    @SpringBootTest
-    @QueryAudit
-    class InstallationVerificationTest {
-
-        @Test
-        void queryGuardIsActive() {
-            // If you see a QueryAudit report in the test output,
-            // the installation is working correctly.
+    @Test
+    @ExpectMaxQueryCount(1)
+    void capturesJdbcWork() throws Exception {
+        try (Connection connection = DATA_SOURCE.getConnection();
+                Statement statement = connection.createStatement();
+                ResultSet result = statement.executeQuery("select 1")) {
+            result.next();
         }
     }
-    ```
+}
+```
 
-=== "Without Spring Boot"
+`TestDatabase.dataSource()` stands for the raw `DataSource` already created by your test fixture,
+Testcontainers setup, or connection pool. Do not create a second pool for QueryAudit. The object
+used by the repository must be `DATA_SOURCE`, not the raw object returned by the fixture.
 
-    ```java
-    @EnableQueryInspector
-    class InstallationVerificationTest {
+QueryAudit 0.6.0+ can install the recording proxy for you when the test exposes the raw object in a
+mutable static field declared as `javax.sql.DataSource`:
 
-        private static DataSource dataSource = createTestDataSource();
+```java
+@EnableQueryInspector
+class OrderRepositoryQueryTest {
 
-        @Test
-        void queryGuardIsActive() {
-            // QueryAudit auto-discovers the static DataSource field
-        }
+    static DataSource DATA_SOURCE = TestDatabase.dataSource();
+
+    @Test
+    @ExpectMaxQueryCount(1)
+    void capturesJdbcWork() {
+        new JdbcOrderRepository(DATA_SOURCE).findOne();
     }
-    ```
-
-Run the test. If QueryAudit is configured correctly, you will see the report header:
-
-```
-================================================================================
-                          QUERY AUDIT REPORT
-              InstallationVerificationTest (0 queries analyzed)
-================================================================================
-  0 confirmed issues | 0 info | 0 queries
-================================================================================
+}
 ```
 
-!!! success "You're all set!"
-    If you see this output, QueryAudit is installed and working. Move on to the Quick Start to see real detections in action.
+Do not mark this field `final` or declare it as a concrete pool type. The extension temporarily
+replaces the field value before the test and restores the original object afterward. The explicit
+`ProxyDataSource` setup above remains valid for QueryAudit 0.5.x and 0.6.0+.
 
----
+!!! warning "Keep the proxy in the execution path"
+    If the repository keeps using the raw object instead of `DATA_SOURCE`, its SQL bypasses the
+    capture listener and the report shows zero queries. Wrap once and use the proxy throughout
+    that test.
 
-## Next Steps
+## Module selection
 
-:material-arrow-right: [Quick Start](quickstart.md) -- Walk through a full example with real detections.
+| Module | Add it when |
+|---|---|
+| `query-audit-spring-boot-starter` | A Spring Boot test should receive automatic `DataSource` wrapping and property binding |
+| `query-audit-mysql` | Tests use MySQL and need MySQL index metadata or EXPLAIN support |
+| `query-audit-postgresql` | Tests use PostgreSQL and need PostgreSQL index metadata or EXPLAIN support |
+| `query-audit-junit5` | Plain JUnit tests only need SQL capture and database-independent checks |
+| `query-audit-core` | A tool consumes the model, schema, reporters, or comparator without the JUnit extension |
+
+The MySQL and PostgreSQL modules both include `query-audit-core` and `query-audit-junit5`
+transitively. Do not add those two modules again unless you need to depend on one directly.
+
+## Next step
+
+Continue with the [quick start](quickstart.md) to add a useful query budget, read the first
+failure, fix it, and keep the reports in CI. If capture does not work, use the
+[no-query checklist](../guide/troubleshooting.md#queryaudit-not-detecting-any-queries).

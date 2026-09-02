@@ -3,6 +3,11 @@
 Snapshot testing for database behavior: record every test's query profile once, then fail any
 change — in either direction — until the contract is explicitly re-recorded.
 
+!!! note "Version scope"
+    Query snapshot contracts were introduced in 0.5. QueryAudit 0.6 records stable JUnit IDs,
+    escapes IDs that contain policy-file delimiters, and includes audited tests that execute zero
+    queries. QueryAudit 0.5 uses class and display-name identities and skips zero-query tests.
+
 What the [baseline](suppressing.md) does for *findings*, contracts do for *behavior*. A
 regression detector only catches increases; a contract catches **every deviation**, which is
 what makes it reviewable: after a legitimate change you re-record, and the contracts file's
@@ -17,13 +22,22 @@ explicit contract update.
 
 ## Recording
 
-Run the suite once with the record flag:
+Run the suite once in record mode. The Gradle command assumes the
+[`Test.systemProperty` bridge](ci-cd.md#plain-junit-build-tool-setup) from the CI guide.
 
-```bash
-./gradlew test -DqueryAudit.contracts.record=true
-```
+=== "Gradle"
 
-Every audited test's SELECT/INSERT/UPDATE/DELETE counts are written to
+    ```bash
+    ./gradlew test -PqueryAuditContractsRecord=true
+    ```
+
+=== "Maven"
+
+    ```bash
+    mvn test -DqueryAudit.contracts.record=true
+    ```
+
+Every completed audited test's SELECT/INSERT/UPDATE/DELETE counts are written to
 `.query-audit-contracts` in the working directory (pipe-separated, sorted, human-reviewable):
 
 ```
@@ -43,19 +57,6 @@ stable-ID escapes make the policy file invalid and the diagnostic identifies the
 Commit the file. Pair with [`mode: all`](configuration.md#audit-coverage-mode) to freeze the
 whole suite's behavior in one run.
 
-!!! note "Gradle daemon and `-D` flags"
-    Gradle only forwards `-D` system properties to the test JVM if your `test` task is
-    configured to do so. If the flag doesn't seem to take effect, pass it explicitly:
-
-    ```groovy
-    tasks.named('test') {
-        systemProperty 'queryAudit.contracts.record',
-            providers.gradleProperty('recordContracts').getOrElse('false')
-    }
-    ```
-
-    and run `./gradlew test -PrecordContracts=true`.
-
 ## Enforcement
 
 On every subsequent run, each test with a recorded entry is compared against its contract.
@@ -68,6 +69,9 @@ QueryAudit: placeOrder() deviates from its recorded query contract (.query-audit
       at com.example.OrderService.placeOrder(OrderService.java:87)
 If the change is intended, re-record the contracts with -DqueryAudit.contracts.record=true and review the file diff.
 ```
+
+The final line names the underlying test-JVM property. Gradle projects using the bridge rerun with
+`-PqueryAuditContractsRecord=true`; Maven projects use the `-D` form shown in the diagnostic.
 
 Failures from `@ExpectMaxQueryCount`, `@ExpectQueries`, and snapshot contracts are test assertions
 rather than findings. Rule profiles, `disabled-rules`, `suppress-patterns`, severity overrides, and
@@ -93,10 +97,19 @@ Rules of enforcement:
 
 Re-record and review the diff:
 
-```bash
-./gradlew test -DqueryAudit.contracts.record=true
-git diff .query-audit-contracts
-```
+=== "Gradle"
+
+    ```bash
+    ./gradlew test -PqueryAuditContractsRecord=true
+    git diff .query-audit-contracts
+    ```
+
+=== "Maven"
+
+    ```bash
+    mvn test -DqueryAudit.contracts.record=true
+    git diff .query-audit-contracts
+    ```
 
 Recording merges: tests that ran are updated, entries for tests that didn't run are kept.
 
@@ -106,10 +119,12 @@ QueryAudit 0.6 continues to read the 0.5 `testClass | displayName | ...` rows. A
 can be enforced while a test has no stable row, and QueryAudit prints a migration warning because
 that identity cannot distinguish packages or duplicate display names. Recording with 0.6 adds an
 `@junit | <uniqueId>` row; subsequent runs prefer it. Old rows stay in the file so partial recording
-does not discard tests that did not run. QueryAudit 0.5 can read the resulting seven-column file as
-long as its stable IDs do not require 0.6 escaping; it does not understand the new syntax when an ID
-contains a pipe or line break. Backslash sequences in legacy rows retain their original literal
-meaning, and stable-ID escaping is not applied retroactively.
+does not discard tests that did not run. Do not mix 0.5 and 0.6 runners after recording stable rows.
+A 0.5 reader may parse an unescaped `@junit` row as seven ordinary fields, but it treats `@junit` as
+a class name and cannot match that row to the test. It also cannot parse the 0.6 escaping for a pipe
+or line break. Upgrade every runner before relying on stable rows. Backslash sequences in preserved
+legacy rows retain their original literal meaning, and stable-ID escaping is not applied
+retroactively.
 
 If a test still needs a legacy row that also matches another stable JUnit ID, the run fails with an
 ambiguity diagnostic. Once every matching test has its own stable row, the preserved legacy row is
@@ -119,10 +134,13 @@ cannot be linked to its old row safely, so re-record the complete suite once whe
 
 ## Configuration
 
-| System property | Description |
-|---|---|
-| `-DqueryAudit.contracts.record=true` | Record/refresh contracts instead of enforcing them |
-| `-DqueryAudit.contractsPath=path` | Override the contracts file location |
+| Test-JVM system property | Gradle project property | Description |
+|---|---|---|
+| `queryAudit.contracts.record` | `queryAuditContractsRecord` | Set to `true` to record or refresh contracts instead of enforcing them |
+| `queryAudit.contractsPath` | `queryAuditContractsPath` | Override the contracts file location |
+
+The Gradle names use the [shared property bridge](ci-cd.md#plain-junit-build-tool-setup). Maven users pass the
+test-JVM property with `-D`, for example `-DqueryAudit.contractsPath=config/query-contracts`.
 
 ## Contracts vs. related features
 
@@ -130,5 +148,5 @@ cannot be linked to its old row safely, so re-record the complete suite once whe
 |---|---|---|---|
 | **Contracts** | every recorded test | any count deviation, both directions | re-record, review file diff |
 | [`@ExpectQueries`](annotations.md#expectqueries) | one method | budget exceeded | edit the annotation |
-| Count baseline (`-DqueryAudit.updateBaseline`) | every test | count **regression** (increase) | update baseline |
+| Count baseline (`queryAudit.updateBaseline`) | every test | count **regression** (increase) | update baseline |
 | [Issue baseline](suppressing.md) | findings | new findings | acknowledge |

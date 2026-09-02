@@ -1,7 +1,8 @@
 # Annotations Guide
 
-QueryAudit provides four annotations for different use cases. All annotations trigger the
-`QueryAuditExtension` JUnit 5 extension automatically.
+QueryAudit provides six annotations for different use cases. The five auditing annotations register
+the `QueryAuditExtension` automatically. `@QueryAuditExclude` is the opt-out marker when
+auto-detected full-suite coverage is already active.
 
 ---
 
@@ -10,7 +11,7 @@ QueryAudit provides four annotations for different use cases. All annotations tr
 | Annotation | Target | Purpose | Test Failure |
 |---|---|---|---|
 | `@QueryAudit` | Class / Method | Full analysis with all 67 detection rules | Yes (configurable) |
-| `@EnableQueryInspector` | Class | Report-only mode, never fails | No |
+| `@EnableQueryInspector` | Class | Report findings without enforcing them | No finding failure; separate budget annotations still assert |
 | `@DetectNPlusOne` | Class / Method | N+1 detection only | Yes (on N+1 only) |
 | `@ExpectMaxQueryCount` | Method | Assert max query count | Yes (on count exceeded) |
 | `@ExpectQueries` | Method | Assert per-type query budgets (SELECT/INSERT/UPDATE/DELETE) | Yes (on budget exceeded) |
@@ -441,15 +442,17 @@ class OrderServiceTest {
 
 ## Without Spring Boot
 
-All annotations work without Spring Boot. QueryAudit resolves the `DataSource`
-by looking for a `static DataSource` field in the test class:
+All annotations work without Spring Boot. Expose the `ProxyDataSource` used by the repository as a
+static field so QueryAudit can discover it and attach its listener:
 
 ```java
 @QueryAudit
 class OrderRepositoryTest {
 
-    // QueryAudit auto-discovers this field
-    static DataSource dataSource = new HikariDataSource(hikariConfig());
+    static DataSource dataSource =
+            ProxyDataSourceBuilder.create(new HikariDataSource(hikariConfig()))
+                    .name("query-audit")
+                    .build();
 
     @Test
     void findByStatus() {
@@ -458,7 +461,7 @@ class OrderRepositoryTest {
                 "SELECT * FROM orders WHERE status = ?");
             ps.setString(1, "PENDING");
             ResultSet rs = ps.executeQuery();
-            // QueryAudit captures and analyzes this query
+            // This connection comes from the discovered proxy.
         }
     }
 
@@ -471,6 +474,14 @@ class OrderRepositoryTest {
     }
 }
 ```
+
+Add `net.ttddyy:datasource-proxy:1.10` to the test compile classpath. The database module already
+provides the QueryAudit JUnit integration. See [Plain JUnit installation](../getting-started/installation.md#plain-junit-5)
+for Gradle and Maven examples.
+
+In QueryAudit 0.6, the extension can also replace a mutable static field declared as
+`javax.sql.DataSource` with its recording proxy for the duration of the test class. The manual
+proxy shown above remains compatible with both 0.5 and 0.6.
 
 ---
 
