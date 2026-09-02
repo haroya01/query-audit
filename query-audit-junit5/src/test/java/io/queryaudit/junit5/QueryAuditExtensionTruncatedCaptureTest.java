@@ -9,6 +9,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.queryaudit.core.interceptor.QueryInterceptor;
+import io.queryaudit.core.model.AuditOutcome;
+import io.queryaudit.core.model.IncompleteReasonCode;
+import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCounts;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
@@ -29,6 +32,9 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 @DisplayName("QueryAuditExtension — truncated query capture (issue #186)")
 class QueryAuditExtensionTruncatedCaptureTest {
 
+  private static final ExtensionContext.Namespace NAMESPACE =
+      ExtensionContext.Namespace.create(QueryAuditExtension.class);
+
   @BeforeEach
   void setUp() {
     HtmlReportAggregator.getInstance().reset();
@@ -40,8 +46,8 @@ class QueryAuditExtensionTruncatedCaptureTest {
   }
 
   @Test
-  void truncatedCaptureFailsBeforeContractsAndReports() throws Exception {
-    AuditFixture fixture = auditFixture(1, "SELECT 1", "SELECT 2");
+  void truncatedCapturePreservesPartialFindingsAndSkipsCountContracts() throws Exception {
+    AuditFixture fixture = auditFixture(1, "UPDATE orders SET status = 'cancelled'", "SELECT 2");
 
     assertThatThrownBy(() -> new QueryAuditExtension().afterEach(fixture.context()))
         .isInstanceOf(AssertionError.class)
@@ -54,7 +60,23 @@ class QueryAuditExtensionTruncatedCaptureTest {
 
     assertThat(fixture.interceptor().isActive()).isFalse();
     assertThat(fixture.currentCounts()).isEmpty();
-    assertThat(HtmlReportAggregator.getInstance().getReports()).isEmpty();
+    assertThat(HtmlReportAggregator.getInstance().getReports())
+        .singleElement()
+        .satisfies(
+            report -> {
+              assertThat(report.getTotalQueryCount()).isEqualTo(1);
+              assertThat(report.getConfirmedIssues())
+                  .extracting(issue -> issue.type())
+                  .contains(IssueType.UPDATE_WITHOUT_WHERE);
+            });
+    assertThat(runState(fixture.context()).result(HtmlReportAggregator.getInstance().getReports()))
+        .satisfies(
+            result -> {
+              assertThat(result.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+              assertThat(result.incompleteReasons())
+                  .extracting(reason -> reason.code())
+                  .containsExactly(IncompleteReasonCode.QUERY_LIMIT_REACHED);
+            });
   }
 
   @Test
@@ -92,11 +114,18 @@ class QueryAuditExtensionTruncatedCaptureTest {
     when(classContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(classStore);
     when(classContext.getParent()).thenReturn(Optional.empty());
 
+    MapStore rootStore = new MapStore();
+    ExtensionContext rootContext = mock(ExtensionContext.class);
+    when(rootContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(rootStore);
+    when(rootContext.getRoot()).thenReturn(rootContext);
+    when(classContext.getRoot()).thenReturn(rootContext);
+
     Method testMethod =
         QueryAuditExtensionTruncatedCaptureTest.class.getDeclaredMethod("auditedMethod");
     ExtensionContext methodContext = mock(ExtensionContext.class);
     when(methodContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(methodStore);
     when(methodContext.getParent()).thenReturn(Optional.of(classContext));
+    when(methodContext.getRoot()).thenReturn(rootContext);
     doReturn(QueryAuditExtensionTruncatedCaptureTest.class)
         .when(methodContext)
         .getRequiredTestClass();
@@ -109,6 +138,14 @@ class QueryAuditExtensionTruncatedCaptureTest {
   private static String contractKey() {
     return QueryCountBaseline.key(
         QueryAuditExtensionTruncatedCaptureTest.class.getSimpleName(), "auditedMethod()");
+  }
+
+  private static QueryAuditExtension.AuditRunState runState(ExtensionContext context) {
+    return (QueryAuditExtension.AuditRunState)
+        context
+            .getRoot()
+            .getStore(NAMESPACE)
+            .get(QueryAuditExtension.AuditRunState.class.getName());
   }
 
   @QueryAudit(failOnDetection = BooleanOverride.FALSE)

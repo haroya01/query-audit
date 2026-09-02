@@ -7,6 +7,9 @@ import static org.mockito.Mockito.*;
 
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.ReportFormat;
+import io.queryaudit.core.model.AuditIncompleteReason;
+import io.queryaudit.core.model.AuditOutcome;
+import io.queryaudit.core.model.IncompleteReasonCode;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
@@ -176,6 +179,7 @@ class QueryAuditExtensionAfterAllTest {
           .hasMessageContaining(firstDirectory.toString())
           .hasMessageContaining(secondDirectory.toString())
           .hasMessageContaining("query-audit.report.output-dir");
+      assertInitializationFailure(rootStore);
     }
 
     @Test
@@ -207,6 +211,7 @@ class QueryAuditExtensionAfterAllTest {
           .hasMessageContaining("'json'")
           .hasMessageContaining("'html'")
           .hasMessageContaining("query-audit.report.format");
+      assertInitializationFailure(rootStore);
     }
 
     @Test
@@ -224,6 +229,21 @@ class QueryAuditExtensionAfterAllTest {
           .isInstanceOf(ExtensionConfigurationException.class)
           .hasMessageContaining("must not be blank")
           .hasMessageContaining("query-audit.report.output-dir");
+      assertInitializationFailure(rootStore);
+    }
+
+    private void assertInitializationFailure(ExtensionContext.Store rootStore) {
+      QueryAuditExtension.AuditRunState runState =
+          (QueryAuditExtension.AuditRunState)
+              rootStore.get(QueryAuditExtension.AuditRunState.class.getName());
+      assertThat(runState.result(List.of()))
+          .satisfies(
+              result -> {
+                assertThat(result.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+                assertThat(result.incompleteReasons())
+                    .extracting(reason -> reason.code())
+                    .containsExactly(IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED);
+              });
     }
   }
 
@@ -248,7 +268,7 @@ class QueryAuditExtensionAfterAllTest {
 
     @Test
     @DisplayName("JSON format writes only the machine report")
-    void jsonWritesOnlyJson(@TempDir Path tempDir) {
+    void jsonWritesOnlyJson(@TempDir Path tempDir) throws IOException {
       addReports();
 
       Path outputDirectory = tempDir.resolve("json-reports");
@@ -260,6 +280,9 @@ class QueryAuditExtensionAfterAllTest {
 
       assertThat(outputDirectory.resolve("report.json")).exists();
       assertThat(outputDirectory.resolve("index.html")).doesNotExist();
+      assertThat(Files.readString(outputDirectory.resolve("report.json")))
+          .contains("\"outcome\": \"PASS\"")
+          .contains("\"incompleteReasons\": []");
     }
 
     @Test
@@ -284,9 +307,10 @@ class QueryAuditExtensionAfterAllTest {
     void jsonWriteFailureInvalidatesRun(@TempDir Path tempDir) throws IOException {
       addReports();
       Path outputDirectory = blockDirectory(tempDir);
+      QueryAuditExtension.AuditRunState runState = new QueryAuditExtension.AuditRunState();
       QueryAuditExtension.ReportFinalizer finalizer =
           new QueryAuditExtension.ReportFinalizer(
-              new QueryAuditExtension(), outputDirectory, ReportFormat.JSON);
+              new QueryAuditExtension(), outputDirectory, ReportFormat.JSON, runState);
 
       assertThatThrownBy(finalizer::close)
           .isInstanceOf(ReportWriteException.class)
@@ -301,6 +325,49 @@ class QueryAuditExtensionAfterAllTest {
                 assertThat(exception.reportPath())
                     .isEqualTo(outputDirectory.resolve("report.json"));
               });
+      assertThat(finalizer.result(HtmlReportAggregator.getInstance().getReports()))
+          .satisfies(
+              result -> {
+                assertThat(result.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+                assertThat(result.incompleteReasons())
+                    .extracting(reason -> reason.code())
+                    .containsExactly(IncompleteReasonCode.REPORT_WRITE_FAILED);
+              });
+    }
+
+    @Test
+    @DisplayName("a failed JSON replacement removes a stale passing report")
+    void jsonWriteFailureRemovesStalePass(@TempDir Path tempDir) throws IOException {
+      addReports();
+      Path outputDirectory = Files.createDirectory(tempDir.resolve("reports"));
+      Path reportPath = outputDirectory.resolve("report.json");
+      Files.writeString(reportPath, "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"PASS\"}");
+      QueryAuditExtension.AuditRunState runState = new QueryAuditExtension.AuditRunState();
+      QueryAuditExtension extension =
+          new QueryAuditExtension() {
+            @Override
+            void moveJsonReportFile(Path source, Path target) throws IOException {
+              throw new IOException("simulated replacement failure");
+            }
+          };
+      QueryAuditExtension.ReportFinalizer finalizer =
+          new QueryAuditExtension.ReportFinalizer(
+              extension, outputDirectory, ReportFormat.JSON, runState);
+
+      assertThatThrownBy(finalizer::close)
+          .isInstanceOf(ReportWriteException.class)
+          .hasRootCauseMessage("simulated replacement failure");
+
+      assertThat(reportPath).doesNotExist();
+      assertThat(outputDirectory).isEmptyDirectory();
+      assertThat(finalizer.result(HtmlReportAggregator.getInstance().getReports()))
+          .satisfies(
+              result -> {
+                assertThat(result.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+                assertThat(result.incompleteReasons())
+                    .extracting(reason -> reason.code())
+                    .containsExactly(IncompleteReasonCode.REPORT_WRITE_FAILED);
+              });
     }
 
     @Test
@@ -308,9 +375,10 @@ class QueryAuditExtensionAfterAllTest {
     void htmlWriteFailureInvalidatesRun(@TempDir Path tempDir) throws IOException {
       addReports();
       Path outputDirectory = blockDirectory(tempDir);
+      QueryAuditExtension.AuditRunState runState = new QueryAuditExtension.AuditRunState();
       QueryAuditExtension.ReportFinalizer finalizer =
           new QueryAuditExtension.ReportFinalizer(
-              new QueryAuditExtension(), outputDirectory, ReportFormat.HTML);
+              new QueryAuditExtension(), outputDirectory, ReportFormat.HTML, runState);
 
       assertThatThrownBy(finalizer::close)
           .isInstanceOf(ReportWriteException.class)
@@ -324,6 +392,45 @@ class QueryAuditExtensionAfterAllTest {
                 assertThat(exception.format()).isEqualTo(ReportFormat.HTML);
                 assertThat(exception.reportPath()).isEqualTo(outputDirectory.resolve("index.html"));
               });
+      assertThat(finalizer.result(HtmlReportAggregator.getInstance().getReports()))
+          .satisfies(
+              result -> {
+                assertThat(result.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+                assertThat(result.incompleteReasons())
+                    .extracting(reason -> reason.code())
+                    .containsExactly(IncompleteReasonCode.REPORT_WRITE_FAILED);
+              });
+    }
+
+    @Test
+    @DisplayName("an incomplete JSON run writes its reason without test reports")
+    void jsonWritesIncompleteRunWithoutReports(@TempDir Path tempDir) throws IOException {
+      QueryAuditExtension.AuditRunState runState = new QueryAuditExtension.AuditRunState();
+      runState.markIncomplete(
+          new AuditIncompleteReason(
+              IncompleteReasonCode.DATASOURCE_UNAVAILABLE, "OrderServiceTest#loadsOrders"));
+      Path outputDirectory = tempDir.resolve("incomplete");
+      QueryAuditExtension.ReportFinalizer finalizer =
+          new QueryAuditExtension.ReportFinalizer(
+              new QueryAuditExtension(), outputDirectory, ReportFormat.JSON, runState);
+
+      finalizer.close();
+
+      assertThat(outputDirectory.resolve("index.html")).doesNotExist();
+      assertThat(Files.readString(outputDirectory.resolve("report.json")))
+          .contains("\"outcome\": \"INCONCLUSIVE\"")
+          .contains("\"code\": \"DATASOURCE_UNAVAILABLE\"")
+          .contains("\"detail\": \"OrderServiceTest#loadsOrders\"");
+    }
+
+    @Test
+    @DisplayName("incomplete state takes precedence over a policy failure")
+    void incompleteStateTakesPrecedenceOverFailure() {
+      QueryAuditExtension.AuditRunState runState = new QueryAuditExtension.AuditRunState();
+      runState.markPolicyFailed();
+      runState.markIncomplete(AuditIncompleteReason.of(IncompleteReasonCode.QUERY_LIMIT_REACHED));
+
+      assertThat(runState.result(List.of()).outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
     }
 
     private void addReports() {

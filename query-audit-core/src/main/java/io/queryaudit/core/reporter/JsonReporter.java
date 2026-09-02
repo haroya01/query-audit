@@ -1,5 +1,7 @@
 package io.queryaudit.core.reporter;
 
+import io.queryaudit.core.model.AuditIncompleteReason;
+import io.queryaudit.core.model.AuditRunResult;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
@@ -30,20 +32,51 @@ public class JsonReporter implements Reporter {
    *
    * @since 0.5.0
    */
-  public static final String SCHEMA_VERSION = "1.0.0";
+  public static final String SCHEMA_VERSION = "1.1.0";
+
+  private static final String LEGACY_SCHEMA_VERSION = "1.0.0";
 
   private String lastJson;
 
   /**
    * Wraps per-test reports in the versioned envelope written to {@code report.json}: {@code
-   * {"schemaVersion": "...", "reports": [...]}}.
+   * {"schemaVersion": "1.0.0", "reports": [...]}}. This compatibility overload retains the 0.5.x
+   * shape because a report list alone cannot prove that the audit completed or that its policies
+   * passed.
    *
+   * @deprecated use {@link #toRunEnvelopeJson(AuditRunResult)} so incomplete and failed runs are
+   *     preserved
    * @since 0.5.0
    */
+  @Deprecated(since = "0.6.0")
   public static String toEnvelopeJson(List<QueryAuditReport> reports) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
+    sb.append("  \"schemaVersion\": \"").append(LEGACY_SCHEMA_VERSION).append("\",\n");
+    appendReports(sb, reports);
+    sb.append("\n}");
+    return sb.toString();
+  }
+
+  /**
+   * Wraps per-test reports and the suite result in the versioned {@code report.json} envelope.
+   *
+   * @since 0.6.0
+   */
+  public static String toRunEnvelopeJson(AuditRunResult runResult) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("{\n");
     sb.append("  \"schemaVersion\": \"").append(SCHEMA_VERSION).append("\",\n");
+    sb.append("  \"outcome\": \"").append(runResult.outcome()).append("\",\n");
+    sb.append("  \"incompleteReasons\": ");
+    appendIncompleteReasons(sb, runResult.incompleteReasons());
+    sb.append(",\n");
+    appendReports(sb, runResult.reports());
+    sb.append("\n}");
+    return sb.toString();
+  }
+
+  private static void appendReports(StringBuilder sb, List<QueryAuditReport> reports) {
     sb.append("  \"reports\": [\n");
     for (int i = 0; i < reports.size(); i++) {
       sb.append(toJson(reports.get(i)).indent(4).stripTrailing());
@@ -52,8 +85,29 @@ public class JsonReporter implements Reporter {
       }
       sb.append("\n");
     }
-    sb.append("  ]\n}");
-    return sb.toString();
+    sb.append("  ]");
+  }
+
+  private static void appendIncompleteReasons(
+      StringBuilder sb, List<AuditIncompleteReason> incompleteReasons) {
+    if (incompleteReasons.isEmpty()) {
+      sb.append("[]");
+      return;
+    }
+    sb.append("[\n");
+    for (int i = 0; i < incompleteReasons.size(); i++) {
+      AuditIncompleteReason reason = incompleteReasons.get(i);
+      sb.append("    {\n");
+      appendJsonString(sb, "      ", "code", reason.code().name());
+      sb.append(",\n");
+      appendJsonString(sb, "      ", "detail", reason.detail());
+      sb.append("\n    }");
+      if (i < incompleteReasons.size() - 1) {
+        sb.append(",");
+      }
+      sb.append("\n");
+    }
+    sb.append("  ]");
   }
 
   @Override

@@ -3,16 +3,24 @@ package io.queryaudit.core.reporter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.queryaudit.core.model.AuditIncompleteReason;
+import io.queryaudit.core.model.AuditOutcome;
+import io.queryaudit.core.model.AuditRunResult;
+import io.queryaudit.core.model.IncompleteReasonCode;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Round-trip tests for the delta verdict (issue #167): envelopes are produced by the real {@link
@@ -35,11 +43,15 @@ class ReportComparatorTest {
   }
 
   private static String envelope(QueryAuditReport... reports) {
-    return JsonReporter.toEnvelopeJson(List.of(reports));
+    return JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(reports)));
   }
 
   private static String envelopeWithRawReport(String report) {
-    return "{\"schemaVersion\":\"1.0.0\",\"reports\":[" + report + "]}";
+    return "{\"schemaVersion\":\""
+        + JsonReporter.SCHEMA_VERSION
+        + "\",\"outcome\":\"PASS\",\"incompleteReasons\":[],\"reports\":["
+        + report
+        + "]}";
   }
 
   private static void assertInvalidReport(String report, String expectedMessage) {
@@ -193,6 +205,9 @@ class ReportComparatorTest {
       assertThat(verdict.persisting()).isEmpty();
       assertThat(verdict.missingTests())
           .containsExactly(new ReportComparator.TestRef("OrderServiceTest", "findOrders"));
+      assertThat(verdict.incompleteReasons())
+          .extracting(reason -> reason.code())
+          .containsExactly(IncompleteReasonCode.EXPECTED_TEST_MISSING);
       assertThat(verdict.complete()).isFalse();
       assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
     }
@@ -250,12 +265,128 @@ class ReportComparatorTest {
     @Test
     @DisplayName("accepts compatible 1.x schema versions")
     void acceptsCompatibleSchemaVersion() {
-      String compatibleEnvelope = "{\"schemaVersion\":\"1.42.7\",\"reports\":[]}";
+      String compatibleEnvelope =
+          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"PASS\","
+              + "\"incompleteReasons\":[],\"reports\":[]}";
 
       ReportComparator.Verdict verdict =
           ReportComparator.compare(compatibleEnvelope, compatibleEnvelope);
 
       assertThat(verdict.complete()).isTrue();
+    }
+
+    @Test
+    @DisplayName("future outcome values produce a structured inconclusive verdict")
+    void futureOutcomeIsInconclusive() {
+      Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
+      String futureEnvelope =
+          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"SKIPPED\","
+              + "\"incompleteReasons\":[],\"reports\":["
+              + JsonReporter.toJson(report("findOrders", List.of(introduced), 9))
+              + "]}";
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(envelope(report("findOrders", List.of(), 5)), futureEnvelope);
+
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.newFindings()).hasSize(1);
+      assertThat(verdict.queriesBefore()).isEqualTo(5);
+      assertThat(verdict.queriesAfter()).isEqualTo(9);
+      assertThat(verdict.incompleteReasons())
+          .singleElement()
+          .satisfies(
+              reason -> {
+                assertThat(reason.code()).isEqualTo(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+                assertThat(reason.detail()).contains("unknown outcome 'SKIPPED'");
+              });
+    }
+
+    @Test
+    @DisplayName("future incomplete reason values produce a structured inconclusive verdict")
+    void futureIncompleteReasonIsInconclusive() {
+      Issue resolved = nPlusOne("select * from payments where order_id = ?", "S.pay:20");
+      String futureEnvelope =
+          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"INCONCLUSIVE\","
+              + "\"incompleteReasons\":[{\"code\":\"FUTURE_REASON\",\"detail\":null}],"
+              + "\"reports\":["
+              + JsonReporter.toJson(report("findOrders", List.of(resolved), 8))
+              + "]}";
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(futureEnvelope, envelope(report("findOrders", List.of(), 3)));
+
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.resolved()).hasSize(1);
+      assertThat(verdict.queriesBefore()).isEqualTo(8);
+      assertThat(verdict.queriesAfter()).isEqualTo(3);
+      assertThat(verdict.incompleteReasons())
+          .singleElement()
+          .satisfies(
+              reason -> {
+                assertThat(reason.code()).isEqualTo(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+                assertThat(reason.detail()).contains("unknown incomplete reason 'FUTURE_REASON'");
+              });
+    }
+
+    @Test
+    @DisplayName("a legacy 1.0 input is inconclusive instead of being inferred as PASS")
+    void legacyEnvelopeWithoutOutcomeIsInconclusive() {
+      Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+      QueryAuditReport baselineReport = report("findOrders", List.of(finding), 11);
+      String legacyEnvelope =
+          "{\"schemaVersion\":\"1.0.0\",\"reports\":[" + JsonReporter.toJson(baselineReport) + "]}";
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(legacyEnvelope, envelope(report("findOrders", List.of(), 7)));
+
+      assertThat(verdict.resolved()).hasSize(1);
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.incompleteReasons())
+          .extracting(reason -> reason.code())
+          .containsExactly(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("an inconclusive candidate retains partial finding deltas")
+    void inconclusiveCandidateRetainsPartialDeltas() {
+      Issue fixed = nPlusOne("select * from payments where order_id = ?", "S.pay:20");
+      Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
+      String before = envelope(report("findPayments", List.of(fixed), 5));
+      String after =
+          JsonReporter.toRunEnvelopeJson(
+              AuditRunResult.inconclusive(
+                  List.of(
+                      report("findPayments", List.of(), 3),
+                      report("findRefunds", List.of(introduced), 7)),
+                  new AuditIncompleteReason(
+                      IncompleteReasonCode.QUERY_LIMIT_REACHED, "findRefunds retained 7 queries")));
+
+      ReportComparator.Verdict verdict = ReportComparator.compare(before, after);
+
+      assertThat(verdict.resolved()).hasSize(1);
+      assertThat(verdict.newFindings()).hasSize(1);
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.incompleteReasons())
+          .extracting(reason -> reason.code())
+          .containsExactly(IncompleteReasonCode.QUERY_LIMIT_REACHED);
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a completed candidate policy failure remains FAIL without new findings")
+    void candidateFailureIsNotHiddenByAnEmptyDelta() {
+      QueryAuditReport unchanged = report("findOrders", List.of(), 3);
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(
+              envelope(unchanged),
+              JsonReporter.toRunEnvelopeJson(AuditRunResult.fail(List.of(unchanged))));
+
+      assertThat(verdict.newFindings()).isEmpty();
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.FAIL);
+      assertThat(verdict.complete()).isTrue();
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(1);
     }
 
     @Test
@@ -268,15 +399,63 @@ class ReportComparatorTest {
     }
 
     @Test
-    @DisplayName("rejects an unsupported schema major version")
-    void rejectsUnsupportedSchemaVersion() {
+    @DisplayName("schema 1.1 requires explicit outcome fields")
+    void rejectsMissingOutcomeFields() {
       assertThatThrownBy(
               () ->
                   ReportComparator.compare(
-                      "{\"schemaVersion\":\"999.0.0\",\"reports\":[]}", envelope()))
+                      "{\"schemaVersion\":\"1.1.0\",\"reports\":[]}", envelope()))
           .isInstanceOf(IllegalArgumentException.class)
-          .hasMessageContaining("unsupported schemaVersion")
-          .hasMessageContaining("1.x");
+          .hasMessageContaining("envelope.outcome is required");
+
+      assertThatThrownBy(
+              () ->
+                  ReportComparator.compare(
+                      "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"PASS\"," + "\"reports\":[]}",
+                      envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("envelope.incompleteReasons is required");
+    }
+
+    @Test
+    @DisplayName("outcome and incomplete reasons must form a valid run result")
+    void validatesOutcomeAndIncompleteReasons() {
+      assertThatThrownBy(
+              () ->
+                  ReportComparator.compare(
+                      "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"PASS\","
+                          + "\"incompleteReasons\":[{\"code\":\"QUERY_LIMIT_REACHED\","
+                          + "\"detail\":null}],\"reports\":[]}",
+                      envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("inconsistent")
+          .hasMessageContaining("PASS must not carry");
+
+      assertThatThrownBy(
+              () ->
+                  ReportComparator.compare(
+                      "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"INCONCLUSIVE\","
+                          + "\"incompleteReasons\":[],\"reports\":[]}",
+                      envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("requires at least one");
+    }
+
+    @Test
+    @DisplayName("an unsupported schema major produces a structured inconclusive verdict")
+    void unsupportedSchemaVersionIsInconclusive() {
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare("{\"schemaVersion\":\"999.0.0\",\"reports\":[]}", envelope());
+
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.incompleteReasons())
+          .singleElement()
+          .satisfies(
+              reason -> {
+                assertThat(reason.code()).isEqualTo(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+                assertThat(reason.detail()).contains("999.0.0").contains("1.x");
+              });
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
     }
 
     @Test
@@ -419,6 +598,27 @@ class ReportComparatorTest {
   }
 
   @Nested
+  @DisplayName("command-line exit contract")
+  class CommandLine {
+
+    @Test
+    @DisplayName("a verdict write failure exits as inconclusive")
+    void verdictWriteFailureUsesExitCodeTwo(@TempDir Path tempDir) throws IOException {
+      Path before = tempDir.resolve("before.json");
+      Path after = tempDir.resolve("after.json");
+      Files.writeString(before, envelope());
+      Files.writeString(after, envelope());
+      Path blockedVerdict = Files.createDirectory(tempDir.resolve("verdict.json"));
+
+      int exitCode =
+          ReportComparator.run(
+              new String[] {before.toString(), after.toString(), blockedVerdict.toString()});
+
+      assertThat(exitCode).isEqualTo(2);
+    }
+  }
+
+  @Nested
   @DisplayName("verdict rendering")
   class Rendering {
 
@@ -433,6 +633,8 @@ class ReportComparatorTest {
       String json = ReportComparator.toJson(verdict);
 
       Map<?, ?> parsed = (Map<?, ?>) MiniJsonParser.parse(json);
+      assertThat(parsed.get("outcome")).isEqualTo("FAIL");
+      assertThat((List<?>) parsed.get("incompleteReasons")).isEmpty();
       assertThat((List<?>) parsed.get("newFindings")).hasSize(1);
       assertThat((List<?>) parsed.get("resolved")).isEmpty();
       assertThat(parsed.get("complete")).isEqualTo(Boolean.TRUE);
@@ -450,8 +652,17 @@ class ReportComparatorTest {
           ReportComparator.compare(envelope(report("findOrders", List.of(finding), 5)), envelope());
 
       Map<?, ?> parsed = (Map<?, ?>) MiniJsonParser.parse(ReportComparator.toJson(verdict));
+      assertThat(parsed.get("outcome")).isEqualTo("INCONCLUSIVE");
       assertThat(parsed.get("complete")).isEqualTo(Boolean.FALSE);
       assertThat((List<?>) parsed.get("resolved")).isEmpty();
+      assertThat((List<?>) parsed.get("incompleteReasons"))
+          .singleElement()
+          .satisfies(
+              entry -> {
+                Map<?, ?> reason = (Map<?, ?>) entry;
+                assertThat(reason.get("code")).isEqualTo("EXPECTED_TEST_MISSING");
+                assertThat(reason.get("detail")).isNull();
+              });
       assertThat((List<?>) parsed.get("missingTests"))
           .singleElement()
           .satisfies(

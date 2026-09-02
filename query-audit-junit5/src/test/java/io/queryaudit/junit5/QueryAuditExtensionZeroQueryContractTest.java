@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.queryaudit.core.interceptor.QueryInterceptor;
+import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCounts;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
@@ -63,6 +64,11 @@ class QueryAuditExtensionZeroQueryContractTest {
         .hasMessageContaining("SELECT: contract 1, executed 0");
 
     assertZeroQueryExecutionWasRecorded(fixture);
+    assertThat(
+            runState(fixture.context())
+                .result(HtmlReportAggregator.getInstance().getReports())
+                .outcome())
+        .isEqualTo(AuditOutcome.FAIL);
   }
 
   @Test
@@ -75,6 +81,11 @@ class QueryAuditExtensionZeroQueryContractTest {
         .doesNotThrowAnyException();
 
     assertZeroQueryExecutionWasRecorded(fixture);
+    assertThat(
+            runState(fixture.context())
+                .result(HtmlReportAggregator.getInstance().getReports())
+                .outcome())
+        .isEqualTo(AuditOutcome.PASS);
   }
 
   private static void assertZeroQueryExecutionWasRecorded(ContractContext fixture) {
@@ -102,11 +113,20 @@ class QueryAuditExtensionZeroQueryContractTest {
     when(classContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(classStore);
     when(classContext.getParent()).thenReturn(Optional.empty());
 
+    MapStore rootStore = new MapStore();
+    rootStore.put(
+        QueryAuditExtension.AuditRunState.class.getName(), new QueryAuditExtension.AuditRunState());
+    ExtensionContext rootContext = mock(ExtensionContext.class);
+    when(rootContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(rootStore);
+    when(rootContext.getRoot()).thenReturn(rootContext);
+    when(classContext.getRoot()).thenReturn(rootContext);
+
     Method testMethod =
         QueryAuditExtensionZeroQueryContractTest.class.getDeclaredMethod("auditedMethod");
     ExtensionContext methodContext = mock(ExtensionContext.class);
     when(methodContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(methodStore);
     when(methodContext.getParent()).thenReturn(Optional.of(classContext));
+    when(methodContext.getRoot()).thenReturn(rootContext);
     doReturn(QueryAuditExtensionZeroQueryContractTest.class)
         .when(methodContext)
         .getRequiredTestClass();
@@ -119,6 +139,14 @@ class QueryAuditExtensionZeroQueryContractTest {
   private static String contractKey() {
     return QueryCountBaseline.key(
         QueryAuditExtensionZeroQueryContractTest.class.getSimpleName(), "auditedMethod()");
+  }
+
+  private static QueryAuditExtension.AuditRunState runState(ExtensionContext context) {
+    return (QueryAuditExtension.AuditRunState)
+        context
+            .getRoot()
+            .getStore(NAMESPACE)
+            .get(QueryAuditExtension.AuditRunState.class.getName());
   }
 
   private static void restoreProperty(String key, String value) {

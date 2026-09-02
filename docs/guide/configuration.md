@@ -529,9 +529,11 @@ significant heap memory. The following settings help control memory usage.
 ### Max Queries Per Test (default: 10,000)
 
 Each test retains up to 10,000 queries by default. Reaching the limit is valid when no queries are
-lost. If another query arrives, it is dropped, a warning is printed to stderr, and the audit fails
-as incomplete before the retained queries are analyzed. This prevents both out-of-memory errors
-and successful audit results based on partial data.
+lost. If another query arrives, it is dropped, a warning is printed to stderr, and the suite outcome
+becomes `INCONCLUSIVE` with reason `QUERY_LIMIT_REACHED`. QueryAudit still analyzes the retained
+queries and preserves their partial findings and statistics, but it does not evaluate count-based
+contracts against incomplete data. This prevents both out-of-memory errors and successful audit
+results based on partial collection.
 
 ```yaml
 query-audit:

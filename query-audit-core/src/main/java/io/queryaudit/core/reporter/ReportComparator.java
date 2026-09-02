@@ -1,5 +1,9 @@
 package io.queryaudit.core.reporter;
 
+import io.queryaudit.core.model.AuditIncompleteReason;
+import io.queryaudit.core.model.AuditOutcome;
+import io.queryaudit.core.model.AuditRunResult;
+import io.queryaudit.core.model.IncompleteReasonCode;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,17 +28,18 @@ import java.util.regex.Pattern;
  * matching, so findings survive line-only refactors while still distinguishing different call
  * sites. Only <em>confirmed</em> findings participate — INFO advisories don't gate fix loops.
  *
- * <p><strong>Exit contract</strong> (CLI): {@code 0} when a complete comparison has no new
- * findings, {@code 1} when a complete comparison has new findings, and {@code 2} when the
- * comparison is incomplete or on usage/parse errors.
+ * <p><strong>Exit contract</strong> (CLI): {@code 0} for {@link AuditOutcome#PASS}, {@code 1} for
+ * {@link AuditOutcome#FAIL}, and {@code 2} for {@link AuditOutcome#INCONCLUSIVE} or usage/parse
+ * errors.
  *
  * @author haroya
  * @since 0.5.0
  */
 public final class ReportComparator {
 
-  private static final String SUPPORTED_SCHEMA_MAJOR = "1";
-  private static final Pattern SCHEMA_VERSION_PATTERN = Pattern.compile("^(\\d+)\\.\\d+\\.\\d+$");
+  private static final int SUPPORTED_SCHEMA_MAJOR = 1;
+  private static final int FIRST_OUTCOME_SCHEMA_MINOR = 1;
+  private static final Pattern SCHEMA_VERSION_PATTERN = Pattern.compile("^(\\d+)\\.(\\d+)\\.\\d+$");
   private static final Pattern SOURCE_LINE_NUMBER = Pattern.compile("(?m):-?\\d+$");
 
   private ReportComparator() {
@@ -48,6 +53,11 @@ public final class ReportComparator {
   /** Identifies an audited test using the fields available in the schema 1.x report envelope. */
   public record TestRef(String testClass, String testName) {}
 
+  private record Envelope(
+      AuditOutcome outcome,
+      List<AuditIncompleteReason> incompleteReasons,
+      List<Map<?, ?>> reports) {}
+
   /** The comparison result; incomplete comparisons cannot produce a trustworthy success signal. */
   public record Verdict(
       List<Finding> resolved,
@@ -57,7 +67,18 @@ public final class ReportComparator {
       long queriesAfter,
       long executionTimeMsBefore,
       long executionTimeMsAfter,
-      List<TestRef> missingTests) {
+      List<TestRef> missingTests,
+      AuditOutcome outcome,
+      List<AuditIncompleteReason> incompleteReasons) {
+
+    public Verdict {
+      resolved = List.copyOf(resolved);
+      newFindings = List.copyOf(newFindings);
+      persisting = List.copyOf(persisting);
+      missingTests = List.copyOf(missingTests);
+      AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
+      incompleteReasons = validated.incompleteReasons();
+    }
 
     /** Retains the original constructor for callers compiled against the 0.5.0 API. */
     public Verdict(
@@ -76,19 +97,58 @@ public final class ReportComparator {
           queriesAfter,
           executionTimeMsBefore,
           executionTimeMsAfter,
+          List.of(),
+          newFindings.isEmpty() ? AuditOutcome.PASS : AuditOutcome.FAIL,
           List.of());
     }
 
-    /** Returns whether every test audited in the baseline also appears in the candidate report. */
+    /** Retains the original complete/missing-tests constructor from the 0.5.x API. */
+    public Verdict(
+        List<Finding> resolved,
+        List<Finding> newFindings,
+        List<Finding> persisting,
+        long queriesBefore,
+        long queriesAfter,
+        long executionTimeMsBefore,
+        long executionTimeMsAfter,
+        List<TestRef> missingTests) {
+      this(
+          resolved,
+          newFindings,
+          persisting,
+          queriesBefore,
+          queriesAfter,
+          executionTimeMsBefore,
+          executionTimeMsAfter,
+          missingTests,
+          missingTests.isEmpty()
+              ? (newFindings.isEmpty() ? AuditOutcome.PASS : AuditOutcome.FAIL)
+              : AuditOutcome.INCONCLUSIVE,
+          missingTests.isEmpty()
+              ? List.of()
+              : List.of(AuditIncompleteReason.of(IncompleteReasonCode.EXPECTED_TEST_MISSING)));
+    }
+
+    /** Returns whether both report inputs support a trustworthy comparison. */
     public boolean complete() {
-      return missingTests.isEmpty();
+      return outcome != AuditOutcome.INCONCLUSIVE;
     }
   }
 
   /** Compares two envelope documents (the string content of two {@code report.json} files). */
   public static Verdict compare(String beforeJson, String afterJson) {
-    List<Map<?, ?>> beforeReports = reports(beforeJson);
-    List<Map<?, ?>> afterReports = reports(afterJson);
+    Envelope beforeEnvelope;
+    Envelope afterEnvelope;
+    try {
+      beforeEnvelope = readEnvelope(beforeJson);
+      afterEnvelope = readEnvelope(afterJson);
+    } catch (UnsupportedReportSchemaException e) {
+      return inconclusiveVerdict(
+          new AuditIncompleteReason(IncompleteReasonCode.UNSUPPORTED_SCHEMA, e.getMessage()));
+    }
+
+    List<Map<?, ?>> beforeReports = beforeEnvelope.reports();
+    List<Map<?, ?>> afterReports = afterEnvelope.reports();
     List<Finding> before = confirmedFindings(beforeReports);
     List<Finding> after = confirmedFindings(afterReports);
 
@@ -110,6 +170,18 @@ public final class ReportComparator {
     List<Finding> fresh = after.stream().filter(f -> !beforeKeys.contains(f.key())).toList();
     List<Finding> persisting = after.stream().filter(f -> beforeKeys.contains(f.key())).toList();
 
+    List<AuditIncompleteReason> incompleteReasons = new ArrayList<>();
+    incompleteReasons.addAll(beforeEnvelope.incompleteReasons());
+    incompleteReasons.addAll(afterEnvelope.incompleteReasons());
+    if (!missingTests.isEmpty()) {
+      incompleteReasons.add(AuditIncompleteReason.of(IncompleteReasonCode.EXPECTED_TEST_MISSING));
+    }
+    AuditRunResult comparisonResult =
+        AuditRunResult.determine(
+            List.of(),
+            afterEnvelope.outcome() == AuditOutcome.FAIL || !fresh.isEmpty(),
+            incompleteReasons);
+
     return new Verdict(
         resolved,
         fresh,
@@ -118,14 +190,33 @@ public final class ReportComparator {
         sumSummary(afterReports, "totalQueries"),
         sumSummary(beforeReports, "executionTimeMs"),
         sumSummary(afterReports, "executionTimeMs"),
-        missingTests);
+        missingTests,
+        comparisonResult.outcome(),
+        comparisonResult.incompleteReasons());
+  }
+
+  private static Verdict inconclusiveVerdict(AuditIncompleteReason reason) {
+    return new Verdict(
+        List.of(),
+        List.of(),
+        List.of(),
+        0,
+        0,
+        0,
+        0,
+        List.of(),
+        AuditOutcome.INCONCLUSIVE,
+        List.of(reason));
   }
 
   /** Renders the verdict as JSON (the {@code verdict.json} contract). */
   public static String toJson(Verdict verdict) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
-    sb.append("  \"newFindings\": ");
+    sb.append("  \"outcome\": \"").append(verdict.outcome()).append("\",\n");
+    sb.append("  \"incompleteReasons\": ");
+    appendIncompleteReasons(sb, verdict.incompleteReasons());
+    sb.append(",\n  \"newFindings\": ");
     appendFindings(sb, verdict.newFindings());
     sb.append(",\n  \"resolved\": ");
     appendFindings(sb, verdict.resolved());
@@ -152,6 +243,8 @@ public final class ReportComparator {
   public static String toSummary(Verdict verdict) {
     StringBuilder sb = new StringBuilder();
     sb.append("[QueryAudit] compare: ")
+        .append(verdict.outcome())
+        .append("; ")
         .append(verdict.newFindings().size())
         .append(" new, ")
         .append(verdict.resolved().size())
@@ -161,7 +254,7 @@ public final class ReportComparator {
         .append(verdict.queriesBefore())
         .append(" -> ")
         .append(verdict.queriesAfter());
-    if (!verdict.complete()) {
+    if (!verdict.missingTests().isEmpty()) {
       sb.append("; INCOMPLETE: ")
           .append(verdict.missingTests().size())
           .append(" baseline ")
@@ -169,6 +262,14 @@ public final class ReportComparator {
           .append(" missing");
       for (TestRef test : verdict.missingTests()) {
         sb.append("\n  MISSING  ").append(describe(test));
+      }
+    } else if (!verdict.incompleteReasons().isEmpty()) {
+      sb.append("; INCONCLUSIVE: ");
+      for (int i = 0; i < verdict.incompleteReasons().size(); i++) {
+        if (i > 0) {
+          sb.append(", ");
+        }
+        sb.append(verdict.incompleteReasons().get(i).code());
       }
     }
     for (Finding f : verdict.newFindings()) {
@@ -185,12 +286,15 @@ public final class ReportComparator {
    * summary; writes {@code verdict.json} when the third argument is given.
    */
   public static void main(String[] args) throws Exception {
+    System.exit(run(args));
+  }
+
+  static int run(String[] args) {
     if (args.length < 2 || args.length > 3) {
       System.err.println(
           "usage: java io.queryaudit.core.reporter.ReportComparator"
               + " <before.json> <after.json> [verdict.json]");
-      System.exit(2);
-      return;
+      return 2;
     }
     Verdict verdict;
     try {
@@ -200,32 +304,39 @@ public final class ReportComparator {
               Files.readString(Path.of(args[1]), StandardCharsets.UTF_8));
     } catch (Exception e) {
       System.err.println("[QueryAudit] compare failed: " + e.getMessage());
-      System.exit(2);
-      return;
+      return 2;
     }
     System.out.println(toSummary(verdict));
     if (args.length == 3) {
-      Files.writeString(Path.of(args[2]), toJson(verdict), StandardCharsets.UTF_8);
-      System.out.println("[QueryAudit] verdict: " + Path.of(args[2]).toAbsolutePath());
+      try {
+        Path verdictPath = Path.of(args[2]);
+        Files.writeString(verdictPath, toJson(verdict), StandardCharsets.UTF_8);
+        System.out.println("[QueryAudit] verdict: " + verdictPath.toAbsolutePath());
+      } catch (Exception e) {
+        System.err.println(
+            "[QueryAudit] could not write verdict to '" + args[2] + "': " + e.getMessage());
+        return 2;
+      }
     }
-    System.exit(exitCode(verdict));
+    return exitCode(verdict);
   }
 
   static int exitCode(Verdict verdict) {
-    if (!verdict.complete()) {
-      return 2;
-    }
-    return verdict.newFindings().isEmpty() ? 0 : 1;
+    return switch (verdict.outcome()) {
+      case PASS -> 0;
+      case FAIL -> 1;
+      case INCONCLUSIVE -> 2;
+    };
   }
 
   // ── Envelope reading ───────────────────────────────────────────────
 
-  private static List<Map<?, ?>> reports(String envelopeJson) {
+  private static Envelope readEnvelope(String envelopeJson) {
     Object root = MiniJsonParser.parse(envelopeJson);
     if (!(root instanceof Map<?, ?> envelope)) {
       throw invalidEnvelope("expected a JSON object");
     }
-    requireSupportedSchemaVersion(envelope);
+    SchemaVersion schemaVersion = requireSupportedSchemaVersion(envelope);
     if (!(envelope.get("reports") instanceof List<?> entries)) {
       throw invalidEnvelope("reports must be an array");
     }
@@ -239,7 +350,74 @@ public final class ReportComparator {
       validateReport(report, i);
       reports.add(report);
     }
-    return reports;
+
+    if (schemaVersion.minor() < FIRST_OUTCOME_SCHEMA_MINOR) {
+      return new Envelope(
+          AuditOutcome.INCONCLUSIVE,
+          List.of(
+              new AuditIncompleteReason(
+                  IncompleteReasonCode.UNSUPPORTED_SCHEMA,
+                  "schemaVersion " + schemaVersion.text() + " does not declare a run outcome")),
+          reports);
+    }
+
+    AuditOutcome outcome;
+    List<AuditIncompleteReason> incompleteReasons;
+    try {
+      outcome = requireOutcome(envelope);
+      incompleteReasons = requireIncompleteReasons(envelope);
+    } catch (UnsupportedReportSchemaException e) {
+      return new Envelope(
+          AuditOutcome.INCONCLUSIVE,
+          List.of(
+              new AuditIncompleteReason(IncompleteReasonCode.UNSUPPORTED_SCHEMA, e.getMessage())),
+          reports);
+    }
+    try {
+      AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
+      return new Envelope(validated.outcome(), validated.incompleteReasons(), reports);
+    } catch (IllegalArgumentException e) {
+      throw invalidEnvelope("outcome and incompleteReasons are inconsistent: " + e.getMessage());
+    }
+  }
+
+  private static AuditOutcome requireOutcome(Map<?, ?> envelope) {
+    Object value = requireField(envelope, "outcome", "envelope");
+    if (!(value instanceof String outcome)) {
+      throw invalidEnvelope("envelope.outcome must be a string");
+    }
+    try {
+      return AuditOutcome.valueOf(outcome);
+    } catch (IllegalArgumentException e) {
+      throw unsupportedEvolution("unknown outcome '" + outcome + "'");
+    }
+  }
+
+  private static List<AuditIncompleteReason> requireIncompleteReasons(Map<?, ?> envelope) {
+    List<?> entries = requireArray(envelope, "incompleteReasons", "envelope");
+    List<AuditIncompleteReason> reasons = new ArrayList<>(entries.size());
+    for (int i = 0; i < entries.size(); i++) {
+      String path = "envelope.incompleteReasons[" + i + "]";
+      if (!(entries.get(i) instanceof Map<?, ?> reason)) {
+        throw invalidEnvelope(path + " must be an object");
+      }
+      Object codeValue = requireField(reason, "code", path);
+      if (!(codeValue instanceof String code)) {
+        throw invalidEnvelope(path + ".code must be a string");
+      }
+      IncompleteReasonCode reasonCode;
+      try {
+        reasonCode = IncompleteReasonCode.valueOf(code);
+      } catch (IllegalArgumentException e) {
+        throw unsupportedEvolution("unknown incomplete reason '" + code + "'");
+      }
+      Object detailValue = requireField(reason, "detail", path);
+      if (detailValue != null && !(detailValue instanceof String)) {
+        throw invalidEnvelope(path + ".detail must be a string or null");
+      }
+      reasons.add(new AuditIncompleteReason(reasonCode, (String) detailValue));
+    }
+    return reasons;
   }
 
   private static void validateReport(Map<?, ?> report, int reportIndex) {
@@ -310,7 +488,9 @@ public final class ReportComparator {
     return object.get(field);
   }
 
-  private static void requireSupportedSchemaVersion(Map<?, ?> envelope) {
+  private record SchemaVersion(int major, int minor, String text) {}
+
+  private static SchemaVersion requireSupportedSchemaVersion(Map<?, ?> envelope) {
     Object value = envelope.get("schemaVersion");
     if (!(value instanceof String schemaVersion)) {
       throw invalidEnvelope("schemaVersion is required and must be a string");
@@ -320,15 +500,34 @@ public final class ReportComparator {
     if (!version.matches()) {
       throw invalidEnvelope("invalid schemaVersion; expected major.minor.patch");
     }
-    if (!SUPPORTED_SCHEMA_MAJOR.equals(version.group(1))) {
-      throw invalidEnvelope(
-          "unsupported schemaVersion; this comparator supports " + SUPPORTED_SCHEMA_MAJOR + ".x");
+    int major = Integer.parseInt(version.group(1));
+    int minor = Integer.parseInt(version.group(2));
+    if (major != SUPPORTED_SCHEMA_MAJOR) {
+      throw new UnsupportedReportSchemaException(
+          "unsupported schemaVersion "
+              + schemaVersion
+              + "; this comparator supports "
+              + SUPPORTED_SCHEMA_MAJOR
+              + ".x");
     }
+    return new SchemaVersion(major, minor, schemaVersion);
   }
 
   private static IllegalArgumentException invalidEnvelope(String reason) {
     return new IllegalArgumentException(
-        "not a supported report.json envelope — " + reason + " (QueryAudit 0.5.0+)");
+        "not a supported report.json envelope — " + reason + " (schema 1.0+ envelope)");
+  }
+
+  private static UnsupportedReportSchemaException unsupportedEvolution(String reason) {
+    return new UnsupportedReportSchemaException(
+        reason + "; update QueryAudit to read this report schema safely");
+  }
+
+  private static final class UnsupportedReportSchemaException extends IllegalArgumentException {
+
+    UnsupportedReportSchemaException(String message) {
+      super(message);
+    }
   }
 
   private static List<Finding> confirmedFindings(List<Map<?, ?>> reports) {
@@ -381,6 +580,26 @@ public final class ReportComparator {
   }
 
   // ── Rendering helpers ──────────────────────────────────────────────
+
+  private static void appendIncompleteReasons(
+      StringBuilder sb, List<AuditIncompleteReason> reasons) {
+    if (reasons.isEmpty()) {
+      sb.append("[]");
+      return;
+    }
+    sb.append("[\n");
+    for (int i = 0; i < reasons.size(); i++) {
+      AuditIncompleteReason reason = reasons.get(i);
+      sb.append("    {\"code\": \"").append(reason.code()).append("\", \"detail\": ");
+      appendString(sb, reason.detail());
+      sb.append("}");
+      if (i < reasons.size() - 1) {
+        sb.append(",");
+      }
+      sb.append("\n");
+    }
+    sb.append("  ]");
+  }
 
   private static void appendFindings(StringBuilder sb, List<Finding> findings) {
     if (findings.isEmpty()) {
