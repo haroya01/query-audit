@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
@@ -40,6 +41,7 @@ public class QueryAuditConfig {
   private final Set<String> suppressPatterns;
   private final Set<String> suppressQueries;
   private final boolean showInfo;
+  private final ReportFormat reportFormat;
   private final String reportOutputDir;
   private final String baselinePath;
   private final boolean autoOpenReport;
@@ -73,6 +75,7 @@ public class QueryAuditConfig {
     this.suppressPatterns = Collections.unmodifiableSet(new HashSet<>(builder.suppressPatterns));
     this.suppressQueries = Collections.unmodifiableSet(new HashSet<>(builder.suppressQueries));
     this.showInfo = builder.showInfo;
+    this.reportFormat = builder.reportFormat;
     this.reportOutputDir = builder.reportOutputDir;
     this.baselinePath = builder.baselinePath;
     this.autoOpenReport = builder.autoOpenReport;
@@ -138,6 +141,11 @@ public class QueryAuditConfig {
 
   public boolean isShowInfo() {
     return showInfo;
+  }
+
+  /** Returns the selected suite report artifact. */
+  public ReportFormat getReportFormat() {
+    return reportFormat;
   }
 
   /**
@@ -400,6 +408,7 @@ public class QueryAuditConfig {
     private Set<String> suppressPatterns = new HashSet<>();
     private Set<String> suppressQueries = new HashSet<>();
     private boolean showInfo = true;
+    private ReportFormat reportFormat = ReportFormat.CONSOLE;
     private String reportOutputDir = DEFAULT_REPORT_OUTPUT_DIR;
     private String baselinePath = null;
     private boolean autoOpenReport = true;
@@ -441,6 +450,7 @@ public class QueryAuditConfig {
       b.suppressPatterns = new HashSet<>(source.suppressPatterns);
       b.suppressQueries = new HashSet<>(source.suppressQueries);
       b.showInfo = source.showInfo;
+      b.reportFormat = source.reportFormat;
       b.reportOutputDir = source.reportOutputDir;
       b.baselinePath = source.baselinePath;
       b.autoOpenReport = source.autoOpenReport;
@@ -514,6 +524,12 @@ public class QueryAuditConfig {
 
     public Builder showInfo(boolean showInfo) {
       this.showInfo = showInfo;
+      return this;
+    }
+
+    /** Selects the suite report artifact written after the test run. */
+    public Builder reportFormat(ReportFormat reportFormat) {
+      this.reportFormat = Objects.requireNonNull(reportFormat, "reportFormat");
       return this;
     }
 

@@ -32,10 +32,10 @@ All properties are optional. The table below lists every supported key under the
 | `suppress-patterns` | `List<String>` | `[]` | Issue codes or qualified patterns to suppress globally. See [Suppressing Issues](suppressing.md). |
 | `suppress-queries` | `List<String>` | `[]` | SQL query substrings to suppress (e.g., health-check queries). Case-insensitive substring match. |
 | `baseline-path` | `String` | `null` | Path to the finding baseline file. When `null`, uses `.query-audit-baseline` in the working directory. |
-| `auto-open-report` | `boolean` | `true` | Whether to automatically open the HTML report in a browser after tests. |
+| `auto-open-report` | `boolean` | `true` | Whether to open the selected HTML report after tests. Ignored for `console` and `json`. |
 | `max-queries` | `int` | `10000` | Maximum number of queries retained per test. If additional queries are dropped, the audit fails as incomplete. |
-| `report.format` | `String` | `"console"` | Report output format: `console`, `json`, or `html`. |
-| `report.output-dir` | `String` | `"build/reports/query-audit"` | Directory for HTML and JSON reports. |
+| `report.format` | `String` | `"console"` | Suite artifact: `console` writes no file, `json` writes `report.json`, and `html` writes the browser report. Per-test console diagnostics remain available for every selection. |
+| `report.output-dir` | `String` | `"build/reports/query-audit"` | Directory used by the selected JSON or HTML report. |
 | `report.show-info` | `boolean` | `true` | Whether unacknowledged INFO findings appear in console, HTML, and JSON output. Visible summary counts follow this setting; analysis and query statistics are unchanged. |
 | `disabled-rules` | `List<String>` | `[]` | Rule codes to completely disable. |
 | `severity-overrides` | `Map<String,String>` | `{}` | Override severity per rule code (e.g., `select-all: WARNING`). |
@@ -419,6 +419,7 @@ These can be passed via `-D` flags on the command line:
 | `-DqueryAudit.contracts.record=true` | Record/refresh [query snapshot contracts](contracts.md) instead of enforcing them |
 | `-DqueryAudit.contractsPath=path` | Override the contracts file location |
 | `-DqueryAudit.countBaselinePath=path` | Override the query count baseline file path |
+| `-DqueryAudit.reportFormat=json` | Select the suite artifact for plain JUnit: `console`, `json`, or `html` |
 | `-Dqueryaudit.autoOpenReport=true` | Force open HTML report in browser |
 
 ```bash

@@ -5,6 +5,7 @@ import io.queryaudit.core.baseline.Baseline;
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.ConnectionUsageTracker;
@@ -495,14 +496,15 @@ public class QueryAuditExtension
 
   void registerReportFinalizer(ExtensionContext context, QueryAuditConfig auditConfig) {
     Path outputDirectory = resolveReportOutputDirectory(auditConfig);
+    ReportFormat reportFormat = auditConfig.getReportFormat();
     ExtensionContext root = context.getRoot();
     ReportFinalizer finalizer =
         (ReportFinalizer)
             root.getStore(NAMESPACE)
                 .getOrComputeIfAbsent(
                     ReportFinalizer.class.getName(),
-                    key -> new ReportFinalizer(this, outputDirectory));
-    finalizer.requireOutputDirectory(outputDirectory);
+                    key -> new ReportFinalizer(this, outputDirectory, reportFormat));
+    finalizer.requireConfiguration(outputDirectory, reportFormat);
   }
 
   private static Path resolveReportOutputDirectory(QueryAuditConfig config) {
@@ -529,14 +531,17 @@ public class QueryAuditExtension
 
     private final QueryAuditExtension extension;
     private final Path outputDirectory;
+    private final ReportFormat reportFormat;
     private volatile boolean autoOpen;
 
-    ReportFinalizer(QueryAuditExtension extension, Path outputDirectory) {
+    ReportFinalizer(
+        QueryAuditExtension extension, Path outputDirectory, ReportFormat reportFormat) {
       this.extension = extension;
       this.outputDirectory = outputDirectory.toAbsolutePath().normalize();
+      this.reportFormat = reportFormat;
     }
 
-    void requireOutputDirectory(Path requestedDirectory) {
+    void requireConfiguration(Path requestedDirectory, ReportFormat requestedFormat) {
       Path normalizedRequest = requestedDirectory.toAbsolutePath().normalize();
       if (!outputDirectory.equals(normalizedRequest)) {
         throw new ExtensionConfigurationException(
@@ -546,10 +551,22 @@ public class QueryAuditExtension
                 + normalizedRequest
                 + "'. Use one query-audit.report.output-dir value for all active test contexts.");
       }
+      if (reportFormat != requestedFormat) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: conflicting report formats in the same test run: '"
+                + reportFormat.name().toLowerCase(Locale.ROOT)
+                + "' and '"
+                + requestedFormat.name().toLowerCase(Locale.ROOT)
+                + "'. Use one query-audit.report.format value for all active test contexts.");
+      }
     }
 
     Path outputDirectory() {
       return outputDirectory;
+    }
+
+    ReportFormat reportFormat() {
+      return reportFormat;
     }
 
     void enableAutoOpen() {
@@ -559,49 +576,55 @@ public class QueryAuditExtension
     @Override
     public void close() {
       HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
-      if (aggregator.getReports().isEmpty()) {
+      List<QueryAuditReport> reports = aggregator.getReports();
+      if (reports.isEmpty()) {
         return;
       }
 
+      printSummary(reports);
       try {
-        aggregator.writeReport(outputDirectory);
-        Path reportPath = outputDirectory.resolve("index.html");
-
-        // Summary line — visible even without opening the report
-        long totalErrors =
-            aggregator.getReports().stream().mapToLong(r -> r.getErrors().size()).sum();
-        long totalWarnings =
-            aggregator.getReports().stream().mapToLong(r -> r.getWarnings().size()).sum();
-        int totalQueries =
-            aggregator.getReports().stream().mapToInt(r -> r.getTotalQueryCount()).sum();
-        int totalTests = aggregator.getReports().size();
-
-        String summary =
-            "[QueryAudit] "
-                + totalTests
-                + " tests, "
-                + totalQueries
-                + " queries"
-                + (totalErrors > 0
-                    ? ", " + totalErrors + " ERROR" + (totalErrors > 1 ? "S" : "")
-                    : "")
-                + (totalWarnings > 0
-                    ? ", " + totalWarnings + " WARNING" + (totalWarnings > 1 ? "S" : "")
-                    : "")
-                + (totalErrors == 0 && totalWarnings == 0 ? " — all clean" : "");
-        System.out.println();
-        System.out.println(summary);
-        System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
-        System.out.println();
-
-        extension.writeJsonReport(aggregator.getReports(), outputDirectory);
-
-        if (autoOpen) {
-          extension.openReportInBrowser(reportPath);
+        switch (reportFormat) {
+          case CONSOLE -> {
+            // Per-test output and the suite summary are already on stdout.
+          }
+          case JSON -> extension.writeJsonReport(reports, outputDirectory);
+          case HTML -> {
+            aggregator.writeReport(outputDirectory);
+            Path reportPath = outputDirectory.resolve("index.html");
+            System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
+            if (autoOpen) {
+              extension.openReportInBrowser(reportPath);
+            }
+          }
         }
       } catch (Exception e) {
-        System.err.println("[QueryAudit] Failed to write HTML report: " + e.getMessage());
+        System.err.println(
+            "[QueryAudit] Failed to write " + reportFormat.name() + " report: " + e.getMessage());
       }
+    }
+
+    private static void printSummary(List<QueryAuditReport> reports) {
+      long totalErrors = reports.stream().mapToLong(r -> r.getErrors().size()).sum();
+      long totalWarnings = reports.stream().mapToLong(r -> r.getWarnings().size()).sum();
+      int totalQueries = reports.stream().mapToInt(QueryAuditReport::getTotalQueryCount).sum();
+      int totalTests = reports.size();
+
+      String summary =
+          "[QueryAudit] "
+              + totalTests
+              + " tests, "
+              + totalQueries
+              + " queries"
+              + (totalErrors > 0
+                  ? ", " + totalErrors + " ERROR" + (totalErrors > 1 ? "S" : "")
+                  : "")
+              + (totalWarnings > 0
+                  ? ", " + totalWarnings + " WARNING" + (totalWarnings > 1 ? "S" : "")
+                  : "")
+              + (totalErrors == 0 && totalWarnings == 0 ? " — all clean" : "");
+      System.out.println();
+      System.out.println(summary);
+      System.out.println();
     }
   }
 
@@ -1041,6 +1064,12 @@ public class QueryAuditExtension
     }
     if (detectNPlusOne != null) {
       builder.nPlusOneThreshold(detectNPlusOne.threshold());
+    }
+
+    String reportFormat =
+        resolveSystemProperty("queryAudit.reportFormat", "queryGuard.reportFormat");
+    if (reportFormat != null) {
+      builder.reportFormat(ReportFormat.parse(reportFormat));
     }
 
     // Wire return type resolver if available

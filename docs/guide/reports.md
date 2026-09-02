@@ -13,6 +13,10 @@ QueryAudit includes three reporter implementations, all fully implemented:
 
 All three reporters implement the `Reporter` interface from `query-audit-core`.
 
+`query-audit.report.format` selects one suite-level artifact. The default `console` setting creates
+no report files. Select `json` for `report.json` or `html` for the browser report. QueryAudit still
+prints each test's console diagnostics so failures remain readable in local and CI logs.
+
 ---
 
 ## Console Report
@@ -73,6 +77,9 @@ query-audit:
     show-info: true       # Show or hide INFO-level findings
 ```
 
+With `format: console`, the suite finalizer prints its summary without creating `index.html` or
+`report.json`.
+
 ### ANSI Color Coding
 
 The console reporter uses ANSI escape codes to improve readability:
@@ -113,6 +120,11 @@ query-audit:
     format: json
     output-dir: build/reports/query-audit
 ```
+
+This selection writes `report.json` and does not create HTML files.
+
+For plain JUnit without Spring configuration, use
+`./gradlew test -DqueryAudit.reportFormat=json`.
 
 ### Example Output
 
@@ -278,9 +290,15 @@ The report includes expandable sections, syntax-highlighted SQL, and a visual su
 ```yaml
 query-audit:
   report:
+    format: html
     output-dir: build/reports/query-audit    # Where to write index.html
   auto-open-report: true                     # Open in browser after tests
 ```
+
+This selection writes the HTML index and per-class pages and does not create `report.json`.
+
+For plain JUnit without Spring configuration, use
+`./gradlew test -DqueryAudit.reportFormat=html`.
 
 Or via annotation:
 
@@ -322,9 +340,9 @@ The generated HTML report contains these sections:
 ```
 
 !!! warning "HTML report timing"
-    The HTML report is generated in `@AfterAll`. If tests fail before that point
-    (e.g., Spring context fails to start), no report is written. Check your test
-    logs for startup failures.
+    The root suite finalizer writes the HTML report after all participating test classes finish. If
+    the test engine cannot reach finalization, no report is written. Check the test logs for the
+    earlier lifecycle failure.
 
 ---
 
