@@ -372,6 +372,41 @@ BREAKING CHANGE: DetectionRule.evaluate() now returns Stream<Issue> instead of L
 
 ---
 
+## Release Publication and Retries
+
+Release Please creates the version commit and GitHub release. The Release workflow resolves that
+release tag to a commit and publishes that exact source. Before publishing, it checks that the tag,
+`gradle.properties`, and `.release-please-manifest.json` agree on the version.
+
+To retry a failed Maven Central publication, run the **Release** workflow from `main` and supply
+the existing published tag in `release_tag`:
+
+```bash
+gh workflow run release-please.yml --ref main -f release_tag=v0.7.0
+```
+
+This retries the tag's source; it does not publish the selected branch, create a release, or change
+the version. Missing tags, draft releases, and mismatched versions are rejected. Never move a
+release tag to retry publication. The job summary records the validated version and commit.
+
+The validation script is loaded from protected `main`, so retries also work for older releases
+that predate the script. Its tests run in the required Java build jobs and can be run locally:
+
+```bash
+python3 -m unittest discover -s .github/scripts/tests -v
+```
+
+The tests cover dispatch from another branch, rejected branch names and missing releases,
+incorrect checkout commits, and tag/version mismatches. A failed validation emits no version
+output for the publication summary, and the publish step runs only after validation succeeds.
+
+GitHub executes the workflow revision selected at dispatch time. Old branches can still contain an
+older, unsafe workflow, so maintainers must retire those refs or restrict Maven Central credentials
+through a protected publishing environment that only permits `main`. Updating this workflow does
+not change historical workflow revisions or repository secret permissions.
+
+---
+
 ## Good First Issues
 
 Look for issues labeled [`good first issue`](https://github.com/haroya01/query-audit/labels/good%20first%20issue). Great starting points:
