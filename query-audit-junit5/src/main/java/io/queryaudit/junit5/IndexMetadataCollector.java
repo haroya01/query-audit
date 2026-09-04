@@ -3,6 +3,8 @@ package io.queryaudit.junit5;
 import io.queryaudit.core.analyzer.IndexMetadataProvider;
 import io.queryaudit.core.analyzer.JpaIndexScanner;
 import io.queryaudit.core.model.IndexMetadata;
+import io.queryaudit.core.provenance.AuditCapability;
+import io.queryaudit.core.provenance.AuditRuntimeIdentity;
 import java.io.File;
 import java.lang.annotation.Annotation;
 import java.net.URL;
@@ -10,6 +12,8 @@ import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.Locale;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import javax.sql.DataSource;
 
@@ -29,50 +33,72 @@ import javax.sql.DataSource;
  */
 class IndexMetadataCollector {
 
-  /**
-   * Collects index metadata from the database if a matching provider exists, otherwise falls back
-   * to JPA annotations.
-   */
+  record Result(
+      IndexMetadata metadata, String dialect, AuditCapability capability, String failure) {}
+
+  private final Iterable<IndexMetadataProvider> providers;
+
+  IndexMetadataCollector() {
+    this(ServiceLoader.load(IndexMetadataProvider.class));
+  }
+
+  IndexMetadataCollector(Iterable<IndexMetadataProvider> providers) {
+    this.providers = providers;
+  }
+
   IndexMetadata collect(DataSource dataSource) {
-    IndexMetadata dbMetadata = collectDatabaseIndexMetadata(dataSource);
-    if (dbMetadata != null) {
-      return dbMetadata;
-    }
-
-    // Fallback: no DB provider matched (e.g., H2) — use JPA annotations as best-effort source
-    return collectJpaIndexMetadata();
+    return collectWithCapabilities(dataSource).metadata();
   }
 
-  private IndexMetadata collectDatabaseIndexMetadata(DataSource dataSource) {
-    ServiceLoader<IndexMetadataProvider> loader = ServiceLoader.load(IndexMetadataProvider.class);
-    for (IndexMetadataProvider provider : loader) {
-      try (Connection connection = dataSource.getConnection()) {
-        String dbProduct = connection.getMetaData().getDatabaseProductName().toLowerCase();
-        if (dbProduct.contains(provider.supportedDatabase())) {
-          return provider.getIndexMetadata(connection);
+  Result collectWithCapabilities(DataSource dataSource) {
+    String dialect = null;
+    String source = "jdbc-metadata";
+    try (Connection connection = dataSource.getConnection()) {
+      String product = connection.getMetaData().getDatabaseProductName();
+      if (product == null || product.isBlank()) {
+        throw new IllegalStateException("JDBC metadata did not identify the database product");
+      }
+      dialect = product.toLowerCase(Locale.ROOT);
+      for (IndexMetadataProvider provider : providers) {
+        if (dialect.contains(provider.supportedDatabase().toLowerCase(Locale.ROOT))) {
+          source =
+              AuditRuntimeIdentity.hasKnownCapabilityInputs(provider.getClass())
+                  ? AuditRuntimeIdentity.implementation(provider.getClass())
+                  : AuditRuntimeIdentity.unverifiedImplementation(provider.getClass());
+          IndexMetadata metadata = provider.getIndexMetadata(connection);
+          if (metadata == null) {
+            throw new IllegalStateException("Index metadata provider returned null");
+          }
+          return new Result(
+              metadata,
+              dialect,
+              AuditCapability.available(
+                  source, AuditRuntimeIdentity.hasKnownCapabilityInputs(provider.getClass())),
+              null);
         }
-      } catch (Exception ignored) {
       }
+    } catch (Exception | LinkageError | ServiceConfigurationError failure) {
+      return failed(dialect, source, failure);
     }
-    return null;
+
+    source = "jpa-annotations";
+    try {
+      List<Class<?>> entities = discoverEntityClasses();
+      if (entities.isEmpty()) {
+        return new Result(null, dialect, AuditCapability.absent(), null);
+      }
+      source = AuditRuntimeIdentity.implementation(JpaIndexScanner.class);
+      IndexMetadata metadata = new JpaIndexScanner().scan(entities);
+      return new Result(
+          metadata.isEmpty() ? null : metadata, dialect, AuditCapability.available(source), null);
+    } catch (Exception | LinkageError failure) {
+      return failed(dialect, source, failure);
+    }
   }
 
-  /**
-   * Scans entity classes on the classpath for JPA @Table(indexes=...) annotations. Returns null if
-   * JPA is not on the classpath or no entities are found.
-   */
-  private IndexMetadata collectJpaIndexMetadata() {
-    try {
-      JpaIndexScanner scanner = new JpaIndexScanner();
-      List<Class<?>> entityClasses = discoverEntityClasses();
-      if (entityClasses.isEmpty()) {
-        return null;
-      }
-      IndexMetadata metadata = scanner.scan(entityClasses);
-      return metadata.isEmpty() ? null : metadata;
-    } catch (Exception | NoClassDefFoundError ignored) {
-      return null;
-    }
+  private static Result failed(String dialect, String source, Throwable failure) {
+    return new Result(
+        null, dialect, AuditCapability.failed(source), failure.getClass().getSimpleName());
   }
 
   /**
@@ -80,15 +106,7 @@ class IndexMetadataCollector {
    * then falls back to classpath scanning.
    */
   private List<Class<?>> discoverEntityClasses() {
-    List<Class<?>> entities = new ArrayList<>();
-
-    // Scan common base packages from the classpath
-    try {
-      entities = discoverEntitiesFromClasspath();
-    } catch (Exception | NoClassDefFoundError ignored) {
-    }
-
-    return entities;
+    return discoverEntitiesFromClasspath();
   }
 
   private List<Class<?>> discoverEntitiesFromClasspath() {
@@ -123,7 +141,8 @@ class IndexMetadataCollector {
           scanForEntities(rootDir, rootDir, entityAnnotation, entities);
         }
       }
-    } catch (Exception ignored) {
+    } catch (Exception failure) {
+      throw new IllegalStateException("Could not discover JPA index metadata", failure);
     }
 
     return entities;

@@ -3,7 +3,14 @@ package io.queryaudit.core.model;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.provenance.AuditCapabilities;
+import io.queryaudit.core.provenance.AuditCapability;
+import io.queryaudit.core.provenance.AuditInputFingerprints;
+import io.queryaudit.core.provenance.AuditPolicyInputs;
+import io.queryaudit.core.provenance.ComparisonInputs;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class AuditRunResultTest {
@@ -34,6 +41,64 @@ class AuditRunResultTest {
         .isEqualTo(AuditRunResult.fail(List.of()));
     assertThat(AuditRunResult.pass(List.of()).isComplete()).isTrue();
     assertThat(AuditRunResult.fail(List.of()).isComplete()).isTrue();
+  }
+
+  @Test
+  void aFailedCapabilityCannotProduceACompleteResult() {
+    Map<String, ComparisonInputs> inputs =
+        Map.of("test", inputs(AuditCapability.failed("provider")));
+
+    AuditRunResult result = AuditRunResult.pass(List.of()).withComparisonInputs(inputs);
+
+    assertThat(result.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+    assertThat(result.incompleteReasons())
+        .containsExactly(
+            AuditIncompleteReason.of(IncompleteReasonCode.CAPABILITY_EXECUTION_FAILED));
+    assertThat(AuditRunResult.fail(List.of()).withComparisonInputs(inputs).outcome())
+        .isEqualTo(AuditOutcome.INCONCLUSIVE);
+
+    AuditIncompleteReason initialization =
+        AuditIncompleteReason.of(IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED);
+    assertThat(
+            AuditRunResult.inconclusive(List.of(), initialization)
+                .withComparisonInputs(inputs)
+                .incompleteReasons())
+        .containsExactly(initialization);
+  }
+
+  @Test
+  void coverageAndComparisonInputCopiesPreserveEachOther() {
+    Map<String, ComparisonInputs> inputs = Map.of("missing", inputs(AuditCapability.absent()));
+    AuditCoverage coverage =
+        new AuditCoverage(
+            List.of(
+                new AuditCoverage.Test(
+                    "missing", true, false, false, AuditCoverage.Gap.NOT_DISCOVERED)));
+
+    AuditRunResult first =
+        AuditRunResult.pass(List.of()).withComparisonInputs(inputs).withCoverage(coverage);
+    AuditRunResult second =
+        AuditRunResult.pass(List.of()).withCoverage(coverage).withComparisonInputs(inputs);
+
+    assertThat(first).isEqualTo(second);
+    assertThat(first.comparisonInputs()).isEqualTo(inputs);
+    assertThat(first.coverage()).isEqualTo(coverage);
+    assertThat(first.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+  }
+
+  private static ComparisonInputs inputs(AuditCapability metadata) {
+    AuditCapability absent = AuditCapability.absent();
+    return new ComparisonInputs(
+        "0.6.0",
+        "recommended",
+        "h2",
+        "JSqlParser",
+        "5.3",
+        List.of(),
+        true,
+        new AuditCapabilities(metadata, absent, absent, absent),
+        AuditInputFingerprints.create(
+            QueryAuditConfig.defaults(), List.of(), AuditPolicyInputs.empty()));
   }
 
   @Test

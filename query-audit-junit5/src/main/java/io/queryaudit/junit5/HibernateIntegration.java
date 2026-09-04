@@ -6,7 +6,10 @@ import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
+import io.queryaudit.core.provenance.AuditCapability;
+import io.queryaudit.core.provenance.AuditRuntimeIdentity;
 import java.lang.reflect.Array;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,16 +36,28 @@ class HibernateIntegration {
   private static final String POST_LOAD_LISTENER_CLASS =
       "org.hibernate.event.spi.PostLoadEventListener";
 
-  // Maps each tracker to the Hibernate-typed listener registered on its behalf, so unregister can
-  // remove the exact listener instance without exposing a Hibernate-typed return from register().
+  // Retain the adapter instance so partial registration and normal cleanup remove the same
+  // listener.
   private final Map<LazyLoadTracker, HibernateLazyLoadListener> registeredListeners =
       new ConcurrentHashMap<>();
 
-  /** Registers a LazyLoadTracker as a Hibernate event listener, or returns null if unavailable. */
+  record Registration(LazyLoadTracker tracker, AuditCapability capability, String failure) {}
+
   LazyLoadTracker registerTracker(ExtensionContext context, ExtensionContext.Namespace namespace) {
-    Object emf = resolveEntityManagerFactory(context);
-    if (emf == null) return null;
-    return registerTrackerForEmf(emf);
+    return registerWithCapabilities(context).tracker();
+  }
+
+  Registration registerWithCapabilities(ExtensionContext context) {
+    try {
+      Object emf = resolveEntityManagerFactory(context);
+      if (emf == null) {
+        return new Registration(null, AuditCapability.absent(), null);
+      }
+      return registerWithCapabilitiesForEmf(emf);
+    } catch (RuntimeException | LinkageError failure) {
+      return new Registration(
+          null, AuditCapability.failed("hibernate-discovery"), failure.getClass().getSimpleName());
+    }
   }
 
   /** Removes the tracker from the Hibernate event listener registry (issue #101). */
@@ -54,14 +69,22 @@ class HibernateIntegration {
   }
 
   LazyLoadTracker registerTrackerForEmf(Object emf) {
+    return registerWithCapabilitiesForEmf(emf).tracker();
+  }
+
+  Registration registerWithCapabilitiesForEmf(Object emf) {
+    LazyLoadTracker tracker = null;
     try {
       Class.forName(INIT_COLLECTION_LISTENER_CLASS);
 
       Object eventListenerRegistry = resolveEventListenerRegistry(emf);
-      if (eventListenerRegistry == null) return null;
+      if (eventListenerRegistry == null) {
+        throw new IllegalStateException("Hibernate event listener registry is unavailable");
+      }
 
-      LazyLoadTracker tracker = new LazyLoadTracker();
+      tracker = new LazyLoadTracker();
       HibernateLazyLoadListener listener = new HibernateLazyLoadListener(tracker);
+      registeredListeners.put(tracker, listener);
 
       Class<?> eventTypeClass = Class.forName("org.hibernate.event.spi.EventType");
       Class<?> registryClass =
@@ -84,15 +107,32 @@ class HibernateIntegration {
           appendListenersMethod,
           listener);
 
-      registeredListeners.put(tracker, listener);
-      return tracker;
-    } catch (ClassNotFoundException ignored) {
-      // Hibernate not on classpath, skip
-    } catch (Exception e) {
-      System.err.println(
-          "[QueryAudit] Failed to register Hibernate LazyLoadTracker: " + e.getMessage());
+      String version =
+          (String)
+              Class.forName("org.hibernate.Version").getMethod("getVersionString").invoke(null);
+      if (version == null || version.isBlank() || version.equalsIgnoreCase("unknown")) {
+        throw new IllegalStateException("Hibernate did not identify its runtime version");
+      }
+      return new Registration(
+          tracker,
+          AuditCapability.available(
+              "hibernate:"
+                  + version
+                  + ";"
+                  + AuditRuntimeIdentity.implementation(listener.getClass())),
+          null);
+    } catch (ClassNotFoundException failure) {
+      if (tracker == null && INIT_COLLECTION_LISTENER_CLASS.equals(failure.getMessage())) {
+        return new Registration(null, AuditCapability.absent(), null);
+      }
+      unregisterTrackerForEmf(emf, tracker);
+      return new Registration(
+          null, AuditCapability.failed("hibernate-events"), failure.getClass().getSimpleName());
+    } catch (Exception | LinkageError failure) {
+      unregisterTrackerForEmf(emf, tracker);
+      return new Registration(
+          null, AuditCapability.failed("hibernate-events"), failure.getClass().getSimpleName());
     }
-    return null;
   }
 
   void unregisterTrackerForEmf(Object emf, LazyLoadTracker tracker) {
@@ -213,19 +253,41 @@ class HibernateIntegration {
 
   /** Resolves the EntityManagerFactory from Spring context via reflection. */
   private Object resolveEntityManagerFactory(ExtensionContext context) {
+    Object applicationContext;
     try {
       Class<?> springExtensionClass =
           Class.forName("org.springframework.test.context.junit.jupiter.SpringExtension");
       Method getAppContext =
           springExtensionClass.getMethod("getApplicationContext", ExtensionContext.class);
-      Object appContext = getAppContext.invoke(null, context);
-      if (appContext != null) {
-        Class<?> emfClass = Class.forName("jakarta.persistence.EntityManagerFactory");
-        Method getBean = appContext.getClass().getMethod("getBean", Class.class);
-        return getBean.invoke(appContext, emfClass);
-      }
-    } catch (Exception ignored) {
+      applicationContext = getAppContext.invoke(null, context);
+    } catch (ReflectiveOperationException unavailableContext) {
+      return null;
     }
-    return null;
+    return entityManagerFactoryBean(applicationContext);
+  }
+
+  static Object entityManagerFactoryBean(Object applicationContext) {
+    if (applicationContext == null) {
+      return null;
+    }
+    try {
+      Class<?> emfClass = Class.forName("jakarta.persistence.EntityManagerFactory");
+      Method getBean = applicationContext.getClass().getMethod("getBean", Class.class);
+      return getBean.invoke(applicationContext, emfClass);
+    } catch (ClassNotFoundException absentJpa) {
+      return null;
+    } catch (InvocationTargetException failure) {
+      Throwable cause = failure.getCause();
+      if (cause != null
+          && cause
+              .getClass()
+              .getName()
+              .equals("org.springframework.beans.factory.NoSuchBeanDefinitionException")) {
+        return null;
+      }
+      throw new IllegalStateException("Could not initialize the EntityManagerFactory", cause);
+    } catch (ReflectiveOperationException failure) {
+      throw new IllegalStateException("Could not discover the EntityManagerFactory", failure);
+    }
   }
 }

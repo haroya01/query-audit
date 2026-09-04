@@ -1,6 +1,7 @@
 package io.queryaudit.junit5;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.queryaudit.core.detector.RepositoryReturnType;
 import java.lang.reflect.Method;
@@ -14,6 +15,19 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class SpringDataReturnTypeResolverTest {
+
+  @Test
+  void repositoryDiscoveryFailureDoesNotProduceAnApparentlyAvailableEmptyResolver() {
+    assertThatThrownBy(() -> new SpringDataReturnTypeResolver(new BrokenApplicationContext()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Could not discover Spring Data repository return types");
+  }
+
+  public static class BrokenApplicationContext {
+    public Map<String, Object> getBeansOfType(Class<?> type) {
+      throw new IllegalStateException("private bean configuration");
+    }
+  }
 
   // ── extractProxyKey ─────────────────────────────────────────────
 

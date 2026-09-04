@@ -7,15 +7,23 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.model.IncompleteReasonCode;
+import io.queryaudit.core.model.IssueType;
+import io.queryaudit.core.model.QueryAuditReport;
+import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.provenance.AuditCapability;
 import io.queryaudit.core.regression.QueryCounts;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -26,6 +34,7 @@ import javax.sql.DataSource;
 import net.ttddyy.dsproxy.ExecutionInfo;
 import net.ttddyy.dsproxy.QueryInfo;
 import net.ttddyy.dsproxy.support.ProxyDataSource;
+import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -116,7 +125,7 @@ class QueryAuditExtensionRunOutcomeTest {
     DataSource originalDataSource = mock(DataSource.class);
     PostHookFailureFixture.DATA_SOURCE = originalDataSource;
     IndexMetadataCollector metadataCollector = mock(IndexMetadataCollector.class);
-    when(metadataCollector.collect(any(DataSource.class)))
+    when(metadataCollector.collectWithCapabilities(any(DataSource.class)))
         .thenThrow(new ServiceConfigurationError("broken metadata provider"));
     QueryAuditExtension extension =
         new QueryAuditExtension(
@@ -137,6 +146,102 @@ class QueryAuditExtensionRunOutcomeTest {
       PostHookFailureFixture.DATA_SOURCE = originalDataSource;
       QueryAuditDataSourceStore.clear();
     }
+  }
+
+  @Test
+  void failedEnabledMetadataMakesAStandaloneRunInconclusive() throws Exception {
+    JdbcDataSource dataSource = new JdbcDataSource();
+    dataSource.setURL("jdbc:h2:mem:capability-failure");
+    PostHookFailureFixture.DATA_SOURCE = dataSource;
+    IndexMetadataCollector collector = mock(IndexMetadataCollector.class);
+    when(collector.collectWithCapabilities(any(DataSource.class)))
+        .thenReturn(
+            new IndexMetadataCollector.Result(
+                null, "h2", AuditCapability.failed("test-index-provider"), "SQLException"));
+    QueryAuditExtension extension =
+        new QueryAuditExtension(new DataSourceResolver(), collector, new HibernateIntegration());
+    AuditContext fixture = contextFor(PostHookFailureFixture.class, "audited", null);
+    try {
+      extension.beforeEach(fixture.methodContext());
+      assertIncomplete(fixture, IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED);
+    } finally {
+      PostHookFailureFixture.DATA_SOURCE = dataSource;
+    }
+  }
+
+  @Test
+  void aCompleteAuditCapturesItsEffectiveInputsByStableTestId() throws Exception {
+    JdbcDataSource dataSource = new JdbcDataSource();
+    dataSource.setURL("jdbc:h2:mem:capability-success");
+    PostHookFailureFixture.DATA_SOURCE = dataSource;
+    QueryAuditExtension extension = new QueryAuditExtension();
+    AuditContext fixture = contextFor(PostHookFailureFixture.class, "audited", null);
+    try {
+      extension.beforeEach(fixture.methodContext());
+      extension.afterEach(fixture.methodContext());
+      var result = runState(fixture).result(HtmlReportAggregator.getInstance().getReports());
+      assertThat(result.outcome()).isEqualTo(AuditOutcome.PASS);
+      assertThat(result.comparisonInputs()).containsKey(fixture.methodContext().getUniqueId());
+      var inputs = result.comparisonInputs().get(fixture.methodContext().getUniqueId());
+      assertThat(inputs.profile()).isEqualTo("recommended");
+      assertThat(inputs.databaseDialect()).isEqualTo("h2");
+      assertThat(inputs.parserName()).isEqualTo("JSqlParser");
+      assertThat(inputs.capabilities().explain().state()).isEqualTo(AuditCapability.State.ABSENT);
+    } finally {
+      PostHookFailureFixture.DATA_SOURCE = dataSource;
+    }
+  }
+
+  @Test
+  void effectiveFailOnSelectionIsFingerprintableAndOrderIndependent() throws Exception {
+    Map<String, String> fingerprints = new java.util.HashMap<>();
+    for (String method :
+        List.of("classPolicy", "reorderedPolicy", "restrictedPolicy", "allFindings")) {
+      JdbcDataSource dataSource = new JdbcDataSource();
+      dataSource.setURL("jdbc:h2:mem:fail-on-inputs");
+      FailureSelectionFixture.DATA_SOURCE = dataSource;
+      AuditContext fixture = contextFor(FailureSelectionFixture.class, method, null);
+      QueryAuditExtension extension = new QueryAuditExtension();
+      try {
+        extension.beforeEach(fixture.methodContext());
+        extension.afterEach(fixture.methodContext());
+        fingerprints.put(
+            method,
+            runState(fixture)
+                .result(List.of())
+                .comparisonInputs()
+                .get(fixture.methodContext().getUniqueId())
+                .fingerprints()
+                .queryContracts());
+      } finally {
+        FailureSelectionFixture.DATA_SOURCE = dataSource;
+      }
+    }
+    assertThat(fingerprints.get("classPolicy")).isEqualTo(fingerprints.get("reorderedPolicy"));
+    assertThat(fingerprints.get("restrictedPolicy")).isNotEqualTo(fingerprints.get("classPolicy"));
+    assertThat(fingerprints.get("allFindings")).isNotEqualTo(fingerprints.get("classPolicy"));
+  }
+
+  @Test
+  void failedExplainMakesAStandaloneRunInconclusiveWithoutLeakingItsCause() throws Exception {
+    DataSource dataSource = mock(DataSource.class);
+    Connection connection = mock(Connection.class);
+    DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+    when(dataSource.getConnection()).thenReturn(connection);
+    when(connection.getMetaData()).thenReturn(metadata);
+    when(metadata.getDatabaseProductName()).thenReturn("Policy Test DB");
+    AuditContext fixture = contextFor(PolicyFixture.class, "audited", null);
+    fixture.classStore().put("dataSource", dataSource);
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    List<QueryRecord> queries = List.of(new QueryRecord("SELECT private_marker", 0, 0, ""));
+    QueryAuditReport report = analyzer.analyze("PolicyFixture", "audited", queries, null);
+
+    new QueryAuditExtension()
+        .runExplainAnalysis(fixture.methodContext(), report, queries, analyzer);
+
+    assertIncomplete(fixture, IncompleteReasonCode.CAPABILITY_EXECUTION_FAILED);
+    assertThat(runState(fixture).result(List.of()).incompleteReasons())
+        .allSatisfy(reason -> assertThat(reason.detail()).doesNotContain("private_marker"));
   }
 
   @Test
@@ -316,6 +421,22 @@ class QueryAuditExtensionRunOutcomeTest {
     static DataSource DATA_SOURCE;
 
     void audited() {}
+  }
+
+  @QueryAudit(failOn = {IssueType.N_PLUS_ONE, IssueType.UPDATE_WITHOUT_WHERE})
+  static class FailureSelectionFixture {
+    static DataSource DATA_SOURCE;
+
+    void classPolicy() {}
+
+    @QueryAudit(failOn = {IssueType.UPDATE_WITHOUT_WHERE, IssueType.N_PLUS_ONE})
+    void reorderedPolicy() {}
+
+    @QueryAudit(failOn = IssueType.N_PLUS_ONE)
+    void restrictedPolicy() {}
+
+    @QueryAudit
+    void allFindings() {}
   }
 
   @QueryAudit(baselinePath = "\0")

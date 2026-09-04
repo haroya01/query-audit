@@ -142,7 +142,7 @@ class ReportRedactionTest {
 
     var schema =
         JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7)
-            .getSchema(getClass().getResourceAsStream("/report-1.5.schema.json"));
+            .getSchema(getClass().getResourceAsStream("/report-1.6.schema.json"));
     var mapper = new ObjectMapper();
     assertThat(schema.validate(mapper.readTree(redacted))).isEmpty();
     assertThat(schema.validate(mapper.readTree(redacted.replace("REDACTED", "unknown"))))
@@ -188,9 +188,8 @@ class ReportRedactionTest {
   @Test
   void mismatchCannotLookLikeResolvedFindings() {
     String full =
-        JsonReporter.toRunEnvelopeJson(
-            AuditRunResult.pass(List.of(report())), ReportRedaction.FULL);
-    String redacted = JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(report())));
+        ComparisonInputFixtures.json(AuditRunResult.pass(List.of(report())), ReportRedaction.FULL);
+    String redacted = ComparisonInputFixtures.json(AuditRunResult.pass(List.of(report())));
     var verdict = ReportComparator.compare(full, redacted);
     assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
     assertThat(verdict.incompleteReasons())
@@ -215,14 +214,13 @@ class ReportRedactionTest {
   @Test
   void verdictAndLegacyWritersDoNotReExposeFullInputDetails() {
     String full =
-        JsonReporter.toRunEnvelopeJson(
-            AuditRunResult.pass(List.of(report())), ReportRedaction.FULL);
+        ComparisonInputFixtures.json(AuditRunResult.pass(List.of(report())), ReportRedaction.FULL);
     var verdict = ReportComparator.compare(full, full);
     assertThat(ReportComparator.toJson(verdict)).doesNotContain("fixture-secret", "private-work");
     assertThat(ReportComparator.toJson(verdict, ReportRedaction.FULL)).contains("fixture-secret");
     assertThat(JsonReporter.toEnvelopeJson(List.of(report()))).doesNotContain("fixture-secret");
     String incomplete =
-        JsonReporter.toRunEnvelopeJson(
+        ComparisonInputFixtures.json(
             AuditRunResult.inconclusive(
                 List.of(),
                 new AuditIncompleteReason(
@@ -247,7 +245,7 @@ class ReportRedactionTest {
     QueryAuditReport report =
         new QueryAuditReport(
             "AccountTest", "loadsAccount", List.of(), List.of(issue), List.of(), 0, 0, 0);
-    String json = JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(report)));
+    String json = ComparisonInputFixtures.json(AuditRunResult.pass(List.of(report)));
     assertThat(json).contains("findById(?)", "batch-fetch").doesNotContain("fixture-secret");
     ByteArrayOutputStream bytes = new ByteArrayOutputStream();
     new GitHubActionsReporter(new PrintStream(bytes), null).report(report);

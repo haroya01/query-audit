@@ -97,7 +97,7 @@ class AuditCoverageComparisonTest {
     String before = covered(List.of(report("a", true)), completed("a"));
     String changed = covered(List.of(report("b", false)), completed("b"));
     String unverified =
-        JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(report("a", false))));
+        ComparisonInputFixtures.json(AuditRunResult.pass(List.of(report("a", false))));
 
     for (String after : List.of(changed, unverified)) {
       ReportComparator.Verdict verdict = ReportComparator.compare(before, after);
@@ -149,7 +149,7 @@ class AuditCoverageComparisonTest {
   }
 
   private static String covered(List<QueryAuditReport> reports, AuditCoverage.Test... tests) {
-    return JsonReporter.toRunEnvelopeJson(
+    return ComparisonInputFixtures.json(
         AuditRunResult.pass(reports).withCoverage(new AuditCoverage(List.of(tests))));
   }
 

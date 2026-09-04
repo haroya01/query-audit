@@ -147,14 +147,17 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
 `coverage` records which expected tests executed and produced audits. It is `null` when no
 manifest was verified; this example does not establish whole-suite coverage. See
 [Audit coverage](audit-coverage.md) to declare and enforce the tests a run must audit.
+`comparisonInputs` identifies each test's effective analysis inputs. The empty object in this
+example is valid for a standalone report but cannot support a verified comparison.
 
 ```json
 {
-  "schemaVersion": "1.5.0",
+  "schemaVersion": "1.6.0",
   "redaction": "REDACTED",
   "outcome": "FAIL",
   "incompleteReasons": [],
   "coverage": null,
+  "comparisonInputs": {},
   "reports": [
     {
       "testId": "[engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:findRecentOrders()]",
@@ -250,11 +253,11 @@ manifest was verified; this example does not establish whole-suite coverage. See
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. The current version is **1.5.0**. QueryAudit 0.5.x wrote schema 1.0
+of silently misparsing it. The current version is **1.6.0**. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
 infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, 1.2
 added stable test identities, 1.3 added query-evidence retention counts, and 1.4 added the report
-redaction mode. Schema 1.5 adds expected-test coverage.
+redaction mode. Schema 1.5 added expected-test coverage; 1.6 adds per-test comparison inputs.
 
 Each version has a published JSON Schema. The deprecated Java method
 `JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` emits a legacy 1.0 envelope without run
@@ -292,10 +295,18 @@ may be `null` when no additional context is available:
 | `COVERAGE_MANIFEST_UNREADABLE` | An explicitly configured expected-test manifest was missing, or the selected manifest was unreadable, empty, or malformed. |
 | `COVERAGE_MANIFEST_MISMATCH` | Comparison inputs were verified against different expected-test manifests, or only one input had verified coverage. |
 | `REPORT_REDACTION_MISMATCH` | Comparison inputs used different report redaction modes. |
+| `CAPABILITY_INITIALIZATION_FAILED` | An enabled metadata, Hibernate, or other analysis capability could not initialize. |
+| `CAPABILITY_EXECUTION_FAILED` | An available analysis capability failed during the audit, including unsupported parameterized SQL in the bundled EXPLAIN analyzers. |
+| `COMPARISON_INPUTS_UNAVAILABLE` | A compared test lacks input metadata, or a custom detector or capability has inputs that cannot be fully identified. |
+| `INCOMPATIBLE_AUDIT_INPUTS` | Compared tests used different versions, profiles, capabilities, or effective configuration and policy fingerprints. |
 | `REPORT_WRITE_FAILED` | The selected JSON or HTML artifact could not be written. The extension fails an active audit; listener-only finalization cannot reliably fail the launcher. Always check the report artifact in CI. |
 
 Field notes for machine consumers:
 
+- `comparisonInputs` is keyed by stable `testId`. It records versions, the active profile and
+  dialect, detector and capability identities, and fingerprints of effective settings and loaded
+  policies. Missing entries are unverified, not implicit defaults. See
+  [Comparison inputs](comparison-inputs.md) for compatibility rules and custom integration limits.
 - `coverage: null` means the run did not verify an expected-test manifest. With coverage enabled,
   the JSON artifact includes counts and per-test execution/audit states even when HTML or console
   output is selected. Use the [coverage CI gate](audit-coverage.md#require-the-artifact-in-ci) to
@@ -327,8 +338,9 @@ The stable schema URLs are
 [`schema/report-1.1.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.1.schema.json),
 [`schema/report-1.2.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.2.schema.json),
 [`schema/report-1.3.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.3.schema.json),
-[`schema/report-1.4.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.4.schema.json), and
-[`schema/report-1.5.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.5.schema.json).
+[`schema/report-1.4.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.4.schema.json),
+[`schema/report-1.5.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.5.schema.json), and
+[`schema/report-1.6.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.6.schema.json).
 [`schema/report.schema.json`](https://haroya01.github.io/query-audit/schema/report.schema.json)
 always points to the current version.
 
@@ -382,7 +394,7 @@ java -cp query-audit-core-<version>.jar \
   error. A candidate run that already has outcome `FAIL` cannot become a successful comparison
   merely because it introduced no new finding.
 - **`verdict.json`**: `{outcome, incompleteReasons, newFindings, resolved, persisting, complete,
-  missingTests, unexpectedTests, queryCountDelta, executionTimeMsDelta}` — the termination condition
+  missingTests, unexpectedTests, inputDifferences, queryCountDelta, executionTimeMsDelta}` — the termination condition
   for automated fix loops.
 
 !!! warning "Java API compatibility in 0.6"
@@ -401,10 +413,16 @@ java -cp query-audit-core-<version>.jar \
   the baseline or declared manifest. A coverage gap prevents affected findings from being marked
   resolved. Different manifests, including coverage enabled on only one side, make the comparison
   `INCONCLUSIVE` with `COVERAGE_MANIFEST_MISMATCH` and no resolved findings.
+- Both sides must identify compatible effective inputs for each compared test. Legacy reports,
+  missing metadata, and unidentified custom inputs produce `COMPARISON_INPUTS_UNAVAILABLE`.
+  Changed inputs produce `INCOMPATIBLE_AUDIT_INPUTS`. Both make the comparison `INCONCLUSIVE`
+  and leave `resolved` empty; `inputDifferences` lists the test ID, field, and safe baseline/candidate
+  values. See [Comparison inputs](comparison-inputs.md) before replacing a baseline.
 - **Matching key**: `testId|type|normalized-pattern|sourceLocation`, so findings survive display
   name edits and unrelated refactors as long as the statement shape and call site are stable.
 - The comparator accepts schema 1.0 and 1.1 reports and uses an exact `testClass|testName` fallback
-  when one side lacks IDs. It rejects an ambiguous legacy match instead of assigning one old test
+  when one side lacks IDs. Those reports still lack verified comparison inputs and cannot produce
+  a passing comparison. It rejects an ambiguous legacy match instead of assigning one old test
   to multiple stable IDs. Re-record archived baselines with QueryAudit 0.6 when a suite contains
   duplicate legacy identities. A display name changed before the first schema 1.2 run has no safe
   fallback and is reported as a missing old test plus a new test.

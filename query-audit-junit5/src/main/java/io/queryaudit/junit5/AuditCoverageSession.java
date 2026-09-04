@@ -131,6 +131,7 @@ final class AuditCoverageSession {
             result.reports(),
             result.outcome() == io.queryaudit.core.model.AuditOutcome.FAIL,
             reasons)
+        .withComparisonInputs(result.comparisonInputs())
         .withCoverage(coverage());
   }
 

@@ -36,7 +36,7 @@ public class JsonReporter implements Reporter {
    *
    * @since 0.5.0
    */
-  public static final String SCHEMA_VERSION = "1.5.0";
+  public static final String SCHEMA_VERSION = "1.6.0";
 
   private static final String LEGACY_SCHEMA_VERSION = "1.0.0";
 
@@ -106,6 +106,9 @@ public class JsonReporter implements Reporter {
     sb.append(",\n");
     sb.append("  \"coverage\": ");
     CoverageJson.append(sb, runResult.coverage());
+    sb.append(",\n");
+    sb.append("  \"comparisonInputs\": ");
+    ComparisonInputsJson.append(sb, runResult.comparisonInputs());
     sb.append(",\n");
     appendReports(sb, runResult.reports(), true, redactor);
     sb.append("\n}");
