@@ -10,11 +10,18 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
- * Handles Hibernate-specific integration: registering a {@link LazyLoadTracker} as a Hibernate
- * event listener and merging Hibernate-level N+1 issues into the report.
+ * Handles Hibernate-specific integration: registering a {@link HibernateLazyLoadListener} as a
+ * Hibernate event listener and merging Hibernate-level N+1 issues into the report.
+ *
+ * <p>Only this class and {@link HibernateLazyLoadListener} carry compile-time references to
+ * Hibernate types; both are reached exclusively through the {@code Class.forName} guard below, so a
+ * plain JDBC audit never forces those classes to load (issue #248). {@link LazyLoadTracker} itself
+ * — the object returned to and stored by {@link QueryAuditExtension} — is Hibernate-free.
  *
  * @author haroya
  * @since 0.2.0
@@ -25,6 +32,11 @@ class HibernateIntegration {
       "org.hibernate.event.spi.InitializeCollectionEventListener";
   private static final String POST_LOAD_LISTENER_CLASS =
       "org.hibernate.event.spi.PostLoadEventListener";
+
+  // Maps each tracker to the Hibernate-typed listener registered on its behalf, so unregister can
+  // remove the exact listener instance without exposing a Hibernate-typed return from register().
+  private final Map<LazyLoadTracker, HibernateLazyLoadListener> registeredListeners =
+      new ConcurrentHashMap<>();
 
   /** Registers a LazyLoadTracker as a Hibernate event listener, or returns null if unavailable. */
   LazyLoadTracker registerTracker(ExtensionContext context, ExtensionContext.Namespace namespace) {
@@ -49,6 +61,7 @@ class HibernateIntegration {
       if (eventListenerRegistry == null) return null;
 
       LazyLoadTracker tracker = new LazyLoadTracker();
+      HibernateLazyLoadListener listener = new HibernateLazyLoadListener(tracker);
 
       Class<?> eventTypeClass = Class.forName("org.hibernate.event.spi.EventType");
       Class<?> registryClass =
@@ -62,15 +75,16 @@ class HibernateIntegration {
           "INIT_COLLECTION",
           Class.forName(INIT_COLLECTION_LISTENER_CLASS),
           appendListenersMethod,
-          tracker);
+          listener);
       appendListener(
           eventListenerRegistry,
           eventTypeClass,
           "POST_LOAD",
           Class.forName(POST_LOAD_LISTENER_CLASS),
           appendListenersMethod,
-          tracker);
+          listener);
 
+      registeredListeners.put(tracker, listener);
       return tracker;
     } catch (ClassNotFoundException ignored) {
       // Hibernate not on classpath, skip
@@ -83,6 +97,8 @@ class HibernateIntegration {
 
   void unregisterTrackerForEmf(Object emf, LazyLoadTracker tracker) {
     if (tracker == null) return;
+    HibernateLazyLoadListener listener = registeredListeners.remove(tracker);
+    if (listener == null) return;
     try {
       Class.forName(INIT_COLLECTION_LISTENER_CLASS);
 
@@ -95,13 +111,13 @@ class HibernateIntegration {
           eventTypeClass,
           "INIT_COLLECTION",
           Class.forName(INIT_COLLECTION_LISTENER_CLASS),
-          tracker);
+          listener);
       removeListener(
           eventListenerRegistry,
           eventTypeClass,
           "POST_LOAD",
           Class.forName(POST_LOAD_LISTENER_CLASS),
-          tracker);
+          listener);
     } catch (ClassNotFoundException ignored) {
       // Hibernate not on classpath, nothing to do
     } catch (Exception e) {
@@ -116,11 +132,11 @@ class HibernateIntegration {
       String eventTypeFieldName,
       Class<?> listenerInterface,
       Method appendListenersMethod,
-      LazyLoadTracker tracker)
+      HibernateLazyLoadListener listener)
       throws Exception {
     Object eventType = eventTypeClass.getField(eventTypeFieldName).get(null);
     Object listenersArray = Array.newInstance(listenerInterface, 1);
-    Array.set(listenersArray, 0, tracker);
+    Array.set(listenersArray, 0, listener);
     appendListenersMethod.invoke(eventListenerRegistry, eventType, listenersArray);
   }
 
@@ -129,7 +145,7 @@ class HibernateIntegration {
       Class<?> eventTypeClass,
       String eventTypeFieldName,
       Class<?> listenerInterface,
-      LazyLoadTracker tracker)
+      HibernateLazyLoadListener listener)
       throws Exception {
     Object eventType = eventTypeClass.getField(eventTypeFieldName).get(null);
 
@@ -144,9 +160,9 @@ class HibernateIntegration {
     Iterable<?> currentListeners = (Iterable<?>) groupClass.getMethod("listeners").invoke(group);
 
     List<Object> retained = new ArrayList<>();
-    for (Object listener : currentListeners) {
-      if (listener != tracker) {
-        retained.add(listener);
+    for (Object registered : currentListeners) {
+      if (registered != listener) {
+        retained.add(registered);
       }
     }
 
