@@ -64,8 +64,8 @@ Spring `DataSource`; no proxy bean is needed in the test.
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.5.0' // x-release-please-version
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.5.0' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.6.0' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.6.0' // x-release-please-version
     }
     ```
 
@@ -73,8 +73,8 @@ Spring `DataSource`; no proxy bean is needed in the test.
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.5.0' // x-release-please-version
-        testImplementation 'io.github.haroya01:query-audit-postgresql:0.5.0' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.6.0' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-postgresql:0.6.0' // x-release-please-version
     }
     ```
 
@@ -85,13 +85,13 @@ Spring `DataSource`; no proxy bean is needed in the test.
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-spring-boot-starter</artifactId>
-            <version>0.5.0</version> <!-- x-release-please-version -->
+            <version>0.6.0</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-mysql</artifactId>
-            <version>0.5.0</version> <!-- x-release-please-version -->
+            <version>0.6.0</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -104,13 +104,13 @@ Spring `DataSource`; no proxy bean is needed in the test.
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-spring-boot-starter</artifactId>
-            <version>0.5.0</version> <!-- x-release-please-version -->
+            <version>0.6.0</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-postgresql</artifactId>
-            <version>0.5.0</version> <!-- x-release-please-version -->
+            <version>0.6.0</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -157,7 +157,7 @@ Add the database module and a compile-time dependency on `datasource-proxy`:
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.5.0' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.6.0' // x-release-please-version
         testImplementation 'net.ttddyy:datasource-proxy:1.10'
     }
     ```
@@ -166,7 +166,7 @@ Add the database module and a compile-time dependency on `datasource-proxy`:
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-postgresql:0.5.0' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-postgresql:0.6.0' // x-release-please-version
         testImplementation 'net.ttddyy:datasource-proxy:1.10'
     }
     ```
@@ -178,7 +178,7 @@ Add the database module and a compile-time dependency on `datasource-proxy`:
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-mysql</artifactId>
-            <version>0.5.0</version> <!-- x-release-please-version -->
+            <version>0.6.0</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -197,7 +197,7 @@ Add the database module and a compile-time dependency on `datasource-proxy`:
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-postgresql</artifactId>
-            <version>0.5.0</version> <!-- x-release-please-version -->
+            <version>0.6.0</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
         <dependency>
