@@ -5,10 +5,10 @@ apply plugin: 'info.solidsoft.pitest'
 
 dependencies {
     implementation 'net.ttddyy:datasource-proxy:1.10'
+    implementation 'com.github.jsqlparser:jsqlparser:5.3'
 
     compileOnly 'org.slf4j:slf4j-api:2.0.16'
     compileOnly 'org.hibernate.orm:hibernate-core:6.6.4.Final'
-    compileOnly 'com.github.jsqlparser:jsqlparser:5.3'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testImplementation 'org.assertj:assertj-core:3.27.3'
@@ -16,7 +16,23 @@ dependencies {
     testImplementation 'org.mockito:mockito-core:5.14.2'
     testImplementation 'ch.qos.logback:logback-classic:1.5.15'
     testImplementation 'org.hibernate.orm:hibernate-core:6.6.4.Final'
-    testImplementation 'com.github.jsqlparser:jsqlparser:5.3'
+}
+
+publishing {
+    repositories {
+        maven {
+            name = 'consumerTest'
+            url = layout.buildDirectory.dir('consumer-test-repository')
+        }
+    }
+}
+
+signing {
+    required {
+        gradle.taskGraph.allTasks.any { task ->
+            task instanceof PublishToMavenRepository && task.repository.name != 'consumerTest'
+        }
+    }
 }
 
 pitest {

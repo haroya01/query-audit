@@ -1,16 +1,20 @@
 package io.queryaudit.core.parser;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
+import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 class EnhancedSqlParserTest {
 
   @Test
-  void jsqlParserIsAvailableOnTestClasspath() {
-    assertThat(EnhancedSqlParser.isJSqlParserAvailable()).isTrue();
+  void identifiesTheRuntimeParser() {
+    assertThat(EnhancedSqlParser.parserName()).isEqualTo("JSqlParser");
+    assertThat(EnhancedSqlParser.parserVersion()).isEqualTo("5.3");
   }
 
   // ── CTE support (regex cannot handle this) ─────────────────────────
@@ -77,12 +81,28 @@ class EnhancedSqlParserTest {
   class FallbackBehavior {
 
     @Test
-    void simpleSelectFallsBackGracefully() {
-      String sql = "SELECT * FROM users WHERE id = 1";
+    void rejectedStatementUsesRegexWithoutChangingTheParserForLaterStatements() {
+      String unsupported = "SELECT id FROM accounts WHERE id = 1 AND";
+      assertThatThrownBy(() -> CCJSqlParserUtil.parse(unsupported))
+          .isInstanceOf(JSQLParserException.class);
 
-      List<ColumnReference> columns = EnhancedSqlParser.extractWhereColumns(sql);
-      assertThat(columns).isNotEmpty();
-      assertThat(columns).anyMatch(c -> c.columnName().equals("id"));
+      for (int attempt = 0; attempt < 2; attempt++) {
+        assertThat(EnhancedSqlParser.extractWhereColumns(unsupported))
+            .containsExactly(new ColumnReference(null, "id"));
+      }
+
+      String supported = "SELECT id FROM accounts WHERE COALESCE(closed_at, created_at) > ?";
+      assertThat(SqlParser.extractWhereColumns(supported)).isEmpty();
+      assertThat(EnhancedSqlParser.extractWhereColumns(supported))
+          .extracting(ColumnReference::columnName)
+          .containsExactly("closed_at", "created_at");
+    }
+
+    @Test
+    void longStatementKeepsTheRegexSizeGuard() {
+      String sql = "SELECT id FROM accounts WHERE id = 1" + " ".repeat(10_000);
+      assertThat(EnhancedSqlParser.extractWhereColumns(sql))
+          .containsExactly(new ColumnReference(null, "id"));
     }
 
     @Test
