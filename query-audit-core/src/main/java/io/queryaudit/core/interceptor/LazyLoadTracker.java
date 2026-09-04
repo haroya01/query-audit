@@ -2,23 +2,27 @@ package io.queryaudit.core.interceptor;
 
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-import org.hibernate.event.spi.InitializeCollectionEvent;
-import org.hibernate.event.spi.InitializeCollectionEventListener;
-import org.hibernate.event.spi.PostLoadEvent;
-import org.hibernate.event.spi.PostLoadEventListener;
 
 /**
- * Tracks Hibernate lazy loading events for N+1 detection and explicit PK loads for
- * findById-for-association detection.
+ * Tracks lazy loading events for N+1 detection and explicit PK loads for findById-for-association
+ * detection.
  *
- * <p>Listens for two types of Hibernate events:
+ * <p>This class carries no compile-time dependency on Hibernate (issue #248) so that plain JDBC
+ * auditing works without Hibernate on the runtime classpath. It is fed by a Hibernate-specific
+ * adapter — {@code io.queryaudit.junit5.HibernateLazyLoadListener} — which implements Hibernate's
+ * {@code InitializeCollectionEventListener} / {@code PostLoadEventListener} SPIs and translates
+ * those events into calls to {@link #recordCollectionInitialized}, {@link #recordProxyResolved},
+ * and {@link #recordExplicitLoad}. That adapter is only ever instantiated once Hibernate has been
+ * confirmed present on the classpath.
+ *
+ * <p>Two kinds of events are tracked:
  *
  * <ul>
- *   <li>{@link InitializeCollectionEvent} -- fires when a lazy {@code @OneToMany} /
- *       {@code @ManyToMany} collection is initialized (e.g., {@code team.getMembers()}).
- *   <li>{@link PostLoadEvent} -- fires after an entity is loaded. Combined with stack-trace
- *       inspection, this detects {@code @ManyToOne} / {@code @OneToOne} lazy proxy resolution
- *       (e.g., {@code room.getOwner().getName()}) and explicit loads via {@code findById()}.
+ *   <li>Collection initialization -- fires when a lazy {@code @OneToMany} / {@code @ManyToMany}
+ *       collection is initialized (e.g., {@code team.getMembers()}).
+ *   <li>Post-load -- fires after an entity is loaded. Combined with stack-trace inspection, this
+ *       detects {@code @ManyToOne} / {@code @OneToOne} lazy proxy resolution (e.g., {@code
+ *       room.getOwner().getName()}) and explicit loads via {@code findById()}.
  * </ul>
  *
  * <p>For proxy resolution, the tracker examines the call stack to distinguish proxy-triggered loads
@@ -37,7 +41,7 @@ import org.hibernate.event.spi.PostLoadEventListener;
  * @author haroya
  * @since 0.2.0
  */
-public class LazyLoadTracker implements InitializeCollectionEventListener, PostLoadEventListener {
+public class LazyLoadTracker {
 
   /** Prefix used for proxy-resolution records to distinguish from collection records. */
   public static final String PROXY_ROLE_PREFIX = "proxy:";
@@ -61,52 +65,48 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
       new CopyOnWriteArrayList<>();
   private volatile boolean active = false;
 
-  // ── InitializeCollectionEventListener (collections) ──────────────
+  // ── Collection initialization (recorded via HibernateLazyLoadListener) ────
 
-  @Override
-  public void onInitializeCollection(InitializeCollectionEvent event) {
+  /** Records a lazy collection initialization event (e.g., a {@code @OneToMany} access). */
+  public void recordCollectionInitialized(
+      String collectionRole, String ownerEntity, Object ownerId) {
     if (!active) return;
-
-    String role = event.getCollection() != null ? event.getCollection().getRole() : "unknown";
-    String ownerEntity = event.getAffectedOwnerEntityName();
-    Object ownerId = event.getAffectedOwnerIdOrNull();
 
     records.add(
         new LazyLoadRecord(
-            role,
+            collectionRole != null ? collectionRole : "unknown",
             ownerEntity,
             ownerId != null ? ownerId.toString() : "null",
             System.currentTimeMillis()));
   }
 
-  // ── PostLoadEventListener (proxy resolution) ─────────────────────
+  // ── Post-load (proxy resolution / explicit load) ───────────────────────
 
-  @Override
-  public void onPostLoad(PostLoadEvent event) {
+  /** Records a lazy proxy resolution (e.g., accessing a {@code @ManyToOne} association). */
+  public void recordProxyResolved(String entityName, Object id) {
     if (!active) return;
 
-    String entityName = event.getEntity().getClass().getName();
-    entityName = deproxyClassName(entityName);
-    Object id = event.getId();
+    String deproxied = deproxyClassName(entityName);
+    records.add(
+        new LazyLoadRecord(
+            PROXY_ROLE_PREFIX + deproxied,
+            deproxied,
+            id != null ? id.toString() : "null",
+            System.currentTimeMillis()));
+  }
 
-    if (isProxyResolution()) {
-      // Proxy resolution → record for N+1 detection
-      records.add(
-          new LazyLoadRecord(
-              PROXY_ROLE_PREFIX + entityName,
-              entityName,
-              id != null ? id.toString() : "null",
-              System.currentTimeMillis()));
-    } else if (hasFindByIdInStack()) {
-      // Explicit findById load → record for findById-for-association detection
-      String stackTrace = captureApplicationStack();
-      explicitLoads.add(
-          new ExplicitLoadRecord(
-              entityName,
-              id != null ? id.toString() : "null",
-              System.currentTimeMillis(),
-              stackTrace));
-    }
+  /**
+   * Records an explicit entity load via {@code findById()}, for findById-for-association analysis.
+   */
+  public void recordExplicitLoad(String entityName, Object id, String stackTrace) {
+    if (!active) return;
+
+    explicitLoads.add(
+        new ExplicitLoadRecord(
+            deproxyClassName(entityName),
+            id != null ? id.toString() : "null",
+            System.currentTimeMillis(),
+            stackTrace));
   }
 
   /**
@@ -115,7 +115,7 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
    *
    * @return true if {@code findById} is found in the call stack
    */
-  static boolean hasFindByIdInStack() {
+  public static boolean hasFindByIdInStack() {
     StackTraceElement[] stack = Thread.currentThread().getStackTrace();
     for (StackTraceElement frame : stack) {
       if ("findById".equals(frame.getMethodName())) return true;
@@ -127,7 +127,7 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
    * Captures a compact stack trace of application frames (up to 10), filtering out framework
    * classes (Spring, Hibernate, java.*, javax.*, proxy classes).
    */
-  private static String captureApplicationStack() {
+  public static String captureApplicationStack() {
     StackTraceElement[] stack = Thread.currentThread().getStackTrace();
     StringBuilder sb = new StringBuilder();
     int count = 0;
@@ -162,7 +162,7 @@ public class LazyLoadTracker implements InitializeCollectionEventListener, PostL
    *
    * @return true if the call stack indicates proxy resolution
    */
-  static boolean isProxyResolution() {
+  public static boolean isProxyResolution() {
     StackTraceElement[] stack = Thread.currentThread().getStackTrace();
     for (StackTraceElement frame : stack) {
       String cls = frame.getClassName();
