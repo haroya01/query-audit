@@ -587,6 +587,10 @@ public class QueryAuditExtension
     // HTML and JSON are generated from this same accumulated view, keeping their visible findings
     // and summary counts aligned with the console.
     HtmlReportAggregator.getInstance().addReport(outputReport);
+    AuditCoverageSession coverageSession = AuditCoverageListener.currentSession(context);
+    if (coverageSession != null) {
+      coverageSession.audited(outputReport);
+    }
 
     if (captureIncomplete) {
       throw new AuditCheckFailure(
@@ -741,6 +745,13 @@ public class QueryAuditExtension
                               auditConfig.getReportRedaction()));
       finalizer.requireConfiguration(
           outputDirectory, reportFormat, auditConfig.getReportRedaction());
+      AuditCoverageSession coverageSession = AuditCoverageListener.currentSession(context);
+      finalizer.requireCoverageSession(coverageSession);
+      if (AuditCoverageManifest.isConfigured() && coverageSession == null) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: an audit coverage manifest is configured, but the platform listener is"
+                + " unavailable. Enable JUnit Platform test execution listener auto-registration.");
+      }
     } catch (RuntimeException | Error failure) {
       recordInitializationFailure(
           context,
@@ -794,7 +805,8 @@ public class QueryAuditExtension
   }
 
   private static Path resolveReportOutputDirectory(QueryAuditConfig config) {
-    String configuredPath = config.getReportOutputDir();
+    String configuredPath =
+        System.getProperty("queryAudit.reportOutputDir", config.getReportOutputDir());
     if (configuredPath == null || configuredPath.isBlank()) {
       throw new ExtensionConfigurationException(
           "QueryAudit: report output directory must not be blank. Configure"
@@ -806,6 +818,14 @@ public class QueryAuditExtension
       throw new ExtensionConfigurationException(
           "QueryAudit: invalid report output directory '" + configuredPath + "'.", e);
     }
+  }
+
+  static Path coverageReportOutputDirectory() {
+    return resolveReportOutputDirectory(QueryAuditConfig.builder().build());
+  }
+
+  static boolean isAuditPolicyFailure(Throwable failure) {
+    return failure instanceof AuditCheckFailure && failure.getSuppressed().length == 0;
   }
 
   static final class AuditRunState {
@@ -845,6 +865,7 @@ public class QueryAuditExtension
     private final ReportFormat reportFormat;
     private final ReportRedaction reportRedaction;
     private final AuditRunState runState;
+    private AuditCoverageSession coverageSession;
     private volatile boolean autoOpen;
 
     ReportFinalizer(
@@ -903,6 +924,14 @@ public class QueryAuditExtension
       }
     }
 
+    void requireCoverageSession(AuditCoverageSession requestedSession) {
+      if (coverageSession != null && coverageSession != requestedSession) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: audit coverage changed during the same test execution.");
+      }
+      coverageSession = requestedSession;
+    }
+
     Path outputDirectory() {
       return outputDirectory;
     }
@@ -922,13 +951,21 @@ public class QueryAuditExtension
     @Override
     public void close() {
       HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
-      AuditRunResult runResult = runState.result(aggregator.getReports());
+      List<QueryAuditReport> reports =
+          coverageSession == null ? aggregator.getReports() : coverageSession.reports();
+      AuditRunResult runResult = runState.result(reports);
+      if (coverageSession != null) {
+        runResult = coverageSession.complete(runResult);
+      }
       if (runResult.reports().isEmpty() && runResult.outcome() == AuditOutcome.PASS) {
         return;
       }
 
       Path reportPath = reportPath();
       try {
+        if (coverageSession != null && reportFormat != ReportFormat.JSON) {
+          extension.writeJsonReport(runResult, outputDirectory, reportRedaction);
+        }
         switch (reportFormat) {
           case CONSOLE -> {
             // Per-test output and the suite summary are already on stdout.
@@ -964,7 +1001,7 @@ public class QueryAuditExtension
       };
     }
 
-    private static void printSummary(AuditRunResult runResult) {
+    static void printSummary(AuditRunResult runResult) {
       List<QueryAuditReport> reports = runResult.reports();
       long totalErrors = reports.stream().mapToLong(report -> report.getErrors().size()).sum();
       long totalWarnings = reports.stream().mapToLong(report -> report.getWarnings().size()).sum();

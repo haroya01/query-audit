@@ -36,7 +36,7 @@ public class JsonReporter implements Reporter {
    *
    * @since 0.5.0
    */
-  public static final String SCHEMA_VERSION = "1.4.0";
+  public static final String SCHEMA_VERSION = "1.5.0";
 
   private static final String LEGACY_SCHEMA_VERSION = "1.0.0";
 
@@ -58,8 +58,8 @@ public class JsonReporter implements Reporter {
   /**
    * Wraps per-test reports in the versioned envelope written to {@code report.json}: {@code
    * {"schemaVersion": "1.0.0", "reports": [...]}}. This compatibility overload uses the legacy
-   * envelope without a suite verdict, and declares its artifact redaction mode. A report list
-   * alone cannot prove that the audit completed or that its policies passed.
+   * envelope without a suite verdict, and declares its artifact redaction mode. A report list alone
+   * cannot prove that the audit completed or that its policies passed.
    *
    * @deprecated use {@link #toRunEnvelopeJson(AuditRunResult)} so incomplete and failed runs are
    *     preserved
@@ -103,6 +103,9 @@ public class JsonReporter implements Reporter {
     sb.append("  \"outcome\": \"").append(runResult.outcome()).append("\",\n");
     sb.append("  \"incompleteReasons\": ");
     appendIncompleteReasons(sb, runResult.incompleteReasons(), redactor);
+    sb.append(",\n");
+    sb.append("  \"coverage\": ");
+    CoverageJson.append(sb, runResult.coverage());
     sb.append(",\n");
     appendReports(sb, runResult.reports(), true, redactor);
     sb.append("\n}");
