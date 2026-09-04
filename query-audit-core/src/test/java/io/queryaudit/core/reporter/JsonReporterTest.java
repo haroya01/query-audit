@@ -253,8 +253,8 @@ class JsonReporterTest {
 
     // Count opening braces for issues
     long issueObjectCount = json.chars().filter(c -> c == '{').count();
-    // 1 root + 1 summary + 2 issues + 1 remediation (n-plus-one only) + 2 queries = 7
-    assertThat(issueObjectCount).isEqualTo(7);
+    // Root, summary, evidence, two issues, remediation, and two queries.
+    assertThat(issueObjectCount).isEqualTo(8);
 
     assertThat(json).contains("\"type\": \"n-plus-one\"");
     assertThat(json).contains("\"type\": \"or-abuse\"");

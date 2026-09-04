@@ -246,6 +246,45 @@ public class QueryAuditReport {
     return allQueries;
   }
 
+  /** Number of captured query records retained in this report. */
+  public int getRetainedQueryCount() {
+    return allQueries == null ? 0 : allQueries.size();
+  }
+
+  /** Number of captured queries whose records are no longer retained. */
+  public int getOmittedQueryCount() {
+    return Math.max(0, totalQueryCount - getRetainedQueryCount());
+  }
+
+  /** Describes query evidence retention, independently of the audit verdict. */
+  public QueryEvidenceStatus getQueryEvidenceStatus() {
+    if (getOmittedQueryCount() == 0) {
+      return QueryEvidenceStatus.COMPLETE;
+    }
+    return getRetainedQueryCount() == 0 ? QueryEvidenceStatus.OMITTED : QueryEvidenceStatus.PARTIAL;
+  }
+
+  /**
+   * Returns a compact copy that keeps findings, identity, and metadata but releases query records.
+   */
+  public QueryAuditReport withoutQueryEvidence() {
+    QueryAuditReport copy =
+        new QueryAuditReport(
+            testId,
+            testSelector,
+            testClass,
+            testName,
+            confirmedIssues,
+            infoIssues,
+            getAcknowledgedIssues(),
+            List.of(),
+            uniquePatternCount,
+            totalQueryCount,
+            totalExecutionTimeNanos);
+    copy.indexMetadata = indexMetadata;
+    return copy;
+  }
+
   public int getUniquePatternCount() {
     return uniquePatternCount;
   }
