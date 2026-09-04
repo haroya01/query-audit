@@ -308,6 +308,15 @@ public class QueryAuditExtension
       failure = runCleanup(failure, hookCleanup);
     }
     failure = runCleanup(failure, QueryAuditDataSourceStore::clear);
+    if (failure != null) {
+      markIncomplete(
+          context,
+          IncompleteReasonCode.AUDIT_ANALYSIS_FAILED,
+          "Could not clean up QueryAudit for "
+              + auditTarget(context)
+              + ": "
+              + failureMessage(failure));
+    }
     failure = runCleanup(failure, () -> writeCountBaselineIfRequested(context));
     failure = runCleanup(failure, () -> writeContractsIfRequested(context));
 
@@ -315,13 +324,6 @@ public class QueryAuditExtension
       return;
     }
 
-    markIncomplete(
-        context,
-        IncompleteReasonCode.AUDIT_ANALYSIS_FAILED,
-        "Could not clean up QueryAudit for "
-            + auditTarget(context)
-            + ": "
-            + failureMessage(failure));
     if (failure instanceof RuntimeException runtimeFailure) {
       throw runtimeFailure;
     }
@@ -1134,7 +1136,7 @@ public class QueryAuditExtension
               + currentCounts.size()
               + " test(s))");
     } catch (Exception e) {
-      System.err.println("[QueryAudit] Failed to write query contracts: " + e.getMessage());
+      throw policyWriteFailure(context, "query contracts", e);
     }
   }
 
@@ -1799,8 +1801,15 @@ public class QueryAuditExtension
               + currentCounts.size()
               + " test(s))");
     } catch (Exception e) {
-      System.err.println("[QueryAudit] Failed to write count baseline: " + e.getMessage());
+      throw policyWriteFailure(context, "count baseline", e);
     }
+  }
+
+  private static ExtensionConfigurationException policyWriteFailure(
+      ExtensionContext context, String policy, Exception cause) {
+    String detail = "Could not write " + policy + "; the requested recording did not complete.";
+    markIncomplete(context, IncompleteReasonCode.POLICY_WRITE_FAILED, detail);
+    return new ExtensionConfigurationException("QueryAudit: " + detail, cause);
   }
 
   private boolean shouldAutoOpenReport(ExtensionContext context) {

@@ -92,6 +92,10 @@ Rules of enforcement:
 - **Invalid files fail the run.** An existing contract file that is malformed or unreadable stops
   audit initialization. The error identifies the file and, for malformed entries, the line number.
   A missing file remains valid and means that no contracts have been recorded yet.
+- **Recording failures fail the run.** If the requested contract or count-baseline file cannot be
+  saved, the launcher reports a failure and the suite is `INCONCLUSIVE` with `POLICY_WRITE_FAILED`.
+  Report-only mode does not suppress this failure. Fix the destination and rerun recording before
+  committing the policy file.
 
 ## Updating
 
