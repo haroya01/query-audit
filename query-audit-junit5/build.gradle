@@ -1,3 +1,21 @@
+// Issue #248: LazyLoadTracker used to implement Hibernate's event-listener SPIs directly, so
+// merely loading the class (e.g. an ExtensionContext.Store lookup keyed by LazyLoadTracker.class)
+// forced the JVM to resolve those Hibernate interfaces, even for a plain JDBC audit. The main
+// `test` source set can't catch that class of regression: it pulls Hibernate in transitively via
+// spring-boot-starter-data-jpa, which masks the failure. noHibernateTest runs the extension
+// lifecycle against a classpath where Hibernate and jakarta.persistence are genuinely absent.
+sourceSets {
+    noHibernateTest {
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    noHibernateTestImplementation.extendsFrom implementation
+    noHibernateTestRuntimeOnly.extendsFrom runtimeOnly
+}
+
 dependencies {
     api project(':query-audit-core')
 
@@ -17,4 +35,20 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa:3.4.1'
     testImplementation 'com.h2database:h2:2.3.232'
     testImplementation 'net.ttddyy:datasource-proxy:1.10'
+
+    noHibernateTestImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    noHibernateTestImplementation 'org.assertj:assertj-core:3.27.3'
+    noHibernateTestImplementation 'com.h2database:h2:2.3.232'
+    noHibernateTestRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+
+tasks.register('noHibernateTest', Test) {
+    description = 'Runs the JUnit5 extension lifecycle with Hibernate absent from the classpath (issue #248).'
+    group = 'verification'
+    testClassesDirs = sourceSets.noHibernateTest.output.classesDirs
+    classpath = sourceSets.noHibernateTest.runtimeClasspath
+    useJUnitPlatform()
+}
+tasks.named('check') {
+    dependsOn tasks.named('noHibernateTest')
 }
