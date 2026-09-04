@@ -1,5 +1,6 @@
 package io.queryaudit.core.reporter;
 
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
 import java.io.IOException;
@@ -26,12 +27,22 @@ public class GitHubActionsReporter implements Reporter {
 
   private final PrintStream out;
   private final Path summaryPath;
+  private final ReportRedactor redactor;
 
   public GitHubActionsReporter() {
     this(System.out, resolveSummaryPathFromEnv());
   }
 
+  public GitHubActionsReporter(ReportRedaction redaction) {
+    this(System.out, resolveSummaryPathFromEnv(), redaction);
+  }
+
   public GitHubActionsReporter(PrintStream out, Path summaryPath) {
+    this(out, summaryPath, ReportRedaction.REDACTED);
+  }
+
+  public GitHubActionsReporter(PrintStream out, Path summaryPath, ReportRedaction redaction) {
+    this.redactor = new ReportRedactor(redaction);
     this.out = out;
     this.summaryPath = summaryPath;
   }
@@ -69,6 +80,7 @@ public class GitHubActionsReporter implements Reporter {
   }
 
   private void emit(String level, Issue issue, QueryAuditReport report) {
+    issue = redactor.issue(issue);
     StringBuilder props = new StringBuilder();
     Location loc = parseLocation(issue.sourceLocation());
     if (loc != null) {
@@ -148,14 +160,14 @@ public class GitHubActionsReporter implements Reporter {
     }
   }
 
-  private static void appendTopIssues(StringBuilder md, String level, List<Issue> issues) {
+  private void appendTopIssues(StringBuilder md, String level, List<Issue> issues) {
     if (issues == null || issues.isEmpty()) {
       return;
     }
     md.append("\n**").append(level).append("**\n\n");
     int limit = Math.min(issues.size(), 5);
     for (int i = 0; i < limit; i++) {
-      Issue issue = issues.get(i);
+      Issue issue = redactor.issue(issues.get(i));
       md.append("- `")
           .append(issue.type() != null ? issue.type().getCode() : "query-audit")
           .append("`");

@@ -3,6 +3,7 @@ package io.queryaudit.core.reporter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.AuditIncompleteReason;
 import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.model.AuditRunResult;
@@ -44,7 +45,8 @@ class ReportComparatorTest {
   }
 
   private static String envelope(QueryAuditReport... reports) {
-    return JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(reports)));
+    return JsonReporter.toRunEnvelopeJson(
+        AuditRunResult.pass(List.of(reports)), ReportRedaction.FULL);
   }
 
   private static String envelopeWithRawReport(String report) {
@@ -90,7 +92,7 @@ class ReportComparatorTest {
   }
 
   private static String reportWithoutIdentity(QueryAuditReport report) {
-    String json = JsonReporter.toJson(report);
+    String json = JsonReporter.toJson(report, ReportRedaction.FULL);
     String withoutTestId = "{\n" + json.substring(json.indexOf("  \"testClass\""));
     return withoutTestId.replace("  \"testSelector\": null,\n", "");
   }
@@ -422,7 +424,7 @@ class ReportComparatorTest {
     @DisplayName("accepts compatible 1.x schema versions")
     void acceptsCompatibleSchemaVersion() {
       String compatibleEnvelope =
-          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"PASS\","
+          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"outcome\":\"PASS\","
               + "\"incompleteReasons\":[],\"reports\":[]}";
 
       ReportComparator.Verdict verdict =
@@ -436,9 +438,10 @@ class ReportComparatorTest {
     void futureOutcomeIsInconclusive() {
       Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
       String futureEnvelope =
-          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"SKIPPED\","
+          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"outcome\":\"SKIPPED\","
               + "\"incompleteReasons\":[],\"reports\":["
-              + JsonReporter.toJson(report("findOrders", List.of(introduced), 9))
+              + JsonReporter.toJson(
+                  report("findOrders", List.of(introduced), 9), ReportRedaction.FULL)
               + "]}";
 
       ReportComparator.Verdict verdict =
@@ -462,10 +465,11 @@ class ReportComparatorTest {
     void futureIncompleteReasonIsInconclusive() {
       Issue resolved = nPlusOne("select * from payments where order_id = ?", "S.pay:20");
       String futureEnvelope =
-          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"INCONCLUSIVE\","
+          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"outcome\":\"INCONCLUSIVE\","
               + "\"incompleteReasons\":[{\"code\":\"FUTURE_REASON\",\"detail\":null}],"
               + "\"reports\":["
-              + JsonReporter.toJson(report("findOrders", List.of(resolved), 8))
+              + JsonReporter.toJson(
+                  report("findOrders", List.of(resolved), 8), ReportRedaction.FULL)
               + "]}";
 
       ReportComparator.Verdict verdict =
@@ -490,7 +494,9 @@ class ReportComparatorTest {
       Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
       QueryAuditReport baselineReport = report("findOrders", List.of(finding), 11);
       String legacyEnvelope =
-          "{\"schemaVersion\":\"1.0.0\",\"reports\":[" + JsonReporter.toJson(baselineReport) + "]}";
+          "{\"schemaVersion\":\"1.0.0\",\"reports\":["
+              + JsonReporter.toJson(baselineReport, ReportRedaction.FULL)
+              + "]}";
 
       ReportComparator.Verdict verdict =
           ReportComparator.compare(legacyEnvelope, envelope(report("findOrders", List.of(), 7)));
@@ -516,7 +522,8 @@ class ReportComparatorTest {
                       report("findPayments", List.of(), 3),
                       report("findRefunds", List.of(introduced), 7)),
                   new AuditIncompleteReason(
-                      IncompleteReasonCode.QUERY_LIMIT_REACHED, "findRefunds retained 7 queries")));
+                      IncompleteReasonCode.QUERY_LIMIT_REACHED, "findRefunds retained 7 queries")),
+              ReportRedaction.FULL);
 
       ReportComparator.Verdict verdict = ReportComparator.compare(before, after);
 
@@ -537,7 +544,8 @@ class ReportComparatorTest {
       ReportComparator.Verdict verdict =
           ReportComparator.compare(
               envelope(unchanged),
-              JsonReporter.toRunEnvelopeJson(AuditRunResult.fail(List.of(unchanged))));
+              JsonReporter.toRunEnvelopeJson(
+                  AuditRunResult.fail(List.of(unchanged)), ReportRedaction.FULL));
 
       assertThat(verdict.newFindings()).isEmpty();
       assertThat(verdict.outcome()).isEqualTo(AuditOutcome.FAIL);
@@ -588,7 +596,7 @@ class ReportComparatorTest {
           .hasMessageContaining("reports[0].testId is required");
 
       String withoutSelector =
-          JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(report)))
+          JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(report)), ReportRedaction.FULL)
               .replace("      \"testSelector\": null,\n", "");
       assertThatThrownBy(() -> ReportComparator.compare(envelope(), withoutSelector))
           .isInstanceOf(IllegalArgumentException.class)

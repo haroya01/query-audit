@@ -147,7 +147,8 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
 
 ```json
 {
-  "schemaVersion": "1.3.0",
+  "schemaVersion": "1.4.0",
+  "redaction": "REDACTED",
   "outcome": "FAIL",
   "incompleteReasons": [],
   "reports": [
@@ -175,8 +176,8 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
           "query": "select id, order_id, sku from order_items where order_id = ?",
           "table": "order_items",
           "column": null,
-          "detail": "Query repeated 3 times (threshold: 3)",
-          "suggestion": "Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)",
+          "detail": "N+1 Query detected",
+          "suggestion": "Consider a fetch join, entity graph, or batch loading.",
           "sourceLocation": "com.example.OrderService.findOrders:42",
           "remediation": {"kind": "batch-fetch", "table": "order_items"}
         },
@@ -186,8 +187,8 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
           "query": "select * from orders where user_id = ? order by created_at desc",
           "table": "orders",
           "column": "user_id",
-          "detail": "Column 'user_id' is used in WHERE clause but has no index",
-          "suggestion": "CREATE INDEX idx_orders_user_id ON orders (user_id);",
+          "detail": "Missing index on WHERE column",
+          "suggestion": "Check the query plan before adding an index on the reported columns.",
           "sourceLocation": "com.example.OrderService.findOrders:42",
           "remediation": {"kind": "add-index", "table": "orders", "columns": ["user_id"]}
         }
@@ -199,8 +200,8 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
           "query": "select * from orders where user_id = ? order by created_at desc",
           "table": "orders",
           "column": null,
-          "detail": "SELECT * usage detected on table 'orders'",
-          "suggestion": "Replace SELECT * with an explicit column list to reduce network I/O and enable covering index optimization.",
+          "detail": "SELECT * usage",
+          "suggestion": "Select only the columns required by the caller.",
           "sourceLocation": "com.example.OrderService.findOrders:42",
           "remediation": {"kind": "select-explicit-columns", "table": "orders"}
         }
@@ -213,25 +214,25 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
       },
       "queries": [
         {
-          "sql": "SELECT * FROM orders WHERE user_id = 42 ORDER BY created_at DESC",
+          "sql": "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC",
           "normalizedSql": "select * from orders where user_id = ? order by created_at desc",
           "executionTimeNanos": 15234000,
           "stackTrace": "com.example.OrderService.findOrders:42"
         },
         {
-          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = 101",
+          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = ?",
           "normalizedSql": "select id, order_id, sku from order_items where order_id = ?",
           "executionTimeNanos": 108922000,
           "stackTrace": "com.example.OrderService.findOrders:42"
         },
         {
-          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = 102",
+          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = ?",
           "normalizedSql": "select id, order_id, sku from order_items where order_id = ?",
           "executionTimeNanos": 109300000,
           "stackTrace": "com.example.OrderService.findOrders:42"
         },
         {
-          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = 103",
+          "sql": "SELECT id, order_id, sku FROM order_items WHERE order_id = ?",
           "normalizedSql": "select id, order_id, sku from order_items where order_id = ?",
           "executionTimeNanos": 108544000,
           "stackTrace": "com.example.OrderService.findOrders:42"
@@ -245,7 +246,7 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. The current version is **1.3.0**. QueryAudit 0.5.x wrote schema 1.0
+of silently misparsing it. The current version is **1.4.0**. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
 infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, and
 schema 1.2 adds a stable test identity and reproducible selector to every per-test report.
@@ -310,8 +311,10 @@ Field notes for machine consumers:
 
 The stable schema URLs are
 [`schema/report-1.0.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.0.schema.json),
-[`schema/report-1.1.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.1.schema.json), and
-[`schema/report-1.3.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.3.schema.json).
+[`schema/report-1.1.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.1.schema.json),
+[`schema/report-1.2.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.2.schema.json),
+[`schema/report-1.3.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.3.schema.json), and
+[`schema/report-1.4.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.4.schema.json).
 [`schema/report.schema.json`](https://haroya01.github.io/query-audit/schema/report.schema.json)
 always points to the current version.
 
@@ -575,3 +578,49 @@ The suite aggregator retains full query records for the first 200 reports and co
 reports to bound memory use. Compaction preserves findings, test identity, index metadata,
 query totals, and timing. It only changes evidence availability, so it does not turn a completed
 PASS or FAIL into INCONCLUSIVE. HTML reports also show when query evidence was omitted.
+
+### Machine report redaction
+
+JSON reports, comparison verdicts, and GitHub Actions annotations default to `REDACTED`.
+SQL values are replaced with `?`, including numeric, string, national/escaped/Unicode,
+hex/bit/octal (including numeric separators), dollar-quoted, date/time, and interval literals. Comments are removed, including
+unterminated comments and literals. Where backslash escaping is ambiguous, the report hides
+value spans from both interpretations. Double-quoted SQL text is treated conservatively as
+potential literal content because its meaning differs between database modes. MySQL backtick
+identifiers and unquoted schema identifiers are retained. A `#` starts a redacted comment
+even where PostgreSQL could interpret it as an operator; the default favors hiding possible
+MySQL comment content. Synthetic `findById` evidence never includes the entity ID.
+
+Raw finding details and suggestions may contain values extracted from SQL without quotes.
+Redacted reports replace this prose with the rule description and a safe suggestion; structured
+remediation still identifies the action, table, and columns. Incomplete-reason codes remain,
+while their free-form details are omitted. Stack evidence keeps up to five application frames,
+removes framework frames, and reduces source paths to filenames.
+
+The original in-memory capture, analysis, policy checks, query counts, and outcome are unchanged.
+The envelope declares `redaction`; comparing different modes returns INCONCLUSIVE with
+`REPORT_REDACTION_MISMATCH`, never a successful resolution. Verdict JSON is redacted by default
+even when both input reports used full detail.
+
+For local debugging, explicitly opt in to full detail:
+
+```yaml
+query-audit:
+  report:
+    format: json
+    redaction: full
+```
+
+Plain JUnit uses `-DqueryAudit.reportRedaction=full`. Core callers can set
+`QueryAuditConfig.builder().reportRedaction(ReportRedaction.FULL)` when constructing a
+`JsonReporter`, or pass `ReportRedaction.FULL` to `JsonReporter.toRunEnvelopeJson`.
+All active contexts in one JUnit run must use the same mode. Unknown values fail configuration.
+
+Full reports can expose SQL values and local paths; keep them out of shared CI artifacts.
+Console and HTML diagnostics are not redacted by this setting. The JUnit extension still
+prints per-test console output, including in CI, so review job-log access as well as artifact
+uploads.
+Test identities, display names, schema identifiers, and numeric execution statistics are
+structural report data and remain visible. Do not put credentials or customer data in those
+identifiers or test names. Redaction reduces accidental disclosure; it is not an anonymizer for
+arbitrary application metadata.

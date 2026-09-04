@@ -1,5 +1,7 @@
 package io.queryaudit.core.reporter;
 
+import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.AuditIncompleteReason;
 import io.queryaudit.core.model.AuditRunResult;
 import io.queryaudit.core.model.IndexInfo;
@@ -13,6 +15,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -33,17 +36,30 @@ public class JsonReporter implements Reporter {
    *
    * @since 0.5.0
    */
-  public static final String SCHEMA_VERSION = "1.3.0";
+  public static final String SCHEMA_VERSION = "1.4.0";
 
   private static final String LEGACY_SCHEMA_VERSION = "1.0.0";
 
+  private final ReportRedaction redaction;
   private String lastJson;
+
+  public JsonReporter() {
+    this(ReportRedaction.REDACTED);
+  }
+
+  public JsonReporter(QueryAuditConfig config) {
+    this(config.getReportRedaction());
+  }
+
+  public JsonReporter(ReportRedaction redaction) {
+    this.redaction = Objects.requireNonNull(redaction, "redaction");
+  }
 
   /**
    * Wraps per-test reports in the versioned envelope written to {@code report.json}: {@code
-   * {"schemaVersion": "1.0.0", "reports": [...]}}. This compatibility overload retains the 0.5.x
-   * shape because a report list alone cannot prove that the audit completed or that its policies
-   * passed.
+   * {"schemaVersion": "1.0.0", "reports": [...]}}. This compatibility overload uses the legacy
+   * envelope without a suite verdict, and declares its artifact redaction mode. A report list
+   * alone cannot prove that the audit completed or that its policies passed.
    *
    * @deprecated use {@link #toRunEnvelopeJson(AuditRunResult)} so incomplete and failed runs are
    *     preserved
@@ -51,10 +67,18 @@ public class JsonReporter implements Reporter {
    */
   @Deprecated(since = "0.6.0")
   public static String toEnvelopeJson(List<QueryAuditReport> reports) {
+    return toEnvelopeJson(reports, ReportRedaction.REDACTED);
+  }
+
+  /** Legacy envelope with an explicit artifact detail policy. */
+  @Deprecated(since = "0.7.0")
+  public static String toEnvelopeJson(List<QueryAuditReport> reports, ReportRedaction redaction) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
     sb.append("  \"schemaVersion\": \"").append(LEGACY_SCHEMA_VERSION).append("\",\n");
-    appendReports(sb, reports, false);
+    appendJsonString(sb, "  ", "redaction", redaction.name());
+    sb.append(",\n");
+    appendReports(sb, reports, false, new ReportRedactor(redaction));
     sb.append("\n}");
     return sb.toString();
   }
@@ -65,23 +89,34 @@ public class JsonReporter implements Reporter {
    * @since 0.6.0
    */
   public static String toRunEnvelopeJson(AuditRunResult runResult) {
+    return toRunEnvelopeJson(runResult, ReportRedaction.REDACTED);
+  }
+
+  /** Serializes a run without changing its findings, counts, or outcome. */
+  public static String toRunEnvelopeJson(AuditRunResult runResult, ReportRedaction redaction) {
+    ReportRedactor redactor = new ReportRedactor(redaction);
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
     sb.append("  \"schemaVersion\": \"").append(SCHEMA_VERSION).append("\",\n");
+    appendJsonString(sb, "  ", "redaction", redaction.name());
+    sb.append(",\n");
     sb.append("  \"outcome\": \"").append(runResult.outcome()).append("\",\n");
     sb.append("  \"incompleteReasons\": ");
-    appendIncompleteReasons(sb, runResult.incompleteReasons());
+    appendIncompleteReasons(sb, runResult.incompleteReasons(), redactor);
     sb.append(",\n");
-    appendReports(sb, runResult.reports(), true);
+    appendReports(sb, runResult.reports(), true, redactor);
     sb.append("\n}");
     return sb.toString();
   }
 
   private static void appendReports(
-      StringBuilder sb, List<QueryAuditReport> reports, boolean includeIdentity) {
+      StringBuilder sb,
+      List<QueryAuditReport> reports,
+      boolean includeIdentity,
+      ReportRedactor redactor) {
     sb.append("  \"reports\": [\n");
     for (int i = 0; i < reports.size(); i++) {
-      sb.append(toJson(reports.get(i), includeIdentity).indent(4).stripTrailing());
+      sb.append(toJson(reports.get(i), includeIdentity, redactor).indent(4).stripTrailing());
       if (i < reports.size() - 1) {
         sb.append(",");
       }
@@ -91,7 +126,7 @@ public class JsonReporter implements Reporter {
   }
 
   private static void appendIncompleteReasons(
-      StringBuilder sb, List<AuditIncompleteReason> incompleteReasons) {
+      StringBuilder sb, List<AuditIncompleteReason> incompleteReasons, ReportRedactor redactor) {
     if (incompleteReasons.isEmpty()) {
       sb.append("[]");
       return;
@@ -102,7 +137,7 @@ public class JsonReporter implements Reporter {
       sb.append("    {\n");
       appendJsonString(sb, "      ", "code", reason.code().name());
       sb.append(",\n");
-      appendJsonString(sb, "      ", "detail", reason.detail());
+      appendJsonString(sb, "      ", "detail", redactor.diagnostic(reason.detail()));
       sb.append("\n    }");
       if (i < incompleteReasons.size() - 1) {
         sb.append(",");
@@ -114,7 +149,7 @@ public class JsonReporter implements Reporter {
 
   @Override
   public void report(QueryAuditReport report) {
-    lastJson = toJson(report);
+    lastJson = toJson(report, redaction);
   }
 
   /** Returns the JSON string produced by the most recent {@link #report} call, or {@code null}. */
@@ -124,10 +159,16 @@ public class JsonReporter implements Reporter {
 
   /** Converts a report to its JSON representation. */
   public static String toJson(QueryAuditReport report) {
-    return toJson(report, true);
+    return toJson(report, ReportRedaction.REDACTED);
   }
 
-  private static String toJson(QueryAuditReport report, boolean includeIdentity) {
+  /** Converts a report using an explicitly selected detail policy. */
+  public static String toJson(QueryAuditReport report, ReportRedaction redaction) {
+    return toJson(report, true, new ReportRedactor(redaction));
+  }
+
+  private static String toJson(
+      QueryAuditReport report, boolean includeIdentity, ReportRedactor redactor) {
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
 
@@ -170,28 +211,28 @@ public class JsonReporter implements Reporter {
 
     // confirmedIssues
     sb.append("  \"confirmedIssues\": ");
-    appendIssueArray(sb, report.getConfirmedIssues(), "  ");
+    appendIssueArray(sb, report.getConfirmedIssues(), "  ", redactor);
     sb.append(",\n");
 
     // infoIssues
     sb.append("  \"infoIssues\": ");
-    appendIssueArray(sb, report.getInfoIssues(), "  ");
+    appendIssueArray(sb, report.getInfoIssues(), "  ", redactor);
     sb.append(",\n");
 
     // acknowledgedIssues
     sb.append("  \"acknowledgedIssues\": ");
-    appendIssueArray(sb, report.getAcknowledgedIssues(), "  ");
+    appendIssueArray(sb, report.getAcknowledgedIssues(), "  ", redactor);
     sb.append(",\n");
 
     // indexMetadata — only tables referenced by findings, so a consumer acting on the report
     // (CI bot, remediation tooling) can see the actual index state without database access.
     sb.append("  \"indexMetadata\": ");
-    appendIndexMetadata(sb, report, "  ");
+    appendIndexMetadata(sb, report, "  ", redactor);
     sb.append(",\n");
 
     // queries
     sb.append("  \"queries\": ");
-    appendQueryArray(sb, report.getAllQueries(), "  ");
+    appendQueryArray(sb, report.getAllQueries(), "  ", redactor);
     sb.append("\n");
 
     sb.append("}");
@@ -202,14 +243,15 @@ public class JsonReporter implements Reporter {
   // Array helpers
   // ---------------------------------------------------------------------------
 
-  private static void appendIssueArray(StringBuilder sb, List<Issue> issues, String indent) {
+  private static void appendIssueArray(
+      StringBuilder sb, List<Issue> issues, String indent, ReportRedactor redactor) {
     if (issues == null || issues.isEmpty()) {
       sb.append("[]");
       return;
     }
     sb.append("[\n");
     for (int i = 0; i < issues.size(); i++) {
-      Issue issue = issues.get(i);
+      Issue issue = redactor.issue(issues.get(i));
       String inner = indent + "  ";
       String innerField = inner + "  ";
       sb.append(inner).append("{\n");
@@ -258,7 +300,8 @@ public class JsonReporter implements Reporter {
     sb.append(indent).append("]");
   }
 
-  private static void appendQueryArray(StringBuilder sb, List<QueryRecord> queries, String indent) {
+  private static void appendQueryArray(
+      StringBuilder sb, List<QueryRecord> queries, String indent, ReportRedactor redactor) {
     if (queries == null || queries.isEmpty()) {
       sb.append("[]");
       return;
@@ -269,13 +312,13 @@ public class JsonReporter implements Reporter {
       String inner = indent + "  ";
       String innerField = inner + "  ";
       sb.append(inner).append("{\n");
-      appendJsonString(sb, innerField, "sql", q.sql());
+      appendJsonString(sb, innerField, "sql", redactor.sql(q.sql()));
       sb.append(",\n");
-      appendJsonString(sb, innerField, "normalizedSql", q.normalizedSql());
+      appendJsonString(sb, innerField, "normalizedSql", redactor.sql(q.normalizedSql()));
       sb.append(",\n");
       sb.append(innerField).append("\"executionTimeNanos\": ").append(q.executionTimeNanos());
       sb.append(",\n");
-      appendJsonString(sb, innerField, "stackTrace", q.stackTrace());
+      appendJsonString(sb, innerField, "stackTrace", redactor.stackTrace(q.stackTrace()));
       sb.append("\n");
       sb.append(inner).append("}");
       if (i < queries.size() - 1) {
@@ -307,7 +350,7 @@ public class JsonReporter implements Reporter {
    * semantics.
    */
   private static void appendIndexMetadata(
-      StringBuilder sb, QueryAuditReport report, String indent) {
+      StringBuilder sb, QueryAuditReport report, String indent, ReportRedactor redactor) {
     IndexMetadata metadata = report.getIndexMetadata();
     if (metadata == null) {
       sb.append("null");
@@ -335,7 +378,7 @@ public class JsonReporter implements Reporter {
         body.append(",\n");
       }
       firstTable = false;
-      body.append(indent).append("  \"").append(escapeJson(table)).append("\": [");
+      body.append(indent).append("  \"").append(escapeJson(redactor.sql(table))).append("\": [");
       boolean firstIndex = true;
       for (Map.Entry<String, List<IndexInfo>> entry : byIndex.entrySet()) {
         if (!firstIndex) {
@@ -343,14 +386,18 @@ public class JsonReporter implements Reporter {
         }
         firstIndex = false;
         List<IndexInfo> indexRows = entry.getValue();
-        body.append("{\"name\": \"").append(escapeJson(entry.getKey())).append("\", ");
+        body.append("{\"name\": \"")
+            .append(escapeJson(redactor.sql(entry.getKey())))
+            .append("\", ");
         body.append("\"unique\": ").append(!indexRows.get(0).nonUnique()).append(", ");
         body.append("\"columns\": [");
         for (int c = 0; c < indexRows.size(); c++) {
           if (c > 0) {
             body.append(", ");
           }
-          body.append("\"").append(escapeJson(indexRows.get(c).columnName())).append("\"");
+          body.append("\"")
+              .append(escapeJson(redactor.sql(indexRows.get(c).columnName())))
+              .append("\"");
         }
         body.append("], \"cardinality\": ")
             .append(indexRows.get(indexRows.size() - 1).cardinality())

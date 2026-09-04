@@ -27,6 +27,9 @@ public enum IncompleteReasonCode {
   /** The selected suite report could not be written. */
   REPORT_WRITE_FAILED,
 
+  /** Comparison inputs used different artifact detail policies. */
+  REPORT_REDACTION_MISMATCH,
+
   /** A report input used an unsupported schema version. */
   UNSUPPORTED_SCHEMA
 }
