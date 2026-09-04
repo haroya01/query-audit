@@ -12,6 +12,7 @@ dependencies {
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
     testImplementation 'org.assertj:assertj-core:3.27.3'
+    testImplementation 'com.networknt:json-schema-validator:1.5.6'
     testImplementation 'org.mockito:mockito-core:5.14.2'
     testImplementation 'ch.qos.logback:logback-classic:1.5.15'
     testImplementation 'org.hibernate.orm:hibernate-core:6.6.4.Final'
@@ -28,3 +29,5 @@ pitest {
     mutationThreshold = 70
     coverageThreshold = 60
 }
+
+sourceSets.test.resources.srcDir(rootProject.file('docs/schema'))

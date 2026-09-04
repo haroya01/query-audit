@@ -33,7 +33,7 @@ public class JsonReporter implements Reporter {
    *
    * @since 0.5.0
    */
-  public static final String SCHEMA_VERSION = "1.2.0";
+  public static final String SCHEMA_VERSION = "1.3.0";
 
   private static final String LEGACY_SCHEMA_VERSION = "1.0.0";
 
@@ -159,6 +159,14 @@ public class JsonReporter implements Reporter {
     sb.append("    \"totalQueries\": ").append(report.getTotalQueryCount()).append(",\n");
     sb.append("    \"executionTimeMs\": ").append(executionTimeMs).append("\n");
     sb.append("  },\n");
+
+    if (includeIdentity) {
+      sb.append("  \"queryEvidence\": {\n");
+      sb.append("    \"status\": \"").append(report.getQueryEvidenceStatus()).append("\",\n");
+      sb.append("    \"retainedQueries\": ").append(report.getRetainedQueryCount()).append(",\n");
+      sb.append("    \"omittedQueries\": ").append(report.getOmittedQueryCount()).append("\n");
+      sb.append("  },\n");
+    }
 
     // confirmedIssues
     sb.append("  \"confirmedIssues\": ");

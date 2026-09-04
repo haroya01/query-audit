@@ -147,7 +147,7 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
 
 ```json
 {
-  "schemaVersion": "1.2.0",
+  "schemaVersion": "1.3.0",
   "outcome": "FAIL",
   "incompleteReasons": [],
   "reports": [
@@ -167,6 +167,7 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
         "totalQueries": 4,
         "executionTimeMs": 342
       },
+      "queryEvidence": { "status": "COMPLETE", "retainedQueries": 4, "omittedQueries": 0 },
       "confirmedIssues": [
         {
           "type": "n-plus-one",
@@ -244,7 +245,7 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. The current version is **1.2.0**. QueryAudit 0.5.x wrote schema 1.0
+of silently misparsing it. The current version is **1.3.0**. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
 infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, and
 schema 1.2 adds a stable test identity and reproducible selector to every per-test report.
@@ -310,7 +311,7 @@ Field notes for machine consumers:
 The stable schema URLs are
 [`schema/report-1.0.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.0.schema.json),
 [`schema/report-1.1.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.1.schema.json), and
-[`schema/report-1.2.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.2.schema.json).
+[`schema/report-1.3.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.3.schema.json).
 [`schema/report.schema.json`](https://haroya01.github.io/query-audit/schema/report.schema.json)
 always points to the current version.
 
@@ -561,3 +562,16 @@ The summary footer provides:
 - [Configuration Reference](configuration.md) -- Configure report format and output directory
 - [CI/CD Integration](ci-cd.md) -- Upload reports as CI artifacts
 - [Suppressing Issues](suppressing.md) -- Suppress intentional findings from reports
+
+### Query evidence retention
+
+Each test in schema 1.3 includes `queryEvidence` with `status`, `retainedQueries`, and
+`omittedQueries`. `COMPLETE` means every captured query record is present (including a test
+that executed zero queries). `PARTIAL` means some records are retained; `OMITTED` means the
+query list is empty even though queries ran. Consumers must not interpret an empty `queries`
+array as proof that no queries executed; use `summary.totalQueries` for the captured count.
+
+The suite aggregator retains full query records for the first 200 reports and compacts later
+reports to bound memory use. Compaction preserves findings, test identity, index metadata,
+query totals, and timing. It only changes evidence availability, so it does not turn a completed
+PASS or FAIL into INCONCLUSIVE. HTML reports also show when query evidence was omitted.
