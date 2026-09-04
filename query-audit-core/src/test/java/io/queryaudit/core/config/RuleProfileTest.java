@@ -31,10 +31,10 @@ class RuleProfileTest {
     }
 
     @Test
-    @DisplayName("null and blank keep the pre-0.5.0 default (STRICT)")
-    void nullAndBlankDefaultToStrict() {
-      assertThat(RuleProfile.parse(null)).isEqualTo(RuleProfile.STRICT);
-      assertThat(RuleProfile.parse(" ")).isEqualTo(RuleProfile.STRICT);
+    @DisplayName("null and blank use RECOMMENDED")
+    void nullAndBlankDefaultToRecommended() {
+      assertThat(RuleProfile.parse(null)).isEqualTo(RuleProfile.RECOMMENDED);
+      assertThat(RuleProfile.parse(" ")).isEqualTo(RuleProfile.RECOMMENDED);
     }
 
     @Test
@@ -106,11 +106,23 @@ class RuleProfileTest {
     }
 
     @Test
-    @DisplayName("STRICT default keeps pre-0.5.0 behavior: nothing excluded without disabled-rules")
-    void strictDefaultExcludesNothing() {
+    @DisplayName("RECOMMENDED is the default in both config factories")
+    void recommendedDefaultExcludesOpinionatedRules() {
       QueryAuditConfig config = QueryAuditConfig.defaults();
-      assertThat(config.getRuleProfile()).isEqualTo(RuleProfile.STRICT);
-      assertThat(config.isRuleExcluded("force-index-hint")).isFalse();
+      assertThat(config.getRuleProfile()).isEqualTo(RuleProfile.RECOMMENDED);
+      assertThat(QueryAuditConfig.builder().build().getRuleProfile())
+          .isEqualTo(RuleProfile.RECOMMENDED);
+      assertThat(config.isRuleExcluded("force-index-hint")).isTrue();
+      assertThat(config.isRuleExcluded("n-plus-one")).isFalse();
+    }
+
+    @Test
+    void nullProfileLeavesTheCurrentValueUnchanged() {
+      assertThat(QueryAuditConfig.builder().ruleProfile(null).build().getRuleProfile())
+          .isEqualTo(RuleProfile.RECOMMENDED);
+      assertThat(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).ruleProfile(null)
+              .build().getRuleProfile())
+          .isEqualTo(RuleProfile.STRICT);
     }
 
     @Test
@@ -146,9 +158,8 @@ class RuleProfileTest {
     @Test
     @DisplayName("RECOMMENDED profile silences an opinionated detector")
     void recommendedSilencesOpinionatedDetector() {
-      QueryAuditConfig strict = QueryAuditConfig.builder().build();
-      QueryAuditConfig recommended =
-          QueryAuditConfig.builder().ruleProfile(RuleProfile.RECOMMENDED).build();
+      QueryAuditConfig strict = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
+      QueryAuditConfig recommended = QueryAuditConfig.defaults();
 
       assertThat(hasIssue(analyze(strict, FORCE_INDEX_SQL), IssueType.FORCE_INDEX_HINT))
           .as("strict fires force-index-hint")

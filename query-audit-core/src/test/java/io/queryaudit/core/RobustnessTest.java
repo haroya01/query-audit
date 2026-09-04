@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
@@ -591,7 +592,7 @@ class RobustnessTest {
       // Prosopite algorithm: queries with null stack traces all have stackHash=0,
       // so they group together. count >= threshold = N+1 detected.
       String sql = "SELECT * FROM users WHERE id = ?";
-      QueryAuditConfig config = QueryAuditConfig.defaults();
+      QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
 
       // At threshold-1 (2 queries with null stacks): no N+1
@@ -1291,7 +1292,9 @@ class RobustnessTest {
 
     @Test
     void nPlusOneDetectedOnRepeatedHibernateQueries() {
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+      QueryAuditAnalyzer analyzer =
+          new QueryAuditAnalyzer(
+              QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
       List<QueryRecord> queries = new ArrayList<>();
       // Simulate N+1: same query pattern repeated 5 times
       for (int i = 0; i < 5; i++) {

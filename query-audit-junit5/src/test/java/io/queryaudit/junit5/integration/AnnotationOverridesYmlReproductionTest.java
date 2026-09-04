@@ -40,12 +40,36 @@ class AnnotationOverridesYmlReproductionTest {
       QueryAuditConfig config = invokeBuildConfig(AnnotatedWithDefaults.class);
       QueryAuditConfig defaults = QueryAuditConfig.defaults();
 
+      assertThat(config.getRuleProfile()).isEqualTo(RuleProfile.RECOMMENDED);
+      assertThat(config.isRuleExcluded("force-index-hint")).isTrue();
       assertThat(config.getNPlusOneThreshold()).isEqualTo(defaults.getNPlusOneThreshold());
       assertThat(config.isFailOnDetection()).isEqualTo(defaults.isFailOnDetection());
       assertThat(config.getReportFormat()).isEqualTo(ReportFormat.CONSOLE);
       assertThat(config.getReportOutputDir()).isEqualTo(QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR);
       assertThat(config.getSuppressPatterns()).isEmpty();
       assertThat(config.getDisabledRules()).isEmpty();
+    }
+
+    @Test
+    @ResourceLock(Resources.SYSTEM_PROPERTIES)
+    void plainJUnitCanSelectAnExplicitProfile() throws Exception {
+      String previous = System.getProperty("queryAudit.profile");
+      try {
+        for (RuleProfile profile : RuleProfile.values()) {
+          System.setProperty("queryAudit.profile", profile.name());
+          assertThat(invokeBuildConfig(AnnotatedWithDefaults.class).getRuleProfile())
+              .isEqualTo(profile);
+        }
+        System.setProperty("queryAudit.profile", " ");
+        assertThat(invokeBuildConfig(AnnotatedWithDefaults.class).getRuleProfile())
+            .isEqualTo(RuleProfile.RECOMMENDED);
+      } finally {
+        if (previous == null) {
+          System.clearProperty("queryAudit.profile");
+        } else {
+          System.setProperty("queryAudit.profile", previous);
+        }
+      }
     }
 
     @Test

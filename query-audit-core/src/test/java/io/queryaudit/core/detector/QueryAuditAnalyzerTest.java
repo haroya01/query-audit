@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
@@ -28,7 +29,9 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void analyzeReturnsReportWithCorrectIssueCounts() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+    QueryAuditAnalyzer analyzer =
+        new QueryAuditAnalyzer(
+            QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     // Create queries that trigger N+1 (3 identical patterns) and SELECT *
     // With empty stack traces and count == threshold, N+1 is conservative INFO.
