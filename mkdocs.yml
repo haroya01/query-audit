@@ -94,6 +94,7 @@ nav:
     - Reports: guide/reports.md
     - Suppressing Issues: guide/suppressing.md
     - Query Contracts: guide/contracts.md
+    - Audit Coverage: guide/audit-coverage.md
     - CI/CD Integration: guide/ci-cd.md
     - Troubleshooting: guide/troubleshooting.md
   - Architecture:

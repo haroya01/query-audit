@@ -384,6 +384,57 @@ BREAKING CHANGE: DetectionRule.evaluate() now returns Stream<Issue> instead of L
 
 ---
 
+## Release Publication and Retries
+
+Release Please creates the version commit and GitHub release. The Release workflow resolves that
+release tag to a commit and publishes that exact source. Before publishing, it checks that the tag,
+`gradle.properties`, and `.release-please-manifest.json` agree on the version.
+
+To retry a failed Maven Central publication, run the **Release** workflow from `main` and supply
+the existing published tag in `release_tag`:
+
+```bash
+gh workflow run release-please.yml --ref main -f release_tag=v0.6.0
+```
+
+This retries the tag's source; it does not publish the selected branch, create a release, or change
+the version. Missing tags, draft releases, and mismatched versions are rejected. Never move a
+release tag to retry publication. The job summary records the validated version and commit.
+
+The validation script is loaded from protected `main`, so retries also work for older releases
+that predate the script. Its tests run in the required Java build jobs and can be run locally:
+
+```bash
+python3 -m unittest discover -s .github/scripts/tests -v
+```
+
+The tests cover dispatch from another branch, rejected branch names and missing releases,
+incorrect checkout commits, and tag/version mismatches. A failed validation emits no version
+output for the publication summary, and the publish step runs only after validation succeeds.
+
+The publication job uses the `maven-central` environment. Configure this environment before
+publishing:
+
+1. In repository **Settings → Environments**, create `maven-central` and choose **Selected branches
+   and tags**. Add one **branch** rule for `main`; do not add tag patterns or a wildcard.
+2. Add `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`, `GPG_SIGNING_KEY`, and
+   `GPG_SIGNING_PASSWORD` as environment secrets, using the original values from your secret store.
+   GitHub cannot reveal existing secret values for copying.
+3. Verify that all four environment secret names are present, then remove their repository-level
+   copies. Leave `RELEASE_PLEASE_TOKEN` in its existing scope; it is not a publication credential.
+
+GitHub executes the workflow revision selected at dispatch time. Old branches can still contain an
+older workflow that does not name this environment. Keeping repository-level publication secrets
+would let those workflows bypass the environment restriction. Creating the environment alone is
+therefore insufficient: finish the credential migration before releasing. No release should be
+dispatched just to test the setup; inspect the environment's branch policy and secret names instead.
+
+The environment permits the workflow from `main`; the validated release tag still determines the
+source checked out for publication. See GitHub's [environment configuration guide](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
+for the repository settings.
+
+---
+
 ## Good First Issues
 
 Look for issues labeled [`good first issue`](https://github.com/haroya01/query-audit/labels/good%20first%20issue). Great starting points:

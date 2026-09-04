@@ -3,5 +3,5 @@
   "$id": "https://haroya01.github.io/query-audit/schema/report.schema.json",
   "title": "QueryAudit current report.json schema",
   "description": "Alias for the current versioned QueryAudit report schema.",
-  "$ref": "report-1.2.schema.json"
+  "$ref": "report-1.5.schema.json"
 }

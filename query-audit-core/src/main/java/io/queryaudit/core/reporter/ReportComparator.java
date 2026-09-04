@@ -1,5 +1,7 @@
 package io.queryaudit.core.reporter;
 
+import io.queryaudit.core.config.ReportRedaction;
+import io.queryaudit.core.model.AuditCoverage;
 import io.queryaudit.core.model.AuditIncompleteReason;
 import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.model.AuditRunResult;
@@ -13,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -89,7 +92,9 @@ public final class ReportComparator {
   private record Envelope(
       AuditOutcome outcome,
       List<AuditIncompleteReason> incompleteReasons,
-      List<ParsedReport> reports) {}
+      List<ParsedReport> reports,
+      ReportRedaction redaction,
+      AuditCoverage coverage) {}
 
   /** The comparison result; incomplete comparisons cannot produce a trustworthy success signal. */
   public record Verdict(
@@ -102,15 +107,43 @@ public final class ReportComparator {
       long executionTimeMsAfter,
       List<TestRef> missingTests,
       AuditOutcome outcome,
-      List<AuditIncompleteReason> incompleteReasons) {
+      List<AuditIncompleteReason> incompleteReasons,
+      List<TestRef> unexpectedTests) {
 
     public Verdict {
       resolved = List.copyOf(resolved);
       newFindings = List.copyOf(newFindings);
       persisting = List.copyOf(persisting);
       missingTests = List.copyOf(missingTests);
+      unexpectedTests = List.copyOf(unexpectedTests);
       AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
       incompleteReasons = validated.incompleteReasons();
+    }
+
+    /** Retains the outcome-aware constructor introduced before coverage manifests. */
+    public Verdict(
+        List<Finding> resolved,
+        List<Finding> newFindings,
+        List<Finding> persisting,
+        long queriesBefore,
+        long queriesAfter,
+        long executionTimeMsBefore,
+        long executionTimeMsAfter,
+        List<TestRef> missingTests,
+        AuditOutcome outcome,
+        List<AuditIncompleteReason> incompleteReasons) {
+      this(
+          resolved,
+          newFindings,
+          persisting,
+          queriesBefore,
+          queriesAfter,
+          executionTimeMsBefore,
+          executionTimeMsAfter,
+          missingTests,
+          outcome,
+          incompleteReasons,
+          List.of());
     }
 
     /** Retains the original constructor for callers compiled against the 0.5.0 API. */
@@ -180,6 +213,13 @@ public final class ReportComparator {
           new AuditIncompleteReason(IncompleteReasonCode.UNSUPPORTED_SCHEMA, e.getMessage()));
     }
 
+    if (beforeEnvelope.redaction() != afterEnvelope.redaction()) {
+      return inconclusiveVerdict(
+          new AuditIncompleteReason(
+              IncompleteReasonCode.REPORT_REDACTION_MISMATCH,
+              "Reports use different redaction modes; regenerate both reports with the same mode"));
+    }
+
     List<ParsedReport> beforeReports = beforeEnvelope.reports();
     List<ParsedReport> afterReports = afterEnvelope.reports();
     Map<ParsedReport, String> beforeIdentities = comparisonIdentities(beforeReports, afterReports);
@@ -194,14 +234,25 @@ public final class ReportComparator {
 
     Map<String, TestRef> beforeTests = auditedTests(beforeReports, beforeIdentities);
     Map<String, TestRef> afterTests = auditedTests(afterReports, afterIdentities);
-    List<TestRef> missingTests =
-        beforeTests.entrySet().stream()
-            .filter(test -> !afterTests.containsKey(test.getKey()))
+    List<TestRef> missingTests = missingTests(beforeTests, afterTests, afterEnvelope.coverage());
+    Set<String> unexpectedIds = unexpectedIds(afterEnvelope.coverage());
+    List<TestRef> unexpectedTests =
+        afterTests.entrySet().stream()
+            .filter(
+                test ->
+                    !beforeTests.containsKey(test.getKey())
+                        || unexpectedIds.contains(test.getValue().testId()))
             .map(Map.Entry::getValue)
             .toList();
+    Set<String> incompleteIds = coverageGapIds(beforeEnvelope.coverage());
+    incompleteIds.addAll(coverageGapIds(afterEnvelope.coverage()));
+    boolean sameManifest =
+        Objects.equals(
+            expectedIds(beforeEnvelope.coverage()), expectedIds(afterEnvelope.coverage()));
 
     List<Finding> resolved =
         before.stream()
+            .filter(f -> sameManifest && !incompleteIds.contains(f.finding().testId()))
             .filter(f -> afterTests.containsKey(f.testIdentity()))
             .filter(f -> !afterKeys.contains(f.finding().key()))
             .map(ComparedFinding::finding)
@@ -220,6 +271,12 @@ public final class ReportComparator {
     List<AuditIncompleteReason> incompleteReasons = new ArrayList<>();
     incompleteReasons.addAll(beforeEnvelope.incompleteReasons());
     incompleteReasons.addAll(afterEnvelope.incompleteReasons());
+    if (!sameManifest) {
+      incompleteReasons.add(
+          new AuditIncompleteReason(
+              IncompleteReasonCode.COVERAGE_MANIFEST_MISMATCH,
+              "Reports do not declare the same expected-test manifest."));
+    }
     if (!missingTests.isEmpty()) {
       incompleteReasons.add(AuditIncompleteReason.of(IncompleteReasonCode.EXPECTED_TEST_MISSING));
     }
@@ -239,7 +296,8 @@ public final class ReportComparator {
         sumSummary(afterReports, "executionTimeMs"),
         missingTests,
         comparisonResult.outcome(),
-        comparisonResult.incompleteReasons());
+        comparisonResult.incompleteReasons(),
+        unexpectedTests);
   }
 
   private static Verdict inconclusiveVerdict(AuditIncompleteReason reason) {
@@ -258,20 +316,29 @@ public final class ReportComparator {
 
   /** Renders the verdict as JSON (the {@code verdict.json} contract). */
   public static String toJson(Verdict verdict) {
+    return toJson(verdict, ReportRedaction.REDACTED);
+  }
+
+  /** Full diagnostic details require an explicit opt-in, including for legacy input reports. */
+  public static String toJson(Verdict verdict, ReportRedaction redaction) {
+    ReportRedactor redactor = new ReportRedactor(redaction);
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
+    sb.append("  \"redaction\": \"").append(redaction).append("\",\n");
     sb.append("  \"outcome\": \"").append(verdict.outcome()).append("\",\n");
     sb.append("  \"incompleteReasons\": ");
-    appendIncompleteReasons(sb, verdict.incompleteReasons());
+    appendIncompleteReasons(sb, verdict.incompleteReasons(), redactor);
     sb.append(",\n  \"newFindings\": ");
-    appendFindings(sb, verdict.newFindings());
+    appendFindings(sb, verdict.newFindings(), redactor);
     sb.append(",\n  \"resolved\": ");
-    appendFindings(sb, verdict.resolved());
+    appendFindings(sb, verdict.resolved(), redactor);
     sb.append(",\n  \"persisting\": ");
-    appendFindings(sb, verdict.persisting());
+    appendFindings(sb, verdict.persisting(), redactor);
     sb.append(",\n  \"complete\": ").append(verdict.complete());
     sb.append(",\n  \"missingTests\": ");
     appendTests(sb, verdict.missingTests());
+    sb.append(",\n  \"unexpectedTests\": ");
+    appendTests(sb, verdict.unexpectedTests());
     sb.append(",\n  \"queryCountDelta\": {\"before\": ")
         .append(verdict.queriesBefore())
         .append(", \"after\": ")
@@ -384,6 +451,7 @@ public final class ReportComparator {
       throw invalidEnvelope("expected a JSON object");
     }
     SchemaVersion schemaVersion = requireSupportedSchemaVersion(envelope);
+    ReportRedaction redaction = requireRedaction(envelope, schemaVersion);
     boolean stableIdentityRequired = schemaVersion.minor() >= FIRST_STABLE_IDENTITY_SCHEMA_MINOR;
     if (!(envelope.get("reports") instanceof List<?> entries)) {
       throw invalidEnvelope("reports must be an array");
@@ -404,6 +472,7 @@ public final class ReportComparator {
               new TestRef(
                   testId, (String) report.get("testClass"), (String) report.get("testName"))));
     }
+    AuditCoverage coverage = CoverageJson.read(envelope, schemaVersion.minor() >= 5);
 
     if (schemaVersion.minor() < FIRST_OUTCOME_SCHEMA_MINOR) {
       return new Envelope(
@@ -412,7 +481,9 @@ public final class ReportComparator {
               new AuditIncompleteReason(
                   IncompleteReasonCode.UNSUPPORTED_SCHEMA,
                   "schemaVersion " + schemaVersion.text() + " does not declare a run outcome")),
-          reports);
+          reports,
+          redaction,
+          coverage);
     }
 
     AuditOutcome outcome;
@@ -425,13 +496,36 @@ public final class ReportComparator {
           AuditOutcome.INCONCLUSIVE,
           List.of(
               new AuditIncompleteReason(IncompleteReasonCode.UNSUPPORTED_SCHEMA, e.getMessage())),
-          reports);
+          reports,
+          redaction,
+          coverage);
     }
     try {
       AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
-      return new Envelope(validated.outcome(), validated.incompleteReasons(), reports);
+      if (coverage != null
+          && coverage.failedToAudit() > 0
+          && outcome != AuditOutcome.INCONCLUSIVE) {
+        throw invalidEnvelope("coverage gaps require an INCONCLUSIVE outcome");
+      }
+      return new Envelope(
+          validated.outcome(), validated.incompleteReasons(), reports, redaction, coverage);
     } catch (IllegalArgumentException e) {
       throw invalidEnvelope("outcome and incompleteReasons are inconsistent: " + e.getMessage());
+    }
+  }
+
+  private static ReportRedaction requireRedaction(Map<?, ?> envelope, SchemaVersion version) {
+    if (!envelope.containsKey("redaction") && version.minor() < 4) {
+      return ReportRedaction.FULL;
+    }
+    Object value = requireField(envelope, "redaction", "envelope");
+    if (!(value instanceof String mode)) {
+      throw invalidEnvelope("envelope.redaction must be a string");
+    }
+    try {
+      return ReportRedaction.valueOf(mode);
+    } catch (IllegalArgumentException e) {
+      throw unsupportedEvolution("unknown report redaction mode");
     }
   }
 
@@ -748,6 +842,54 @@ public final class ReportComparator {
     return tests;
   }
 
+  private static List<TestRef> missingTests(
+      Map<String, TestRef> before, Map<String, TestRef> after, AuditCoverage coverage) {
+    Map<String, TestRef> missing = new LinkedHashMap<>();
+    before.forEach(
+        (id, test) -> {
+          if (!after.containsKey(id)) {
+            missing.put(id, test);
+          }
+        });
+    for (String id : coverageGapIds(coverage)) {
+      String key = stableIdentity(id);
+      TestRef test = before.getOrDefault(key, after.getOrDefault(key, new TestRef(id, null, id)));
+      missing.putIfAbsent(key, test);
+    }
+    return List.copyOf(missing.values());
+  }
+
+  private static Set<String> coverageGapIds(AuditCoverage coverage) {
+    Set<String> ids = new LinkedHashSet<>();
+    if (coverage != null) {
+      coverage.tests().stream()
+          .filter(test -> test.gap() != null)
+          .forEach(test -> ids.add(test.testId()));
+    }
+    return ids;
+  }
+
+  private static Set<String> unexpectedIds(AuditCoverage coverage) {
+    Set<String> ids = new LinkedHashSet<>();
+    if (coverage != null) {
+      coverage.tests().stream()
+          .filter(test -> !test.expected())
+          .forEach(test -> ids.add(test.testId()));
+    }
+    return ids;
+  }
+
+  private static Set<String> expectedIds(AuditCoverage coverage) {
+    if (coverage == null) {
+      return null;
+    }
+    Set<String> ids = new LinkedHashSet<>();
+    coverage.tests().stream()
+        .filter(AuditCoverage.Test::expected)
+        .forEach(test -> ids.add(test.testId()));
+    return ids;
+  }
+
   private static long sumSummary(List<ParsedReport> reports, String field) {
     long sum = 0;
     for (ParsedReport report : reports) {
@@ -760,7 +902,7 @@ public final class ReportComparator {
   // ── Rendering helpers ──────────────────────────────────────────────
 
   private static void appendIncompleteReasons(
-      StringBuilder sb, List<AuditIncompleteReason> reasons) {
+      StringBuilder sb, List<AuditIncompleteReason> reasons, ReportRedactor redactor) {
     if (reasons.isEmpty()) {
       sb.append("[]");
       return;
@@ -769,7 +911,7 @@ public final class ReportComparator {
     for (int i = 0; i < reasons.size(); i++) {
       AuditIncompleteReason reason = reasons.get(i);
       sb.append("    {\"code\": \"").append(reason.code()).append("\", \"detail\": ");
-      appendString(sb, reason.detail());
+      appendString(sb, redactor.diagnostic(reason.detail()));
       sb.append("}");
       if (i < reasons.size() - 1) {
         sb.append(",");
@@ -779,7 +921,8 @@ public final class ReportComparator {
     sb.append("  ]");
   }
 
-  private static void appendFindings(StringBuilder sb, List<Finding> findings) {
+  private static void appendFindings(
+      StringBuilder sb, List<Finding> findings, ReportRedactor redactor) {
     if (findings.isEmpty()) {
       sb.append("[]");
       return;
@@ -795,10 +938,14 @@ public final class ReportComparator {
           .append(JsonReporter.escapeJson(f.type()))
           .append("\"");
       if (f.table() != null) {
-        sb.append(", \"table\": \"").append(JsonReporter.escapeJson(f.table())).append("\"");
+        sb.append(", \"table\": \"")
+            .append(JsonReporter.escapeJson(redactor.sql(f.table())))
+            .append("\"");
       }
       if (f.detail() != null) {
-        sb.append(", \"detail\": \"").append(JsonReporter.escapeJson(f.detail())).append("\"");
+        sb.append(", \"detail\": \"")
+            .append(JsonReporter.escapeJson(redactor.diagnostic(f.detail())))
+            .append("\"");
       }
       sb.append("}");
       if (i < findings.size() - 1) {

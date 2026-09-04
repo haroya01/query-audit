@@ -6,6 +6,7 @@ import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.ReportFormat;
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.ConnectionUsageTracker;
@@ -307,6 +308,15 @@ public class QueryAuditExtension
       failure = runCleanup(failure, hookCleanup);
     }
     failure = runCleanup(failure, QueryAuditDataSourceStore::clear);
+    if (failure != null) {
+      markIncomplete(
+          context,
+          IncompleteReasonCode.AUDIT_ANALYSIS_FAILED,
+          "Could not clean up QueryAudit for "
+              + auditTarget(context)
+              + ": "
+              + failureMessage(failure));
+    }
     failure = runCleanup(failure, () -> writeCountBaselineIfRequested(context));
     failure = runCleanup(failure, () -> writeContractsIfRequested(context));
 
@@ -314,13 +324,6 @@ public class QueryAuditExtension
       return;
     }
 
-    markIncomplete(
-        context,
-        IncompleteReasonCode.AUDIT_ANALYSIS_FAILED,
-        "Could not clean up QueryAudit for "
-            + auditTarget(context)
-            + ": "
-            + failureMessage(failure));
     if (failure instanceof RuntimeException runtimeFailure) {
       throw runtimeFailure;
     }
@@ -580,12 +583,16 @@ public class QueryAuditExtension
 
     // GitHub Actions annotations + step summary (issue #85).
     if ("true".equals(System.getenv("GITHUB_ACTIONS"))) {
-      new GitHubActionsReporter().report(outputReport);
+      new GitHubActionsReporter(config.getReportRedaction()).report(outputReport);
     }
 
     // HTML and JSON are generated from this same accumulated view, keeping their visible findings
     // and summary counts aligned with the console.
     HtmlReportAggregator.getInstance().addReport(outputReport);
+    AuditCoverageSession coverageSession = AuditCoverageListener.currentSession(context);
+    if (coverageSession != null) {
+      coverageSession.audited(outputReport);
+    }
 
     if (captureIncomplete) {
       throw new AuditCheckFailure(
@@ -731,8 +738,22 @@ public class QueryAuditExtension
               root.getStore(NAMESPACE)
                   .getOrComputeIfAbsent(
                       ReportFinalizer.class.getName(),
-                      key -> new ReportFinalizer(this, outputDirectory, reportFormat, runState));
-      finalizer.requireConfiguration(outputDirectory, reportFormat);
+                      key ->
+                          new ReportFinalizer(
+                              this,
+                              outputDirectory,
+                              reportFormat,
+                              runState,
+                              auditConfig.getReportRedaction()));
+      finalizer.requireConfiguration(
+          outputDirectory, reportFormat, auditConfig.getReportRedaction());
+      AuditCoverageSession coverageSession = AuditCoverageListener.currentSession(context);
+      finalizer.requireCoverageSession(coverageSession);
+      if (AuditCoverageManifest.isConfigured() && coverageSession == null) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: an audit coverage manifest is configured, but the platform listener is"
+                + " unavailable. Enable JUnit Platform test execution listener auto-registration.");
+      }
     } catch (RuntimeException | Error failure) {
       recordInitializationFailure(
           context,
@@ -786,7 +807,8 @@ public class QueryAuditExtension
   }
 
   private static Path resolveReportOutputDirectory(QueryAuditConfig config) {
-    String configuredPath = config.getReportOutputDir();
+    String configuredPath =
+        System.getProperty("queryAudit.reportOutputDir", config.getReportOutputDir());
     if (configuredPath == null || configuredPath.isBlank()) {
       throw new ExtensionConfigurationException(
           "QueryAudit: report output directory must not be blank. Configure"
@@ -798,6 +820,14 @@ public class QueryAuditExtension
       throw new ExtensionConfigurationException(
           "QueryAudit: invalid report output directory '" + configuredPath + "'.", e);
     }
+  }
+
+  static Path coverageReportOutputDirectory() {
+    return resolveReportOutputDirectory(QueryAuditConfig.builder().build());
+  }
+
+  static boolean isAuditPolicyFailure(Throwable failure) {
+    return failure instanceof AuditCheckFailure && failure.getSuppressed().length == 0;
   }
 
   static final class AuditRunState {
@@ -835,7 +865,9 @@ public class QueryAuditExtension
     private final QueryAuditExtension extension;
     private final Path outputDirectory;
     private final ReportFormat reportFormat;
+    private final ReportRedaction reportRedaction;
     private final AuditRunState runState;
+    private AuditCoverageSession coverageSession;
     private volatile boolean autoOpen;
 
     ReportFinalizer(
@@ -848,6 +880,16 @@ public class QueryAuditExtension
         Path outputDirectory,
         ReportFormat reportFormat,
         AuditRunState runState) {
+      this(extension, outputDirectory, reportFormat, runState, ReportRedaction.REDACTED);
+    }
+
+    ReportFinalizer(
+        QueryAuditExtension extension,
+        Path outputDirectory,
+        ReportFormat reportFormat,
+        AuditRunState runState,
+        ReportRedaction reportRedaction) {
+      this.reportRedaction = reportRedaction;
       this.extension = extension;
       this.outputDirectory = outputDirectory.toAbsolutePath().normalize();
       this.reportFormat = reportFormat;
@@ -855,6 +897,16 @@ public class QueryAuditExtension
     }
 
     void requireConfiguration(Path requestedDirectory, ReportFormat requestedFormat) {
+      requireConfiguration(requestedDirectory, requestedFormat, ReportRedaction.REDACTED);
+    }
+
+    void requireConfiguration(
+        Path requestedDirectory, ReportFormat requestedFormat, ReportRedaction requestedRedaction) {
+      if (reportRedaction != requestedRedaction) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: conflicting report redaction modes in the same test run. "
+                + "Use one query-audit.report.redaction value for all active test contexts.");
+      }
       Path normalizedRequest = requestedDirectory.toAbsolutePath().normalize();
       if (!outputDirectory.equals(normalizedRequest)) {
         throw new ExtensionConfigurationException(
@@ -872,6 +924,14 @@ public class QueryAuditExtension
                 + requestedFormat.name().toLowerCase(Locale.ROOT)
                 + "'. Use one query-audit.report.format value for all active test contexts.");
       }
+    }
+
+    void requireCoverageSession(AuditCoverageSession requestedSession) {
+      if (coverageSession != null && coverageSession != requestedSession) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: audit coverage changed during the same test execution.");
+      }
+      coverageSession = requestedSession;
     }
 
     Path outputDirectory() {
@@ -893,18 +953,26 @@ public class QueryAuditExtension
     @Override
     public void close() {
       HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
-      AuditRunResult runResult = runState.result(aggregator.getReports());
+      List<QueryAuditReport> reports =
+          coverageSession == null ? aggregator.getReports() : coverageSession.reports();
+      AuditRunResult runResult = runState.result(reports);
+      if (coverageSession != null) {
+        runResult = coverageSession.complete(runResult);
+      }
       if (runResult.reports().isEmpty() && runResult.outcome() == AuditOutcome.PASS) {
         return;
       }
 
       Path reportPath = reportPath();
       try {
+        if (coverageSession != null && reportFormat != ReportFormat.JSON) {
+          extension.writeJsonReport(runResult, outputDirectory, reportRedaction);
+        }
         switch (reportFormat) {
           case CONSOLE -> {
             // Per-test output and the suite summary are already on stdout.
           }
-          case JSON -> extension.writeJsonReport(runResult, outputDirectory);
+          case JSON -> extension.writeJsonReport(runResult, outputDirectory, reportRedaction);
           case HTML -> {
             aggregator.writeReport(outputDirectory);
             System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
@@ -935,7 +1003,7 @@ public class QueryAuditExtension
       };
     }
 
-    private static void printSummary(AuditRunResult runResult) {
+    static void printSummary(AuditRunResult runResult) {
       List<QueryAuditReport> reports = runResult.reports();
       long totalErrors = reports.stream().mapToLong(report -> report.getErrors().size()).sum();
       long totalWarnings = reports.stream().mapToLong(report -> report.getWarnings().size()).sum();
@@ -1068,7 +1136,7 @@ public class QueryAuditExtension
               + currentCounts.size()
               + " test(s))");
     } catch (Exception e) {
-      System.err.println("[QueryAudit] Failed to write query contracts: " + e.getMessage());
+      throw policyWriteFailure(context, "query contracts", e);
     }
   }
 
@@ -1196,7 +1264,8 @@ public class QueryAuditExtension
       throw new AuditCheckFailure(
           String.format(
               "QueryAudit: %s executed %d queries, expected at most %d.\n"
-                  + "Tip: Check the Query Patterns section in the report above to identify which queries to optimize.",
+                  + "Tip: Check the Query Patterns section in the report above to identify which"
+                  + " queries to optimize.",
               testName, actual, max));
     }
   }
@@ -1510,6 +1579,11 @@ public class QueryAuditExtension
       builder.reportFormat(ReportFormat.parse(reportFormat));
     }
 
+    String reportRedaction = System.getProperty("queryAudit.reportRedaction");
+    if (reportRedaction != null) {
+      builder.reportRedaction(ReportRedaction.parse(reportRedaction));
+    }
+
     // Wire return type resolver if available
     RepositoryReturnTypeResolver resolver = getReturnTypeResolver(context);
     if (resolver != null) {
@@ -1642,13 +1716,20 @@ public class QueryAuditExtension
   // ── JSON report ───────────────────────────────────────────────────
 
   void writeJsonReport(AuditRunResult runResult, Path outputDir) throws IOException {
+    writeJsonReport(runResult, outputDir, ReportRedaction.REDACTED);
+  }
+
+  void writeJsonReport(AuditRunResult runResult, Path outputDir, ReportRedaction redaction)
+      throws IOException {
     Path jsonPath = outputDir.resolve("report.json");
     Path temporaryPath = null;
     try {
       Files.createDirectories(outputDir);
       temporaryPath = Files.createTempFile(outputDir, ".report-", ".json.tmp");
       Files.writeString(
-          temporaryPath, JsonReporter.toRunEnvelopeJson(runResult), StandardCharsets.UTF_8);
+          temporaryPath,
+          JsonReporter.toRunEnvelopeJson(runResult, redaction),
+          StandardCharsets.UTF_8);
       moveJsonReportFile(temporaryPath, jsonPath);
       temporaryPath = null;
     } catch (IOException | RuntimeException failure) {
@@ -1720,8 +1801,15 @@ public class QueryAuditExtension
               + currentCounts.size()
               + " test(s))");
     } catch (Exception e) {
-      System.err.println("[QueryAudit] Failed to write count baseline: " + e.getMessage());
+      throw policyWriteFailure(context, "count baseline", e);
     }
+  }
+
+  private static ExtensionConfigurationException policyWriteFailure(
+      ExtensionContext context, String policy, Exception cause) {
+    String detail = "Could not write " + policy + "; the requested recording did not complete.";
+    markIncomplete(context, IncompleteReasonCode.POLICY_WRITE_FAILED, detail);
+    return new ExtensionConfigurationException("QueryAudit: " + detail, cause);
   }
 
   private boolean shouldAutoOpenReport(ExtensionContext context) {

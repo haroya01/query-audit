@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Immutable run-level result written in the {@code report.json} suite envelope.
@@ -17,7 +19,16 @@ import java.util.Objects;
 public record AuditRunResult(
     List<QueryAuditReport> reports,
     AuditOutcome outcome,
-    List<AuditIncompleteReason> incompleteReasons) {
+    List<AuditIncompleteReason> incompleteReasons,
+    AuditCoverage coverage) {
+
+  /** Retains the constructor for integrations without an expected-test manifest. */
+  public AuditRunResult(
+      List<QueryAuditReport> reports,
+      AuditOutcome outcome,
+      List<AuditIncompleteReason> incompleteReasons) {
+    this(reports, outcome, incompleteReasons, null);
+  }
 
   public AuditRunResult {
     Objects.requireNonNull(reports, "reports");
@@ -34,6 +45,22 @@ public record AuditRunResult(
       }
     }
     incompleteReasons = List.copyOf(copiedReasons);
+
+    if (coverage != null && coverage.failedToAudit() > 0 && outcome != AuditOutcome.INCONCLUSIVE) {
+      throw new IllegalArgumentException("Coverage gaps require an INCONCLUSIVE result");
+    }
+    if (coverage != null) {
+      Set<String> reportedIds =
+          reports.stream().map(QueryAuditReport::getTestId).collect(Collectors.toSet());
+      Set<String> auditedIds =
+          coverage.tests().stream()
+              .filter(AuditCoverage.Test::audited)
+              .map(AuditCoverage.Test::testId)
+              .collect(Collectors.toSet());
+      if (reportedIds.size() != reports.size() || !reportedIds.equals(auditedIds)) {
+        throw new IllegalArgumentException("Coverage audits must match the per-test reports");
+      }
+    }
 
     if (outcome == AuditOutcome.INCONCLUSIVE && incompleteReasons.isEmpty()) {
       throw new IllegalArgumentException("INCONCLUSIVE requires at least one incomplete reason");
@@ -89,5 +116,16 @@ public record AuditRunResult(
   /** Returns whether the audit completed with a trustworthy verdict. */
   public boolean isComplete() {
     return outcome != AuditOutcome.INCONCLUSIVE;
+  }
+
+  /**
+   * Adds manifest coverage, preserving audit failures and giving gaps precedence over PASS/FAIL.
+   */
+  public AuditRunResult withCoverage(AuditCoverage coverage) {
+    Objects.requireNonNull(coverage, "coverage");
+    List<AuditIncompleteReason> reasons = new ArrayList<>(incompleteReasons);
+    reasons.addAll(coverage.incompleteReasons());
+    AuditOutcome coveredOutcome = reasons.isEmpty() ? outcome : AuditOutcome.INCONCLUSIVE;
+    return new AuditRunResult(reports, coveredOutcome, reasons, coverage);
   }
 }

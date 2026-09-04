@@ -24,8 +24,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * <em>lightweight summaries</em> of each report once the number of accumulated reports exceeds
  * {@value #DEFAULT_MAX_IN_MEMORY_REPORTS}. Lightweight summaries retain all issues but drop the
  * per-query {@link QueryRecord} list (which is the largest contributor to memory usage). The full
- * query list is only needed for the per-test console report, which has already been printed by the
- * time the report reaches the aggregator.
+ * query list remains available in the per-test console report. Aggregated reports explicitly expose
+ * the retained and omitted query counts so consumers can identify compacted evidence.
  *
  * @author haroya
  * @since 0.2.0
@@ -59,11 +59,11 @@ public final class HtmlReportAggregator {
    *
    * @param report the report to accumulate
    */
-  public void addReport(QueryAuditReport report) {
+  public synchronized void addReport(QueryAuditReport report) {
     if (report != null) {
       if (reports.size() >= maxInMemoryReports) {
         // Store a lightweight summary: keep issues but drop the query list
-        reports.add(toLightweight(report));
+        reports.add(report.withoutQueryEvidence());
       } else {
         reports.add(report);
       }
@@ -136,26 +136,5 @@ public final class HtmlReportAggregator {
       throw new IllegalArgumentException("maxInMemoryReports must be positive, got: " + max);
     }
     this.maxInMemoryReports = max;
-  }
-
-  // ── Internal helpers ──────────────────────────────────────────────────
-
-  /**
-   * Creates a lightweight copy of a report that retains all issues and metadata but replaces the
-   * query list with an empty list. This dramatically reduces memory usage for large test suites.
-   */
-  private static QueryAuditReport toLightweight(QueryAuditReport report) {
-    return new QueryAuditReport(
-            report.getTestClass(),
-            report.getTestName(),
-            report.getConfirmedIssues(),
-            report.getInfoIssues(),
-            report.getAcknowledgedIssues(),
-            List.of(), // drop query list to save memory
-            report.getUniquePatternCount(),
-            report.getTotalQueryCount(),
-            report.getTotalExecutionTimeNanos())
-        .withTestIdentity(report.getTestId(), report.getTestSelector())
-        .withIndexMetadata(report.getIndexMetadata());
   }
 }

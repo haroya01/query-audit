@@ -420,7 +420,7 @@ class QueryAuditExtensionAfterAllTest {
       assertThat(Files.readString(outputDirectory.resolve("report.json")))
           .contains("\"outcome\": \"INCONCLUSIVE\"")
           .contains("\"code\": \"DATASOURCE_UNAVAILABLE\"")
-          .contains("\"detail\": \"OrderServiceTest#loadsOrders\"");
+          .contains("\"detail\": \"Details omitted by report redaction\"");
     }
 
     @Test
