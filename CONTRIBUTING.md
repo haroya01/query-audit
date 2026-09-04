@@ -120,6 +120,18 @@ cd query-audit
 ./gradlew spotlessApply
 ```
 
+CI also verifies the published core JAR and POM with a separate consumer build. The consumer
+declares only `query-audit-core`; JSqlParser must arrive through the published runtime dependency.
+Run the same check locally with:
+
+```bash
+./gradlew :query-audit-core:publishMavenPublicationToConsumerTestRepository
+./gradlew -p query-audit-core/src/consumerTest run
+```
+
+The temporary Maven repository stays under `query-audit-core/build`. It needs no signing key;
+Maven Central publications still require signing.
+
 ### Test Categories
 
 | Test | Purpose |

@@ -332,6 +332,18 @@ always points to the current version.
 
 ---
 
+### Parser identity
+
+From 0.6.0, every standard installation includes the same structural parser dependency. Tools
+can read its name and actual runtime version through `EnhancedSqlParser.parserName()` and
+`EnhancedSqlParser.parserVersion()`. The version comes from the loaded JSqlParser dependency's
+metadata, including when dependency management selects another version.
+
+Unsupported SQL and statements above 10,000 characters still use the regex fallback. This is a
+per-statement behavior, not a separate classpath-selected parser mode. Schema 1.2 does not yet
+include parser identity or audit-configuration fingerprints; use the same dependency versions and
+audit settings for both runs when comparing reports.
+
 ## Delta Verdict (compare two runs)
 
 Every fix loop ends with the same question: *did my change resolve the finding without
