@@ -310,8 +310,17 @@ public class QueryAuditProperties {
 
   public static class Report {
     private String format = "console";
+    private String redaction = "redacted";
     private String outputDir = QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR;
     private boolean showInfo = true;
+
+    public String getRedaction() {
+      return redaction;
+    }
+
+    public void setRedaction(String redaction) {
+      this.redaction = redaction;
+    }
 
     public String getFormat() {
       return format;

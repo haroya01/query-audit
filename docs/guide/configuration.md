@@ -651,3 +651,13 @@ test {
 - [Suppressing Issues](suppressing.md) -- How to suppress specific detections
 - [Reports](reports.md) -- Report format details and example output
 - [CI/CD Integration](ci-cd.md) -- Using configuration in CI pipelines
+
+### Machine report detail
+
+`query-audit.report.redaction` accepts `redacted` (the default) or `full`. The default removes
+SQL values, comments, raw diagnostic prose, and framework/absolute-path stack details from JSON
+and GitHub Actions output. It does not change findings or enforcement. Use `full` only for
+local debugging; see [machine report redaction](reports.md#machine-report-redaction).
+
+The plain JUnit equivalent is `-DqueryAudit.reportRedaction=full`. Core callers use
+`QueryAuditConfig.builder().reportRedaction(ReportRedaction.FULL)` with `JsonReporter`.

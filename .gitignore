@@ -23,3 +23,6 @@ bin/
 
 # Generated site
 site/
+
+# Python release tooling
+__pycache__/

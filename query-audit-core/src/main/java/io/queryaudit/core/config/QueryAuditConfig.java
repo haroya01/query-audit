@@ -42,6 +42,7 @@ public class QueryAuditConfig {
   private final Set<String> suppressQueries;
   private final boolean showInfo;
   private final ReportFormat reportFormat;
+  private final ReportRedaction reportRedaction;
   private final String reportOutputDir;
   private final String baselinePath;
   private final boolean autoOpenReport;
@@ -76,6 +77,7 @@ public class QueryAuditConfig {
     this.suppressQueries = Collections.unmodifiableSet(new HashSet<>(builder.suppressQueries));
     this.showInfo = builder.showInfo;
     this.reportFormat = builder.reportFormat;
+    this.reportRedaction = builder.reportRedaction;
     this.reportOutputDir = builder.reportOutputDir;
     this.baselinePath = builder.baselinePath;
     this.autoOpenReport = builder.autoOpenReport;
@@ -146,6 +148,11 @@ public class QueryAuditConfig {
   /** Returns the selected suite report artifact. */
   public ReportFormat getReportFormat() {
     return reportFormat;
+  }
+
+  /** Detail policy for machine reports; the default removes SQL values and raw diagnostics. */
+  public ReportRedaction getReportRedaction() {
+    return reportRedaction;
   }
 
   /**
@@ -409,6 +416,7 @@ public class QueryAuditConfig {
     private Set<String> suppressQueries = new HashSet<>();
     private boolean showInfo = true;
     private ReportFormat reportFormat = ReportFormat.CONSOLE;
+    private ReportRedaction reportRedaction = ReportRedaction.REDACTED;
     private String reportOutputDir = DEFAULT_REPORT_OUTPUT_DIR;
     private String baselinePath = null;
     private boolean autoOpenReport = true;
@@ -451,6 +459,7 @@ public class QueryAuditConfig {
       b.suppressQueries = new HashSet<>(source.suppressQueries);
       b.showInfo = source.showInfo;
       b.reportFormat = source.reportFormat;
+      b.reportRedaction = source.reportRedaction;
       b.reportOutputDir = source.reportOutputDir;
       b.baselinePath = source.baselinePath;
       b.autoOpenReport = source.autoOpenReport;
@@ -524,6 +533,12 @@ public class QueryAuditConfig {
 
     public Builder showInfo(boolean showInfo) {
       this.showInfo = showInfo;
+      return this;
+    }
+
+    /** Selects the detail policy for machine-readable artifacts. */
+    public Builder reportRedaction(ReportRedaction reportRedaction) {
+      this.reportRedaction = Objects.requireNonNull(reportRedaction, "reportRedaction");
       return this;
     }
 

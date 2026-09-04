@@ -1,0 +1,692 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://haroya01.github.io/query-audit/schema/report-1.5.schema.json",
+  "title": "QueryAudit report.json schema 1.5",
+  "description": "Schema for the current 1.5 report.json envelope written in the configured output directory.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "outcome",
+    "incompleteReasons",
+    "redaction",
+    "reports",
+    "coverage"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^1\\.5\\.\\d+$"
+    },
+    "redaction": {
+      "type": "string",
+      "enum": [
+        "REDACTED",
+        "FULL"
+      ],
+      "description": "Artifact detail policy. REDACTED removes SQL values, comments and raw diagnostic prose without changing the audit verdict."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "INCONCLUSIVE"
+      ]
+    },
+    "incompleteReasons": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/incompleteReason"
+      }
+    },
+    "reports": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/testReport"
+      }
+    },
+    "coverage": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/definitions/auditCoverage"
+        }
+      ],
+      "description": "Expected-test manifest reconciled with this run, or null when manifest coverage was not verified."
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "INCONCLUSIVE"
+          }
+        },
+        "required": [
+          "outcome"
+        ]
+      },
+      "then": {
+        "properties": {
+          "incompleteReasons": {
+            "minItems": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "incompleteReasons": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "coverage": {
+            "type": "object",
+            "properties": {
+              "failedToAudit": {
+                "minimum": 1
+              }
+            },
+            "required": [
+              "failedToAudit"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "outcome": {
+            "const": "INCONCLUSIVE"
+          }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "incompleteReason": {
+      "type": "object",
+      "required": [
+        "code",
+        "detail"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "QUERY_LIMIT_REACHED",
+            "DATASOURCE_UNAVAILABLE",
+            "AUDIT_INITIALIZATION_FAILED",
+            "AUDIT_ANALYSIS_FAILED",
+            "CONTRACT_UNREADABLE",
+            "EXPECTED_TEST_MISSING",
+            "REPORT_WRITE_FAILED",
+            "REPORT_REDACTION_MISMATCH",
+            "UNSUPPORTED_SCHEMA",
+            "COVERAGE_MANIFEST_UNREADABLE",
+            "COVERAGE_MANIFEST_MISMATCH"
+          ]
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "testReport": {
+      "type": "object",
+      "required": [
+        "testId",
+        "testClass",
+        "testName",
+        "testSelector",
+        "summary",
+        "queryEvidence",
+        "confirmedIssues",
+        "infoIssues",
+        "acknowledgedIssues",
+        "indexMetadata",
+        "queries"
+      ],
+      "properties": {
+        "testId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable test identity. JUnit reports use ExtensionContext.getUniqueId(); core-only reports use a deterministic fallback derived from testClass and testName."
+        },
+        "testClass": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "testName": {
+          "type": "string",
+          "description": "Human-readable display name. Do not use this field as a machine identity."
+        },
+        "testSelector": {
+          "description": "Selector that reproduces this test through its originating framework, or null for core-only reports.",
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "required": [
+                "type",
+                "value"
+              ],
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "queryEvidence": {
+          "type": "object",
+          "description": "Captured query records retained in this artifact. Evidence retention does not change the audit outcome or findings.",
+          "required": [
+            "status",
+            "retainedQueries",
+            "omittedQueries"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "COMPLETE",
+                "PARTIAL",
+                "OMITTED"
+              ]
+            },
+            "retainedQueries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "omittedQueries": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "oneOf": [
+            {
+              "properties": {
+                "status": {
+                  "const": "COMPLETE"
+                },
+                "omittedQueries": {
+                  "const": 0
+                }
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "PARTIAL"
+                },
+                "retainedQueries": {
+                  "minimum": 1
+                },
+                "omittedQueries": {
+                  "minimum": 1
+                }
+              }
+            },
+            {
+              "properties": {
+                "status": {
+                  "const": "OMITTED"
+                },
+                "retainedQueries": {
+                  "const": 0
+                },
+                "omittedQueries": {
+                  "minimum": 1
+                }
+              }
+            }
+          ],
+          "additionalProperties": false
+        },
+        "summary": {
+          "type": "object",
+          "required": [
+            "confirmedIssues",
+            "infoIssues",
+            "acknowledgedIssues",
+            "uniquePatterns",
+            "totalQueries",
+            "executionTimeMs"
+          ],
+          "properties": {
+            "confirmedIssues": {
+              "type": "integer"
+            },
+            "infoIssues": {
+              "type": "integer"
+            },
+            "acknowledgedIssues": {
+              "type": "integer"
+            },
+            "uniquePatterns": {
+              "type": "integer"
+            },
+            "totalQueries": {
+              "type": "integer"
+            },
+            "executionTimeMs": {
+              "type": "integer"
+            }
+          }
+        },
+        "confirmedIssues": {
+          "$ref": "#/definitions/issueArray"
+        },
+        "infoIssues": {
+          "$ref": "#/definitions/issueArray"
+        },
+        "acknowledgedIssues": {
+          "$ref": "#/definitions/issueArray"
+        },
+        "indexMetadata": {
+          "description": "Index state of every table referenced by a finding, or null when no metadata was collected (non-database test). Keys are table names.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/index"
+            }
+          }
+        },
+        "queries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/query"
+          }
+        }
+      }
+    },
+    "issueArray": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/issue"
+      }
+    },
+    "issue": {
+      "type": "object",
+      "required": [
+        "type",
+        "severity",
+        "query",
+        "table",
+        "column",
+        "detail",
+        "suggestion",
+        "sourceLocation"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Issue code, e.g. n-plus-one, missing-where-index."
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "ERROR",
+            "WARNING",
+            "INFO"
+          ]
+        },
+        "query": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "table": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "column": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "suggestion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceLocation": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Innermost application stack frame of the offending query."
+        },
+        "remediation": {
+          "description": "Structured fix hint, present only for high-precision rules.",
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "add-index",
+                "batch-fetch",
+                "batch-insert",
+                "batch-update",
+                "add-where-clause",
+                "add-limit",
+                "select-explicit-columns"
+              ]
+            },
+            "table": {
+              "type": "string"
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "index": {
+      "type": "object",
+      "required": [
+        "name",
+        "unique",
+        "columns",
+        "cardinality"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "unique": {
+          "type": "boolean"
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Column names in index order."
+        },
+        "cardinality": {
+          "type": "integer",
+          "description": "Whole-index cardinality (SHOW INDEX semantics: the last column entry's cardinality)."
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "required": [
+        "sql",
+        "normalizedSql",
+        "executionTimeNanos",
+        "stackTrace"
+      ],
+      "properties": {
+        "sql": {
+          "type": "string"
+        },
+        "normalizedSql": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "executionTimeNanos": {
+          "type": "integer"
+        },
+        "stackTrace": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "auditCoverage": {
+      "type": "object",
+      "required": [
+        "expected",
+        "executed",
+        "skipped",
+        "audited",
+        "failedToAudit",
+        "tests"
+      ],
+      "properties": {
+        "expected": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of test IDs in the configured manifest."
+        },
+        "executed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of entries whose test execution started."
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of expected tests with a SKIPPED gap."
+        },
+        "audited": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of per-test audit reports, including reports from failed or aborted tests."
+        },
+        "failedToAudit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of expected tests with a non-null gap."
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/coverageTest"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Counts cover expected tests and emitted audit reports, not every unrelated test in the launcher. The report reader also checks totals, unique test IDs, and correspondence with reports[].testId."
+    },
+    "coverageTest": {
+      "type": "object",
+      "required": [
+        "testId",
+        "expected",
+        "executed",
+        "audited",
+        "gap"
+      ],
+      "properties": {
+        "testId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "expected": {
+          "type": "boolean"
+        },
+        "executed": {
+          "type": "boolean"
+        },
+        "audited": {
+          "type": "boolean"
+        },
+        "gap": {
+          "enum": [
+            null,
+            "NOT_DISCOVERED",
+            "NOT_EXECUTED",
+            "SETUP_FAILED",
+            "SKIPPED",
+            "ABORTED",
+            "TEST_FAILED",
+            "AUDIT_MISSING"
+          ],
+          "description": "Why an expected test did not supply complete audit evidence. Only expected tests can have a gap."
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "expected": {
+                "const": false
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "gap": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "audited": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "executed": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "expected": {
+                "const": true
+              },
+              "gap": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "audited": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gap": {
+                "enum": [
+                  "NOT_DISCOVERED",
+                  "NOT_EXECUTED",
+                  "SETUP_FAILED",
+                  "SKIPPED"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "const": true
+              },
+              "executed": {
+                "const": false
+              },
+              "audited": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gap": {
+                "enum": [
+                  "ABORTED",
+                  "TEST_FAILED",
+                  "AUDIT_MISSING"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "expected": {
+                "const": true
+              },
+              "executed": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "gap": {
+                "const": "AUDIT_MISSING"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "audited": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

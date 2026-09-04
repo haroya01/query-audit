@@ -5,8 +5,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.junit5.integration.TestApplication;
 import jakarta.persistence.EntityManagerFactory;
-import java.util.ArrayList;
-import java.util.List;
 import org.hibernate.engine.spi.SessionFactoryImplementor;
 import org.hibernate.event.service.spi.EventListenerGroup;
 import org.hibernate.event.service.spi.EventListenerRegistry;
@@ -18,9 +16,13 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * Regression for issue #101 — verifies {@link HibernateIntegration#unregisterTrackerForEmf} removes
- * the {@link LazyLoadTracker} it previously attached to the Hibernate {@link
- * EventListenerRegistry}, so that repeated test classes against a shared {@code SessionFactory}
+ * the listener it previously attached to the Hibernate {@link EventListenerRegistry} on behalf of a
+ * {@link LazyLoadTracker}, so that repeated test classes against a shared {@code SessionFactory}
  * don't accumulate dead listeners.
+ *
+ * <p>The registered listener is a Hibernate-typed adapter distinct from the returned {@link
+ * LazyLoadTracker} (issue #248 keeps the tracker itself Hibernate-free), so these assertions go by
+ * listener count rather than by identity against the returned tracker.
  */
 @SpringBootTest(classes = TestApplication.class)
 @DisplayName("HibernateIntegration — tracker register/unregister lifecycle (issue #101)")
@@ -41,15 +43,11 @@ class HibernateIntegrationLifecycleTest {
 
     assertThat(countListeners(EventType.INIT_COLLECTION)).isEqualTo(initBefore + 1);
     assertThat(countListeners(EventType.POST_LOAD)).isEqualTo(postLoadBefore + 1);
-    assertThat(listenerInstances(EventType.INIT_COLLECTION)).contains(tracker);
-    assertThat(listenerInstances(EventType.POST_LOAD)).contains(tracker);
 
     integration.unregisterTrackerForEmf(emf, tracker);
 
     assertThat(countListeners(EventType.INIT_COLLECTION)).isEqualTo(initBefore);
     assertThat(countListeners(EventType.POST_LOAD)).isEqualTo(postLoadBefore);
-    assertThat(listenerInstances(EventType.INIT_COLLECTION)).doesNotContain(tracker);
-    assertThat(listenerInstances(EventType.POST_LOAD)).doesNotContain(tracker);
   }
 
   @Test
@@ -86,14 +84,6 @@ class HibernateIntegrationLifecycleTest {
 
   private int countListeners(EventType<?> eventType) {
     return listenerGroup(eventType).count();
-  }
-
-  private List<Object> listenerInstances(EventType<?> eventType) {
-    List<Object> out = new ArrayList<>();
-    for (Object listener : listenerGroup(eventType).listeners()) {
-      out.add(listener);
-    }
-    return out;
   }
 
   private EventListenerGroup<?> listenerGroup(EventType<?> eventType) {
