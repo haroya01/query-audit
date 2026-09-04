@@ -24,6 +24,12 @@ public enum IncompleteReasonCode {
   /** A test required by the audit coverage manifest did not run. */
   EXPECTED_TEST_MISSING,
 
+  /** The expected-test manifest was missing, unreadable, empty, or malformed. */
+  COVERAGE_MANIFEST_UNREADABLE,
+
+  /** Reports were produced with different expected-test manifests. */
+  COVERAGE_MANIFEST_MISMATCH,
+
   /** The selected suite report could not be written. */
   REPORT_WRITE_FAILED,
 

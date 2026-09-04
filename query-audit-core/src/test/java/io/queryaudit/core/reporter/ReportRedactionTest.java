@@ -142,7 +142,7 @@ class ReportRedactionTest {
 
     var schema =
         JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7)
-            .getSchema(getClass().getResourceAsStream("/report-1.4.schema.json"));
+            .getSchema(getClass().getResourceAsStream("/report-1.5.schema.json"));
     var mapper = new ObjectMapper();
     assertThat(schema.validate(mapper.readTree(redacted))).isEmpty();
     assertThat(schema.validate(mapper.readTree(redacted.replace("REDACTED", "unknown"))))

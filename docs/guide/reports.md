@@ -144,13 +144,17 @@ For plain JUnit, Maven can pass the test-JVM property directly with
 
 The file is a **versioned suite envelope**. `outcome` and `incompleteReasons` describe whether
 the run produced a trustworthy verdict, while `reports` keeps the per-test findings and statistics.
+`coverage` records which expected tests executed and produced audits. It is `null` when no
+manifest was verified; this example does not establish whole-suite coverage. See
+[Audit coverage](audit-coverage.md) to declare and enforce the tests a run must audit.
 
 ```json
 {
-  "schemaVersion": "1.4.0",
+  "schemaVersion": "1.5.0",
   "redaction": "REDACTED",
   "outcome": "FAIL",
   "incompleteReasons": [],
+  "coverage": null,
   "reports": [
     {
       "testId": "[engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:findRecentOrders()]",
@@ -246,14 +250,15 @@ the run produced a trustworthy verdict, while `reports` keeps the per-test findi
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. The current version is **1.4.0**. QueryAudit 0.5.x wrote schema 1.0
+of silently misparsing it. The current version is **1.5.0**. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
-infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, and
-schema 1.2 adds a stable test identity and reproducible selector to every per-test report.
+infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, 1.2
+added stable test identities, 1.3 added query-evidence retention counts, and 1.4 added the report
+redaction mode. Schema 1.5 adds expected-test coverage.
 
-The published JSON Schemas validate all three envelope versions. The deprecated Java method
-`JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` retains the exact legacy 1.0 shape, without
-run outcomes or stable identity fields. A list of reports cannot establish whether the audit
+Each version has a published JSON Schema. The deprecated Java method
+`JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` emits a legacy 1.0 envelope without run
+outcomes or stable identity fields. A list of reports cannot establish whether the audit
 completed or its policies passed. New callers should use
 `JsonReporter.toRunEnvelopeJson(AuditRunResult)`.
 
@@ -263,7 +268,7 @@ The suite outcome uses one precedence rule everywhere: `INCONCLUSIVE > FAIL > PA
 
 | Outcome | Meaning |
 |---|---|
-| `PASS` | The required audit completed and every configured policy and contract passed. |
+| `PASS` | The reported audits completed and every configured policy and contract passed. A non-null `coverage` is also required to verify the expected-test manifest. |
 | `FAIL` | The audit completed, but `failOnDetection`, `@DetectNPlusOne`, `@ExpectQueries`, `@ExpectMaxQueryCount`, or a recorded query contract failed. |
 | `INCONCLUSIVE` | Collection or a required input was incomplete, so the run cannot produce a trustworthy verdict. Any partial findings and statistics remain in `reports`. |
 
@@ -282,11 +287,18 @@ may be `null` when no additional context is available:
 | `AUDIT_ANALYSIS_FAILED` | QueryAudit could not complete analysis for an active test. Earlier per-test reports remain available, but the suite is incomplete. |
 | `CONTRACT_UNREADABLE` | The query contract or query-count baseline was unreadable or malformed. |
 | `UNSUPPORTED_SCHEMA` | Report comparison received a schema it cannot evaluate safely, including legacy 1.0 input with no outcome. |
-| `EXPECTED_TEST_MISSING` | Report comparison can derive this from a baseline-relative missing test. Suite-wide expected-test generation remains part of [#240](https://github.com/haroya01/query-audit/issues/240). |
-| `REPORT_WRITE_FAILED` | The selected JSON or HTML artifact could not be written. QueryAudit records the incomplete state and fails the JUnit run; the missing artifact cannot contain its own failure reason. |
+| `EXPECTED_TEST_MISSING` | An expected test was not discovered, skipped, failed before completing its audit, or otherwise did not supply complete audit evidence. Report comparison also uses this for baseline-relative missing tests. |
+| `COVERAGE_MANIFEST_UNREADABLE` | An explicitly configured expected-test manifest was missing, or the selected manifest was unreadable, empty, or malformed. |
+| `COVERAGE_MANIFEST_MISMATCH` | Comparison inputs were verified against different expected-test manifests, or only one input had verified coverage. |
+| `REPORT_REDACTION_MISMATCH` | Comparison inputs used different report redaction modes. |
+| `REPORT_WRITE_FAILED` | The selected JSON or HTML artifact could not be written. The extension fails an active audit; listener-only finalization cannot reliably fail the launcher. Always check the report artifact in CI. |
 
 Field notes for machine consumers:
 
+- `coverage: null` means the run did not verify an expected-test manifest. With coverage enabled,
+  the JSON artifact includes counts and per-test execution/audit states even when HTML or console
+  output is selected. Use the [coverage CI gate](audit-coverage.md#require-the-artifact-in-ci) to
+  reject missing, skipped, or unaudited expected tests.
 - `testId` is the machine identity. In JUnit reports it is the opaque value from
   `ExtensionContext.getUniqueId()`, which distinguishes packages, nested classes, overloaded
   methods, and test-template invocations. `testName` remains presentation text and may change
@@ -313,8 +325,9 @@ The stable schema URLs are
 [`schema/report-1.0.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.0.schema.json),
 [`schema/report-1.1.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.1.schema.json),
 [`schema/report-1.2.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.2.schema.json),
-[`schema/report-1.3.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.3.schema.json), and
-[`schema/report-1.4.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.4.schema.json).
+[`schema/report-1.3.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.3.schema.json),
+[`schema/report-1.4.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.4.schema.json), and
+[`schema/report-1.5.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.5.schema.json).
 [`schema/report.schema.json`](https://haroya01.github.io/query-audit/schema/report.schema.json)
 always points to the current version.
 
@@ -356,8 +369,8 @@ java -cp query-audit-core-<version>.jar \
   error. A candidate run that already has outcome `FAIL` cannot become a successful comparison
   merely because it introduced no new finding.
 - **`verdict.json`**: `{outcome, incompleteReasons, newFindings, resolved, persisting, complete,
-  missingTests, queryCountDelta, executionTimeMsDelta}` — the termination condition for automated
-  fix loops.
+  missingTests, unexpectedTests, queryCountDelta, executionTimeMsDelta}` — the termination condition
+  for automated fix loops.
 
 !!! warning "Java API compatibility in 0.6"
     `ReportComparator.Finding` and `ReportComparator.TestRef` now prepend `testId` to their record
@@ -370,6 +383,11 @@ java -cp query-audit-core-<version>.jar \
   `complete` is `false`, `missingTests` identifies the absent tests, and their findings are not
   classified as resolved. Schema 1.2 reports are matched by `testId`; verdict findings and missing
   test entries carry that ID alongside their display fields.
+- With [manifest coverage](audit-coverage.md), `missingTests` also includes expected tests that
+  failed to supply complete audit evidence. `unexpectedTests` identifies candidate audits outside
+  the baseline or declared manifest. A coverage gap prevents affected findings from being marked
+  resolved. Different manifests, including coverage enabled on only one side, make the comparison
+  `INCONCLUSIVE` with `COVERAGE_MANIFEST_MISMATCH` and no resolved findings.
 - **Matching key**: `testId|type|normalized-pattern|sourceLocation`, so findings survive display
   name edits and unrelated refactors as long as the statement shape and call site are stable.
 - The comparator accepts schema 1.0 and 1.1 reports and uses an exact `testClass|testName` fallback
