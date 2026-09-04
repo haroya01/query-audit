@@ -424,7 +424,7 @@ class ReportComparatorTest {
     @DisplayName("accepts compatible 1.x schema versions")
     void acceptsCompatibleSchemaVersion() {
       String compatibleEnvelope =
-          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"outcome\":\"PASS\","
+          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"coverage\":null,\"outcome\":\"PASS\","
               + "\"incompleteReasons\":[],\"reports\":[]}";
 
       ReportComparator.Verdict verdict =
@@ -438,7 +438,7 @@ class ReportComparatorTest {
     void futureOutcomeIsInconclusive() {
       Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
       String futureEnvelope =
-          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"outcome\":\"SKIPPED\","
+          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"coverage\":null,\"outcome\":\"SKIPPED\","
               + "\"incompleteReasons\":[],\"reports\":["
               + JsonReporter.toJson(
                   report("findOrders", List.of(introduced), 9), ReportRedaction.FULL)
@@ -465,7 +465,7 @@ class ReportComparatorTest {
     void futureIncompleteReasonIsInconclusive() {
       Issue resolved = nPlusOne("select * from payments where order_id = ?", "S.pay:20");
       String futureEnvelope =
-          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"outcome\":\"INCONCLUSIVE\","
+          "{\"schemaVersion\":\"1.42.7\",\"redaction\":\"FULL\",\"coverage\":null,\"outcome\":\"INCONCLUSIVE\","
               + "\"incompleteReasons\":[{\"code\":\"FUTURE_REASON\",\"detail\":null}],"
               + "\"reports\":["
               + JsonReporter.toJson(
