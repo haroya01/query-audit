@@ -29,11 +29,11 @@ public class QueryAuditProperties {
   private String mode = "annotated";
 
   /**
-   * Rule profile tier: {@code strict} (all rules, the default), {@code recommended} (opinionated
-   * rules off), or {@code minimal} (safety-critical only). {@code disabled-rules} / {@code
+   * Rule profile tier: {@code strict} (all rules), {@code recommended} (the default, with
+   * opinionated rules off), or {@code minimal} (safety-critical only). {@code disabled-rules} / {@code
    * enabled-rules} always win over the profile.
    */
-  private String profile = "strict";
+  private String profile = "recommended";
 
   /** Rule codes to run even when the profile tier excludes them. */
   private List<String> enabledRules = new ArrayList<>();

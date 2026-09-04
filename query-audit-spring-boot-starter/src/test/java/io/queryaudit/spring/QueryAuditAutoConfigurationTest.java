@@ -12,8 +12,11 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 class QueryAuditAutoConfigurationTest {
 
@@ -26,12 +29,19 @@ class QueryAuditAutoConfigurationTest {
   class RuleProfileProperties {
 
     @Test
-    @DisplayName("defaults to STRICT")
-    void defaultsToStrict() {
+    @DisplayName("defaults to RECOMMENDED")
+    void defaultsToRecommended() {
       contextRunner.run(
           context ->
               assertThat(context.getBean(QueryAuditConfig.class).getRuleProfile())
-                  .isEqualTo(RuleProfile.STRICT));
+                  .isEqualTo(RuleProfile.RECOMMENDED));
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension.class)
+    void startupLogNamesTheConfiguredProfile(CapturedOutput output) {
+      contextRunner.withPropertyValues("query-audit.profile=minimal").run(context ->
+          assertThat(output).contains("QueryAudit rule profile: minimal"));
     }
 
     @Test
@@ -47,6 +57,32 @@ class QueryAuditAutoConfigurationTest {
                 assertThat(config.isRuleExcluded("force-index-hint")).isFalse();
                 assertThat(config.isRuleExcluded("offset-pagination")).isTrue();
               });
+    }
+
+    @Test
+    void blankProfileUsesRecommended() {
+      contextRunner.withPropertyValues("query-audit.profile=").run(context ->
+          assertThat(context.getBean(QueryAuditConfig.class).getRuleProfile())
+              .isEqualTo(RuleProfile.RECOMMENDED));
+    }
+
+    @Test
+    void explicitStrictKeepsEveryRule() {
+      contextRunner.withPropertyValues("query-audit.profile=strict").run(context -> {
+        QueryAuditConfig config = context.getBean(QueryAuditConfig.class);
+        assertThat(config.getRuleProfile()).isEqualTo(RuleProfile.STRICT);
+        assertThat(config.isRuleExcluded("force-index-hint")).isFalse();
+      });
+    }
+
+    @Test
+    void explicitMinimalKeepsItsAllowList() {
+      contextRunner.withPropertyValues("query-audit.profile=minimal").run(context -> {
+        QueryAuditConfig config = context.getBean(QueryAuditConfig.class);
+        assertThat(config.getRuleProfile()).isEqualTo(RuleProfile.MINIMAL);
+        assertThat(config.isRuleExcluded("n-plus-one")).isFalse();
+        assertThat(config.isRuleExcluded("select-all")).isTrue();
+      });
     }
 
     @Test

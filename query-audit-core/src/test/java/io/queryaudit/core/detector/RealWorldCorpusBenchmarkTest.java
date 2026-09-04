@@ -3,6 +3,7 @@ package io.queryaudit.core.detector;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
@@ -36,7 +37,8 @@ class RealWorldCorpusBenchmarkTest {
   @BeforeAll
   static void setUp() {
     // Use an empty baseline so nothing is pre-acknowledged
-    analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
   }
 
   // ---------------------------------------------------------------

@@ -21,7 +21,7 @@ All properties are optional. The table below lists every supported key under the
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Master switch for the entire auto-configuration. When `false`, the `QueryInterceptor` bean and the wrapping `BeanPostProcessor` are both skipped — the `@QueryAudit` annotation will not work either. Use `wrap-data-source.enabled: false` instead if you want to keep the interceptor active but skip the auto-wrap. |
-| `profile` | `String` | `"strict"` | Rule tier: `strict` (all rules), `recommended` (opinionated rules off), or `minimal` (safety-critical only). See [Rule Profiles](#rule-profiles). |
+| `profile` | `String` | `"recommended"` | Rule tier: `strict` (all rules), `recommended` (opinionated rules off), or `minimal` (safety-critical only). See [Rule Profiles](#rule-profiles). |
 | `enabled-rules` | `List<String>` | `[]` | Rule codes to run even when the profile tier excludes them. `disabled-rules` still wins. |
 | `mode` | `String` | `"annotated"` | Which tests the JUnit extension audits: `annotated` (opt-in via `@QueryAudit`) or `all` (every test, opt-out via `@QueryAuditExclude`). `all` additionally requires JUnit extension autodetection — see [Audit Coverage Mode](#audit-coverage-mode). |
 | `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
@@ -102,13 +102,14 @@ query-audit:
 
 ## Rule Profiles
 
-All rules enabled at once is the honest default, but on a first run against a real codebase it
-buries the high-precision findings under style opinions. Profiles are named tiers:
+Since 0.6.0, omitted or blank profile settings select `recommended`. It keeps the general
+detection rules while excluding context-dependent advice. Choose `strict` to run every rule
+or `minimal` to start with a smaller set:
 
 | Profile | What runs | Use it for |
 |---|---|---|
-| `strict` (default) | Every rule — the pre-0.5.0 behavior | Maximum coverage, mature suppression setup |
-| `recommended` | Everything except ~20 opinionated / context-dependent rules | First adoption, day-to-day CI |
+| `strict` | Every rule — the default before 0.6.0 | Maximum coverage, mature suppression setup |
+| `recommended` (default) | Everything except the 21 rules listed below | First adoption, day-to-day CI |
 | `minimal` | Safety-critical rules only (`n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query`) | A lean, non-negotiable gate |
 
 ```yaml
@@ -123,13 +124,59 @@ Precedence: `disabled-rules` > `enabled-rules` > profile tier.
 The `recommended` exclusions are rules that legitimately fire on correct SQL — index hints,
 offset pagination at small scale, leading LIKE wildcards, EXPLAIN advisories
 (`full-scan`/`filesort`/`temporary-table`), and style opinions such as `or-abuse` or
-`regexp-usage`. The full list with per-rule rationale lives in the `RuleProfile` source. The
+`regexp-usage`. The full list is in the migration note below. The
 tier assignment is v1 and will be revised as per-rule false-positive statistics accumulate —
 [false-positive reports](https://github.com/haroya01/query-audit/issues) directly shape it.
 
 `recommended` is deny-list based: a newly added rule joins it automatically unless flagged as
 opinionated. External rules registered via `ServiceLoader` without a rule code are never
 filtered by profiles.
+
+### Migrating from 0.5.x to 0.6.0
+
+If you did not configure a profile, upgrading changes the active rules from `strict` to
+`recommended`. The profile excludes these 21 rule codes:
+
+| Area | Excluded rule codes |
+|---|---|
+| Query shape and style | `force-index-hint`, `offset-pagination`, `like-leading-wildcard`, `or-abuse`, `case-in-where`, `regexp-usage`, `find-in-set`, `having-misuse`, `distinct-misuse`, `union-without-all` |
+| Counts and repeated queries | `count-star-no-where`, `count-instead-of-exists`, `n-plus-one-suspect`, `mergeable-queries` |
+| Execution plans and indexes | `full-scan`, `filesort`, `temporary-table`, `covering-index-opportunity` |
+| Locks, windows and connection timing | `for-update-no-timeout`, `window-no-partition`, `connection-held-idle` |
+
+`count-instead-of-exists` already required a separate opt-in in 0.5.x. With `recommended`,
+it also needs an entry in `enabled-rules`. The other listed rules now need an explicit
+profile or rule override to run.
+
+To retain the previous rule selection in Spring:
+
+```yaml
+query-audit:
+  profile: strict
+```
+
+For direct core use, select it on the builder:
+
+```java
+QueryAuditConfig config = QueryAuditConfig.builder()
+    .ruleProfile(RuleProfile.STRICT)
+    .build();
+```
+
+For plain JUnit, set `-DqueryAudit.profile=strict` on the **test JVM**. In Gradle, configure
+`tasks.withType(Test).configureEach { systemProperty 'queryAudit.profile', 'strict' }`;
+with Maven Surefire, use `mvn test -DqueryAudit.profile=strict`. This system property also
+overrides Spring's profile for the JUnit audit. Omitted values preserve Spring configuration;
+blank values select `recommended`.
+
+Explicit `strict`, `recommended`, and `minimal` retain their rule selections. You can also
+keep `recommended` and re-enable selected rules with `enabled-rules`. Query budgets and
+snapshot contracts still run independently of the profile. Re-record a comparison reference
+after changing profiles; reports produced with different active rules are not equivalent.
+
+The JUnit console report shows the effective profile for each test. Spring startup logs show
+the configured profile; a test JVM override, if present, appears in the JUnit output. JSON
+schema 1.2 does not contain profile metadata, so retain the configuration with saved reports.
 
 ---
 
@@ -184,13 +231,14 @@ Coverage first, cleanup incrementally — the audit becomes a ratchet instead of
 
 Copy-paste these presets for typical use cases.
 
-=== "Strict (recommended for new projects)"
+=== "Recommended (new projects)"
 
-    Best for greenfield projects where you want to catch issues from day one.
+    Start with the default rule set and tighter thresholds for a new project.
 
     ```yaml
     query-audit:
       enabled: true
+      profile: recommended
       fail-on-detection: true
       n-plus-one:
         threshold: 2

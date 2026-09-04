@@ -2,6 +2,8 @@ package io.queryaudit.junit5.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Issue;
@@ -52,7 +54,8 @@ class JoinSubqueryIntegrationTest {
   }
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries) {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
     return analyzer.analyze("JoinSubqueryIntegrationTest", testName, queries, null);
   }
 

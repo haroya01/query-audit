@@ -7,9 +7,9 @@ import java.util.Set;
  * Named rule tiers controlling which detection rules run by default.
  *
  * <ul>
- *   <li>{@link #STRICT} — every rule (the pre-0.5.0 behavior, and the default).
+ *   <li>{@link #STRICT} — every rule (the default before 0.6.0).
  *   <li>{@link #RECOMMENDED} — everything except the opinionated / context-dependent rules that
- *       legitimately fire on correct SQL. Built for a quiet, trustworthy first run.
+ *       legitimately fire on correct SQL. The default since 0.6.0.
  *   <li>{@link #MINIMAL} — safety-critical rules only, for a lean CI gate.
  * </ul>
  *
@@ -81,14 +81,14 @@ public enum RuleProfile {
   }
 
   /**
-   * Parses a configuration value. Case-insensitive; {@code null} and blank map to {@link #STRICT}
-   * so absent configuration keeps the pre-0.5.0 behavior.
+   * Parses a configuration value. Case-insensitive; {@code null} and blank map to
+   * {@link #RECOMMENDED}.
    *
    * @throws IllegalArgumentException on any other value, naming the accepted ones
    */
   public static RuleProfile parse(String value) {
     if (value == null || value.isBlank()) {
-      return STRICT;
+      return RECOMMENDED;
     }
     return switch (value.trim().toLowerCase(Locale.ROOT)) {
       case "strict" -> STRICT;

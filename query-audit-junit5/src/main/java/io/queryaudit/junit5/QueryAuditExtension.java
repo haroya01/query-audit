@@ -7,6 +7,7 @@ import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.config.ReportRedaction;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.ConnectionUsageTracker;
@@ -579,6 +580,8 @@ public class QueryAuditExtension
     List<BaselineEntry> baseline = analyzer.getBaseline();
     ConsoleReporter reporter =
         new ConsoleReporter(System.out, ConsoleReporter.detectColorSupport(), baseline);
+    System.out.println(
+        "[QueryAudit] Rule profile: " + config.getRuleProfile().name().toLowerCase(Locale.ROOT));
     reporter.report(outputReport);
 
     // GitHub Actions annotations + step summary (issue #85).
@@ -1571,6 +1574,11 @@ public class QueryAuditExtension
     }
     if (detectNPlusOne != null) {
       builder.nPlusOneThreshold(detectNPlusOne.threshold());
+    }
+
+    String profile = System.getProperty("queryAudit.profile");
+    if (profile != null) {
+      builder.ruleProfile(RuleProfile.parse(profile));
     }
 
     String reportFormat =

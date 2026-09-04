@@ -2,6 +2,8 @@ package io.queryaudit.junit5.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
@@ -63,7 +65,8 @@ class IndexLockIntegrationTest {
   }
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries) {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
     return analyzer.analyze("IndexLockIntegrationTest", testName, queries, indexMetadata);
   }
 
@@ -112,7 +115,8 @@ class IndexLockIntegrationTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report =
           analyzer.analyze(
               "IndexLockIntegrationTest",
@@ -166,7 +170,8 @@ class IndexLockIntegrationTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report =
           analyzer.analyze(
               "IndexLockIntegrationTest",
@@ -204,7 +209,8 @@ class IndexLockIntegrationTest {
       entityManager.createNativeQuery("SELECT * FROM members WHERE id = 1").getResultList();
       queryInterceptor.stop();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report =
           analyzer.analyze(
               "IndexLockIntegrationTest",
@@ -255,7 +261,8 @@ class IndexLockIntegrationTest {
           .getResultList();
       queryInterceptor.stop();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report =
           analyzer.analyze(
               "IndexLockIntegrationTest",
