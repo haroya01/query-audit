@@ -7,7 +7,7 @@ on:
     inputs:
       release_tag:
         description: >-
-          Existing published release tag to retry, for example v0.7.0.
+          Existing published release tag to retry, for example v0.6.0.
           The selected workflow branch does not select the artifact source.
         type: string
         required: true
@@ -38,6 +38,7 @@ jobs:
       needs.release-please.outputs.release_created == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    environment: maven-central
     permissions:
       contents: read
     steps:
