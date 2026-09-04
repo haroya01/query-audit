@@ -13,7 +13,9 @@ N+1 patterns, missing-index findings when database metadata is available, and un
 query budgets enforce upper bounds on reads and writes. With test-scoped dependencies, its
 instrumentation stays on the test runtime path.
 
-**Java 17+ · JUnit 5 · Spring Boot 3 and 4 · MySQL · PostgreSQL**
+**Java 17+ · JUnit 5 · Spring Boot · MySQL · PostgreSQL**
+
+See [CI-verified compatibility](#compatibility-tested-by-this-project) for the exact tested versions.
 
 [**Run the 5-minute quick start**](https://haroya01.github.io/query-audit/getting-started/quickstart/)
 · [Choose an installation](https://haroya01.github.io/query-audit/getting-started/installation/)
@@ -175,13 +177,29 @@ stable test identities, exit codes, and comparison rules, or the
 
 ## Compatibility tested by this project
 
-| Layer | Baseline and coverage |
-|---|---|
-| Java | Requires 17; CI runs on 17 and 21 |
-| JUnit | JUnit 5 extension; built and tested with 5.11.4 |
-| Spring Boot | Supports 3.x and 4.x; 0.5.x is built against 3.4.1, and main also runs a dedicated 4.0.6 suite during `check` |
-| Database metadata | Integration tests run MySQL 8.0 and PostgreSQL 16 |
-| Build tools | Artifacts are published to Maven Central for Gradle and Maven consumers |
+The current `main` branch verifies these combinations in the
+[pull-request CI workflow](https://github.com/haroya01/query-audit/blob/main/.github/workflows/ci.yml):
+
+| CI coverage | Java | Verified version | Scope |
+|---|---|---|---|
+| Build and regular tests | 17 and 21 | Spring Boot 3.4.1 | Compilation and regular starter tests |
+| Dedicated `boot4Test` suite | 17 and 21 | Spring Boot 4.0.6 | Multi-context lifecycle regression, included in `check` and therefore `build` |
+| MySQL integration tests | 21 | MySQL 8.0 (`mysql:8.0`) | Database metadata and EXPLAIN |
+| PostgreSQL integration tests | 21 | PostgreSQL 16 (`postgres:16-alpine`) | Database metadata and EXPLAIN |
+
+The [starter build](https://github.com/haroya01/query-audit/blob/main/query-audit-spring-boot-starter/build.gradle)
+pins the Spring Boot versions and wires `boot4Test` into `check`.
+The [MySQL](https://github.com/haroya01/query-audit/blob/main/query-audit-mysql/src/test/java/io/queryaudit/mysql/MySqlIntegrationTest.java)
+and [PostgreSQL](https://github.com/haroya01/query-audit/blob/main/query-audit-postgresql/src/test/java/io/queryaudit/postgresql/PostgreSqlIntegrationTest.java)
+test fixtures select the database images.
+
+Java 17 is the source/target baseline; the regular JUnit 5 suite uses 5.11.4.
+Artifacts are published to Maven Central for Gradle and Maven consumers. These baselines
+and Spring Boot 3.x/4.x integration are not a guarantee that every version in those lines,
+or every Java/Boot/database combination, has been verified. In particular, the dedicated
+Boot 4 suite is not the full Boot 3 suite rerun against Boot 4.
+The broader scheduled matrix and support policy are tracked in
+[#208](https://github.com/haroya01/query-audit/issues/208).
 
 ## Modules
 
