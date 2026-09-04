@@ -2,6 +2,7 @@ package io.queryaudit.junit5.nohibernate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.queryaudit.junit5.BooleanOverride;
 import io.queryaudit.junit5.ExpectQueries;
@@ -33,6 +34,11 @@ class NoHibernateOnClasspathTest {
   @Test
   @DisplayName("full extension lifecycle completes against a plain JDBC DataSource")
   void fullLifecycleCompletesWithoutHibernate() throws Exception {
+    assertThatThrownBy(() -> Class.forName("org.hibernate.Session"))
+        .isInstanceOf(ClassNotFoundException.class);
+    assertThatThrownBy(() -> Class.forName("jakarta.persistence.EntityManager"))
+        .isInstanceOf(ClassNotFoundException.class);
+
     DataSource dataSource = newH2DataSource();
     Fixture.dataSource = dataSource;
     QueryAuditExtension extension = new QueryAuditExtension();
