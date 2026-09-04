@@ -16,8 +16,7 @@ import org.junit.jupiter.api.Test;
 
 class AuditRunSchemaContractTest {
 
-  private static final Path REPORT_SCHEMA =
-      Path.of("..", "docs", "schema", "report-1.2.schema.json");
+  private static final Path REPORT_SCHEMA = Path.of("..", "docs", "schema", "report.schema.json");
 
   @Test
   void schemaRequiresTheSuiteResultFields() throws IOException {
@@ -52,7 +51,9 @@ class AuditRunSchemaContractTest {
   }
 
   private static Map<?, ?> readSchema() throws IOException {
-    return (Map<?, ?>) MiniJsonParser.parse(Files.readString(REPORT_SCHEMA));
+    Map<?, ?> alias = (Map<?, ?>) MiniJsonParser.parse(Files.readString(REPORT_SCHEMA));
+    Path versioned = REPORT_SCHEMA.resolveSibling((String) alias.get("$ref"));
+    return (Map<?, ?>) MiniJsonParser.parse(Files.readString(versioned));
   }
 
   private static Map<?, ?> object(Map<?, ?> parent, String field) {

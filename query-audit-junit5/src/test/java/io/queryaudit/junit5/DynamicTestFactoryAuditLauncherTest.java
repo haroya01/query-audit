@@ -88,7 +88,7 @@ class DynamicTestFactoryAuditLauncherTest {
     assertThat(Files.readString(reportPath))
         .contains("\"outcome\": \"INCONCLUSIVE\"")
         .contains("\"code\": \"AUDIT_INITIALIZATION_FAILED\"")
-        .contains("DynamicTest child")
+        .contains("Details omitted by report redaction")
         .doesNotContain("\"outcome\": \"PASS\"");
   }
 

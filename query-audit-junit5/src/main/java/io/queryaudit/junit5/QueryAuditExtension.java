@@ -6,6 +6,7 @@ import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.ReportFormat;
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.interceptor.ConnectionUsageTracker;
@@ -580,7 +581,7 @@ public class QueryAuditExtension
 
     // GitHub Actions annotations + step summary (issue #85).
     if ("true".equals(System.getenv("GITHUB_ACTIONS"))) {
-      new GitHubActionsReporter().report(outputReport);
+      new GitHubActionsReporter(config.getReportRedaction()).report(outputReport);
     }
 
     // HTML and JSON are generated from this same accumulated view, keeping their visible findings
@@ -731,8 +732,15 @@ public class QueryAuditExtension
               root.getStore(NAMESPACE)
                   .getOrComputeIfAbsent(
                       ReportFinalizer.class.getName(),
-                      key -> new ReportFinalizer(this, outputDirectory, reportFormat, runState));
-      finalizer.requireConfiguration(outputDirectory, reportFormat);
+                      key ->
+                          new ReportFinalizer(
+                              this,
+                              outputDirectory,
+                              reportFormat,
+                              runState,
+                              auditConfig.getReportRedaction()));
+      finalizer.requireConfiguration(
+          outputDirectory, reportFormat, auditConfig.getReportRedaction());
     } catch (RuntimeException | Error failure) {
       recordInitializationFailure(
           context,
@@ -835,6 +843,7 @@ public class QueryAuditExtension
     private final QueryAuditExtension extension;
     private final Path outputDirectory;
     private final ReportFormat reportFormat;
+    private final ReportRedaction reportRedaction;
     private final AuditRunState runState;
     private volatile boolean autoOpen;
 
@@ -848,6 +857,16 @@ public class QueryAuditExtension
         Path outputDirectory,
         ReportFormat reportFormat,
         AuditRunState runState) {
+      this(extension, outputDirectory, reportFormat, runState, ReportRedaction.REDACTED);
+    }
+
+    ReportFinalizer(
+        QueryAuditExtension extension,
+        Path outputDirectory,
+        ReportFormat reportFormat,
+        AuditRunState runState,
+        ReportRedaction reportRedaction) {
+      this.reportRedaction = reportRedaction;
       this.extension = extension;
       this.outputDirectory = outputDirectory.toAbsolutePath().normalize();
       this.reportFormat = reportFormat;
@@ -855,6 +874,16 @@ public class QueryAuditExtension
     }
 
     void requireConfiguration(Path requestedDirectory, ReportFormat requestedFormat) {
+      requireConfiguration(requestedDirectory, requestedFormat, ReportRedaction.REDACTED);
+    }
+
+    void requireConfiguration(
+        Path requestedDirectory, ReportFormat requestedFormat, ReportRedaction requestedRedaction) {
+      if (reportRedaction != requestedRedaction) {
+        throw new ExtensionConfigurationException(
+            "QueryAudit: conflicting report redaction modes in the same test run. "
+                + "Use one query-audit.report.redaction value for all active test contexts.");
+      }
       Path normalizedRequest = requestedDirectory.toAbsolutePath().normalize();
       if (!outputDirectory.equals(normalizedRequest)) {
         throw new ExtensionConfigurationException(
@@ -904,7 +933,7 @@ public class QueryAuditExtension
           case CONSOLE -> {
             // Per-test output and the suite summary are already on stdout.
           }
-          case JSON -> extension.writeJsonReport(runResult, outputDirectory);
+          case JSON -> extension.writeJsonReport(runResult, outputDirectory, reportRedaction);
           case HTML -> {
             aggregator.writeReport(outputDirectory);
             System.out.println("[QueryAudit] file://" + reportPath.toAbsolutePath());
@@ -1196,7 +1225,8 @@ public class QueryAuditExtension
       throw new AuditCheckFailure(
           String.format(
               "QueryAudit: %s executed %d queries, expected at most %d.\n"
-                  + "Tip: Check the Query Patterns section in the report above to identify which queries to optimize.",
+                  + "Tip: Check the Query Patterns section in the report above to identify which"
+                  + " queries to optimize.",
               testName, actual, max));
     }
   }
@@ -1510,6 +1540,11 @@ public class QueryAuditExtension
       builder.reportFormat(ReportFormat.parse(reportFormat));
     }
 
+    String reportRedaction = System.getProperty("queryAudit.reportRedaction");
+    if (reportRedaction != null) {
+      builder.reportRedaction(ReportRedaction.parse(reportRedaction));
+    }
+
     // Wire return type resolver if available
     RepositoryReturnTypeResolver resolver = getReturnTypeResolver(context);
     if (resolver != null) {
@@ -1642,13 +1677,20 @@ public class QueryAuditExtension
   // ── JSON report ───────────────────────────────────────────────────
 
   void writeJsonReport(AuditRunResult runResult, Path outputDir) throws IOException {
+    writeJsonReport(runResult, outputDir, ReportRedaction.REDACTED);
+  }
+
+  void writeJsonReport(AuditRunResult runResult, Path outputDir, ReportRedaction redaction)
+      throws IOException {
     Path jsonPath = outputDir.resolve("report.json");
     Path temporaryPath = null;
     try {
       Files.createDirectories(outputDir);
       temporaryPath = Files.createTempFile(outputDir, ".report-", ".json.tmp");
       Files.writeString(
-          temporaryPath, JsonReporter.toRunEnvelopeJson(runResult), StandardCharsets.UTF_8);
+          temporaryPath,
+          JsonReporter.toRunEnvelopeJson(runResult, redaction),
+          StandardCharsets.UTF_8);
       moveJsonReportFile(temporaryPath, jsonPath);
       temporaryPath = null;
     } catch (IOException | RuntimeException failure) {

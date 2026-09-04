@@ -2,6 +2,7 @@ package io.queryaudit.core.reporter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.AuditIncompleteReason;
 import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.model.AuditRunResult;
@@ -26,7 +27,7 @@ class JsonReporterTest {
   // ------------------------------------------------------------------
 
   private String generateJson(QueryAuditReport report) {
-    JsonReporter reporter = new JsonReporter();
+    JsonReporter reporter = new JsonReporter(ReportRedaction.FULL);
     reporter.report(report);
     String json = reporter.getJson();
     assertThat(json).isNotNull();

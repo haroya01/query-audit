@@ -2,6 +2,7 @@ package io.queryaudit.core.reporter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
@@ -44,7 +45,8 @@ class GitHubActionsReporterTest {
   @Test
   @DisplayName("emits ::error / ::warning / ::notice per severity bucket")
   void emitsOneLinePerIssueAtCorrectLevel() {
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, null, ReportRedaction.FULL);
     Issue err = issue(IssueType.N_PLUS_ONE, Severity.ERROR, "N+1 hit", null);
     Issue warn = issue(IssueType.OR_ABUSE, Severity.WARNING, "too many ORs", null);
     Issue info = issue(IssueType.SELECT_ALL, Severity.INFO, "SELECT *", null);
@@ -63,7 +65,8 @@ class GitHubActionsReporterTest {
   @Test
   @DisplayName("parses sourceLocation into file=/line= when it matches FQCN.method:line")
   void parsesSourceLocationWhenWellFormed() {
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, null, ReportRedaction.FULL);
     Issue i =
         issue(
             IssueType.MISSING_WHERE_INDEX,
@@ -81,7 +84,8 @@ class GitHubActionsReporterTest {
   @Test
   @DisplayName("omits file=/line= when sourceLocation is null or malformed")
   void skipsFileLineWhenSourceLocationMissing() {
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, null, ReportRedaction.FULL);
     reporter.report(
         reportOf(List.of(issue(IssueType.N_PLUS_ONE, Severity.ERROR, "no loc", null)), List.of()));
     reporter.report(
@@ -97,7 +101,8 @@ class GitHubActionsReporterTest {
   @Test
   @DisplayName("escapes %, newline, carriage return in the body")
   void escapesPercentAndNewlinesInBody() {
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, null, ReportRedaction.FULL);
     Issue i = issue(IssueType.N_PLUS_ONE, Severity.ERROR, "100% broken\nline two", null);
 
     reporter.report(reportOf(List.of(i), List.of()));
@@ -111,7 +116,8 @@ class GitHubActionsReporterTest {
   @DisplayName("appends a Markdown summary to $GITHUB_STEP_SUMMARY when the path is provided")
   void writesMarkdownSummaryWhenPathProvided() throws Exception {
     Path summary = tempDir.resolve("summary.md");
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, summary);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, summary, ReportRedaction.FULL);
 
     reporter.report(
         reportOf(
@@ -146,7 +152,8 @@ class GitHubActionsReporterTest {
   @Test
   @DisplayName("empty issue lists produce no stdout output")
   void emptyReportProducesNoOutput() {
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, null, ReportRedaction.FULL);
     reporter.report(reportOf(List.of(), List.of()));
     assertThat(stdout.toString()).isEmpty();
   }
@@ -154,7 +161,8 @@ class GitHubActionsReporterTest {
   @Test
   @DisplayName("null report is tolerated and produces no output")
   void nullReportIsNoOp() {
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, null, ReportRedaction.FULL);
     reporter.report(null);
     assertThat(stdout.toString()).isEmpty();
   }
@@ -163,7 +171,8 @@ class GitHubActionsReporterTest {
   @DisplayName("multiple report() calls append to the same summary file")
   void summaryFileIsAppendedNotOverwritten() throws Exception {
     Path summary = tempDir.resolve("summary.md");
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, summary);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, summary, ReportRedaction.FULL);
 
     reporter.report(
         reportOf(List.of(issue(IssueType.N_PLUS_ONE, Severity.ERROR, "first", null)), List.of()));
@@ -179,7 +188,8 @@ class GitHubActionsReporterTest {
   @Test
   @DisplayName("issue with null detail falls back to the IssueType description")
   void nullDetailUsesTypeDescription() {
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, null, ReportRedaction.FULL);
     Issue i =
         new Issue(IssueType.CARTESIAN_JOIN, Severity.ERROR, "sql", "t", null, null, null, null);
 
@@ -191,7 +201,8 @@ class GitHubActionsReporterTest {
   @Test
   @DisplayName("commas in property values are percent-encoded but bodies keep them")
   void commaEncodingDistinguishesPropertyFromBody() {
-    GitHubActionsReporter reporter = new GitHubActionsReporter(stdoutPrinter, null);
+    GitHubActionsReporter reporter =
+        new GitHubActionsReporter(stdoutPrinter, null, ReportRedaction.FULL);
     // The Issue detail contains a comma; this is the body part and should NOT be encoded.
     Issue i = issue(IssueType.N_PLUS_ONE, Severity.ERROR, "a, b, c", null);
 

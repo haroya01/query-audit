@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.AuditRunResult;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
@@ -64,7 +65,13 @@ class ReportInfoVisibilityTest {
     Path htmlDir = tempDir.resolve(settingName.replace(' ', '-'));
     aggregator.writeReport(htmlDir);
     String html = Files.readString(htmlDir.resolve("VisibilityTest.html"));
-    String json = JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(aggregator.getReports()));
+    String json =
+        JsonReporter.toRunEnvelopeJson(
+            AuditRunResult.pass(aggregator.getReports()), ReportRedaction.FULL);
+    String redactedJson =
+        JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(aggregator.getReports()));
+    assertVisibleFindingCounts(console, html, redactedJson, expectInfo);
+    assertThat(redactedJson).doesNotContain(INFO_MARKER, CONFIRMED_MARKER);
 
     assertVisibleFindingCounts(console, html, json, expectInfo);
     assertMarkerVisibility(console, html, json, INFO_MARKER, expectInfo);

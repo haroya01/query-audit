@@ -1,5 +1,6 @@
 package io.queryaudit.core.reporter;
 
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.AuditIncompleteReason;
 import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.model.AuditRunResult;
@@ -89,7 +90,8 @@ public final class ReportComparator {
   private record Envelope(
       AuditOutcome outcome,
       List<AuditIncompleteReason> incompleteReasons,
-      List<ParsedReport> reports) {}
+      List<ParsedReport> reports,
+      ReportRedaction redaction) {}
 
   /** The comparison result; incomplete comparisons cannot produce a trustworthy success signal. */
   public record Verdict(
@@ -180,6 +182,13 @@ public final class ReportComparator {
           new AuditIncompleteReason(IncompleteReasonCode.UNSUPPORTED_SCHEMA, e.getMessage()));
     }
 
+    if (beforeEnvelope.redaction() != afterEnvelope.redaction()) {
+      return inconclusiveVerdict(
+          new AuditIncompleteReason(
+              IncompleteReasonCode.REPORT_REDACTION_MISMATCH,
+              "Reports use different redaction modes; regenerate both reports with the same mode"));
+    }
+
     List<ParsedReport> beforeReports = beforeEnvelope.reports();
     List<ParsedReport> afterReports = afterEnvelope.reports();
     Map<ParsedReport, String> beforeIdentities = comparisonIdentities(beforeReports, afterReports);
@@ -258,17 +267,24 @@ public final class ReportComparator {
 
   /** Renders the verdict as JSON (the {@code verdict.json} contract). */
   public static String toJson(Verdict verdict) {
+    return toJson(verdict, ReportRedaction.REDACTED);
+  }
+
+  /** Full diagnostic details require an explicit opt-in, including for legacy input reports. */
+  public static String toJson(Verdict verdict, ReportRedaction redaction) {
+    ReportRedactor redactor = new ReportRedactor(redaction);
     StringBuilder sb = new StringBuilder();
     sb.append("{\n");
+    sb.append("  \"redaction\": \"").append(redaction).append("\",\n");
     sb.append("  \"outcome\": \"").append(verdict.outcome()).append("\",\n");
     sb.append("  \"incompleteReasons\": ");
-    appendIncompleteReasons(sb, verdict.incompleteReasons());
+    appendIncompleteReasons(sb, verdict.incompleteReasons(), redactor);
     sb.append(",\n  \"newFindings\": ");
-    appendFindings(sb, verdict.newFindings());
+    appendFindings(sb, verdict.newFindings(), redactor);
     sb.append(",\n  \"resolved\": ");
-    appendFindings(sb, verdict.resolved());
+    appendFindings(sb, verdict.resolved(), redactor);
     sb.append(",\n  \"persisting\": ");
-    appendFindings(sb, verdict.persisting());
+    appendFindings(sb, verdict.persisting(), redactor);
     sb.append(",\n  \"complete\": ").append(verdict.complete());
     sb.append(",\n  \"missingTests\": ");
     appendTests(sb, verdict.missingTests());
@@ -384,6 +400,7 @@ public final class ReportComparator {
       throw invalidEnvelope("expected a JSON object");
     }
     SchemaVersion schemaVersion = requireSupportedSchemaVersion(envelope);
+    ReportRedaction redaction = requireRedaction(envelope, schemaVersion);
     boolean stableIdentityRequired = schemaVersion.minor() >= FIRST_STABLE_IDENTITY_SCHEMA_MINOR;
     if (!(envelope.get("reports") instanceof List<?> entries)) {
       throw invalidEnvelope("reports must be an array");
@@ -412,7 +429,8 @@ public final class ReportComparator {
               new AuditIncompleteReason(
                   IncompleteReasonCode.UNSUPPORTED_SCHEMA,
                   "schemaVersion " + schemaVersion.text() + " does not declare a run outcome")),
-          reports);
+          reports,
+          redaction);
     }
 
     AuditOutcome outcome;
@@ -425,13 +443,29 @@ public final class ReportComparator {
           AuditOutcome.INCONCLUSIVE,
           List.of(
               new AuditIncompleteReason(IncompleteReasonCode.UNSUPPORTED_SCHEMA, e.getMessage())),
-          reports);
+          reports,
+          redaction);
     }
     try {
       AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
-      return new Envelope(validated.outcome(), validated.incompleteReasons(), reports);
+      return new Envelope(validated.outcome(), validated.incompleteReasons(), reports, redaction);
     } catch (IllegalArgumentException e) {
       throw invalidEnvelope("outcome and incompleteReasons are inconsistent: " + e.getMessage());
+    }
+  }
+
+  private static ReportRedaction requireRedaction(Map<?, ?> envelope, SchemaVersion version) {
+    if (!envelope.containsKey("redaction") && version.minor() < 4) {
+      return ReportRedaction.FULL;
+    }
+    Object value = requireField(envelope, "redaction", "envelope");
+    if (!(value instanceof String mode)) {
+      throw invalidEnvelope("envelope.redaction must be a string");
+    }
+    try {
+      return ReportRedaction.valueOf(mode);
+    } catch (IllegalArgumentException e) {
+      throw unsupportedEvolution("unknown report redaction mode");
     }
   }
 
@@ -760,7 +794,7 @@ public final class ReportComparator {
   // ── Rendering helpers ──────────────────────────────────────────────
 
   private static void appendIncompleteReasons(
-      StringBuilder sb, List<AuditIncompleteReason> reasons) {
+      StringBuilder sb, List<AuditIncompleteReason> reasons, ReportRedactor redactor) {
     if (reasons.isEmpty()) {
       sb.append("[]");
       return;
@@ -769,7 +803,7 @@ public final class ReportComparator {
     for (int i = 0; i < reasons.size(); i++) {
       AuditIncompleteReason reason = reasons.get(i);
       sb.append("    {\"code\": \"").append(reason.code()).append("\", \"detail\": ");
-      appendString(sb, reason.detail());
+      appendString(sb, redactor.diagnostic(reason.detail()));
       sb.append("}");
       if (i < reasons.size() - 1) {
         sb.append(",");
@@ -779,7 +813,8 @@ public final class ReportComparator {
     sb.append("  ]");
   }
 
-  private static void appendFindings(StringBuilder sb, List<Finding> findings) {
+  private static void appendFindings(
+      StringBuilder sb, List<Finding> findings, ReportRedactor redactor) {
     if (findings.isEmpty()) {
       sb.append("[]");
       return;
@@ -795,10 +830,14 @@ public final class ReportComparator {
           .append(JsonReporter.escapeJson(f.type()))
           .append("\"");
       if (f.table() != null) {
-        sb.append(", \"table\": \"").append(JsonReporter.escapeJson(f.table())).append("\"");
+        sb.append(", \"table\": \"")
+            .append(JsonReporter.escapeJson(redactor.sql(f.table())))
+            .append("\"");
       }
       if (f.detail() != null) {
-        sb.append(", \"detail\": \"").append(JsonReporter.escapeJson(f.detail())).append("\"");
+        sb.append(", \"detail\": \"")
+            .append(JsonReporter.escapeJson(redactor.diagnostic(f.detail())))
+            .append("\"");
       }
       sb.append("}");
       if (i < findings.size() - 1) {
