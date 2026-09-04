@@ -1,5 +1,6 @@
 package io.queryaudit.postgresql;
 
+import io.queryaudit.core.analyzer.ExplainAnalysisException;
 import io.queryaudit.core.analyzer.ExplainAnalyzer;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
@@ -9,6 +10,7 @@ import io.queryaudit.core.parser.SqlParser;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -50,14 +52,20 @@ public class PostgreSqlExplainAnalyzer implements ExplainAnalyzer {
       if (!SqlParser.isSelectQuery(sql)) {
         continue;
       }
-      if (!analyzed.add(query.normalizedSql())) {
+      if (sql.indexOf('?') >= 0) {
+        throw new ExplainAnalysisException(
+            ExplainAnalysisException.Reason.UNSUPPORTED_PARAMETERS,
+            issues,
+            new SQLFeatureNotSupportedException("Captured bind values and types are unavailable"));
+      }
+      if (!analyzed.add(sql)) {
         continue;
       }
 
       try {
         String jsonOutput = runExplain(connection, sql);
-        if (jsonOutput == null) {
-          continue;
+        if (jsonOutput == null || jsonOutput.isBlank()) {
+          throw new SQLException("EXPLAIN returned no query plan");
         }
 
         // Parse the JSON output with simple string matching.
@@ -105,29 +113,16 @@ public class PostgreSqlExplainAnalyzer implements ExplainAnalyzer {
                   "EXPLAIN shows materialization/hash node — temporary data structure used",
                   "Consider rewriting the query to avoid temporary table usage."));
         }
-      } catch (Exception e) {
-        // Skip queries that can't be EXPLAINed
+      } catch (Exception failure) {
+        throw new ExplainAnalysisException(issues, failure);
       }
     }
     return issues;
   }
 
-  /**
-   * Replaces {@code ?} parameter placeholders with safe dummy values so that the SQL can be
-   * executed as a plain {@code EXPLAIN} statement. datasource-proxy captures SQL with {@code ?}
-   * placeholders which are invalid in a non-PreparedStatement context.
-   *
-   * <p>Using {@code 1} is safe because EXPLAIN only plans the query without executing it, and
-   * PostgreSQL uses table statistics rather than actual parameter values to choose the plan.
-   */
-  static String prepareForExplain(String sql) {
-    return sql.replaceAll("\\?", "1");
-  }
-
   String runExplain(Connection conn, String sql) throws SQLException {
-    String explainSql = prepareForExplain(sql);
     try (Statement stmt = conn.createStatement();
-        ResultSet rs = stmt.executeQuery("EXPLAIN (FORMAT JSON) " + explainSql)) {
+        ResultSet rs = stmt.executeQuery("EXPLAIN (FORMAT JSON) " + sql)) {
       if (rs.next()) {
         return rs.getString(1);
       }

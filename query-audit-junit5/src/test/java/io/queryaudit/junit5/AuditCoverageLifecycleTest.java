@@ -84,6 +84,7 @@ class AuditCoverageLifecycleTest {
 
     assertThat(summary.getTestsSucceededCount()).isEqualTo(1);
     assertReport("PASS", 1, 1, 0, 1, 0);
+    assertThat(report()).contains("\"comparisonInputs\": {", "\"profile\":\"recommended\"");
   }
 
   @Test

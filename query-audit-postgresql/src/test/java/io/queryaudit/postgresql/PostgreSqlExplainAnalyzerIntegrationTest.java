@@ -1,7 +1,9 @@
 package io.queryaudit.postgresql;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.queryaudit.core.analyzer.ExplainAnalysisException;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
@@ -14,6 +16,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -55,33 +59,58 @@ class PostgreSqlExplainAnalyzerIntegrationTest {
     }
   }
 
-  @Test
-  @DisplayName("EXPLAIN works with single ? placeholder in parameterized SQL")
-  void explainWorksWithSinglePlaceholder() throws SQLException {
-    try (Connection conn = getConnection()) {
-      List<QueryRecord> queries =
-          List.of(new QueryRecord("SELECT * FROM users WHERE id = ?", 0L, 0L, null));
-
-      // Should NOT throw — the ? is replaced with 1 before EXPLAIN
-      List<Issue> issues = analyzer.analyze(conn, queries);
-
-      assertThat(issues).isNotNull();
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "SELECT * FROM users WHERE id = ?",
+        "SELECT * FROM orders WHERE user_id = ? AND status = ?",
+        "SELECT '?' FROM users"
+      })
+  void unsupportedQuestionMarksDoNotBecomeInventedPlans(String sql) throws SQLException {
+    try (Connection connection = getConnection()) {
+      assertThatThrownBy(
+              () -> analyzer.analyze(connection, List.of(new QueryRecord(sql, 0L, 0L, null))))
+          .isInstanceOfSatisfying(
+              ExplainAnalysisException.class,
+              failure -> {
+                assertThat(failure.getReason())
+                    .isEqualTo(ExplainAnalysisException.Reason.UNSUPPORTED_PARAMETERS);
+                assertThat(failure.getCompletedIssues()).isEmpty();
+                assertThat(failure)
+                    .hasCauseInstanceOf(java.sql.SQLFeatureNotSupportedException.class);
+              });
     }
   }
 
   @Test
-  @DisplayName("EXPLAIN works with multiple ? placeholders")
-  void explainWorksWithMultiplePlaceholders() throws SQLException {
-    try (Connection conn = getConnection()) {
+  void literalValuesCanBeExplainedWithoutRewriting() throws SQLException {
+    try (Connection connection = getConnection()) {
       List<QueryRecord> queries =
           List.of(
               new QueryRecord(
-                  "SELECT * FROM orders WHERE user_id = ? AND status = ?", 0L, 0L, null));
+                  "SELECT * FROM orders WHERE user_id = 1 AND status = 'active'", 0L, 0L, null));
 
-      // Should NOT throw
-      List<Issue> issues = analyzer.analyze(conn, queries);
+      assertThat(analyzer.analyze(connection, queries)).isNotNull();
+    }
+  }
 
-      assertThat(issues).isNotNull();
+  @Test
+  void failedTypeResolutionRetainsThePostgresCause() throws SQLException {
+    try (Connection connection = getConnection()) {
+      List<QueryRecord> queries =
+          List.of(new QueryRecord("SELECT * FROM orders WHERE status = 1", 0L, 0L, null));
+
+      assertThatThrownBy(() -> analyzer.analyze(connection, queries))
+          .isInstanceOfSatisfying(
+              ExplainAnalysisException.class,
+              failure -> {
+                assertThat(failure.getReason())
+                    .isEqualTo(ExplainAnalysisException.Reason.EXECUTION_FAILED);
+                assertThat(failure.getCause()).isInstanceOf(SQLException.class);
+                assertThat(((SQLException) failure.getCause()).getSQLState()).isEqualTo("42883");
+                assertThat(failure.getCause()).hasMessageContaining("character varying = integer");
+                assertThat(failure).hasMessage("EXPLAIN analysis did not complete");
+              });
     }
   }
 

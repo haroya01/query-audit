@@ -31,7 +31,14 @@ class AuditRunSchemaContractTest {
     Map<?, ?> schema = readSchema();
 
     assertThat(((List<?>) schema.get("required")).stream().map(String.class::cast).toList())
-        .contains("schemaVersion", "outcome", "incompleteReasons", "redaction", "reports", "coverage");
+        .contains(
+            "schemaVersion",
+            "outcome",
+            "incompleteReasons",
+            "redaction",
+            "reports",
+            "coverage",
+            "comparisonInputs");
   }
 
   @Test

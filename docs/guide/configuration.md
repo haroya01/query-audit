@@ -176,7 +176,9 @@ after changing profiles; reports produced with different active rules are not eq
 
 The JUnit console report shows the effective profile for each test. Spring startup logs show
 the configured profile; a test JVM override, if present, appears in the JUnit output. JSON
-schema 1.2 does not contain profile metadata, so retain the configuration with saved reports.
+schema 1.6 records the effective profile in each test's `comparisonInputs` entry. The comparator
+rejects profile differences; see [Comparison inputs](comparison-inputs.md) before replacing a
+saved baseline.
 
 ---
 

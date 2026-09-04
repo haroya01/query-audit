@@ -1,9 +1,11 @@
 package io.queryaudit.postgresql;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.*;
 
+import io.queryaudit.core.analyzer.ExplainAnalysisException;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
@@ -17,6 +19,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
@@ -143,7 +147,7 @@ class PostgreSqlExplainAnalyzerTest {
     }
 
     @Test
-    @DisplayName("deduplicates by normalized SQL")
+    @DisplayName("deduplicates identical captured SQL")
     void deduplicates() throws SQLException {
       String json =
           """
@@ -154,7 +158,7 @@ class PostgreSqlExplainAnalyzerTest {
       List<QueryRecord> queries =
           List.of(
               new QueryRecord("SELECT * FROM users WHERE id = 1", 0L, 0L, null),
-              new QueryRecord("SELECT * FROM users WHERE id = 2", 0L, 0L, null));
+              new QueryRecord("SELECT * FROM users WHERE id = 1", 0L, 0L, null));
 
       List<Issue> issues = analyzer.analyze(connection, queries);
 
@@ -163,67 +167,66 @@ class PostgreSqlExplainAnalyzerTest {
     }
   }
 
+  @Test
+  void differentLiteralValuesAreExplainedSeparately() throws SQLException {
+    mockExplainResult(
+        "[{\"Plan\": {\"Node Type\": \"Seq Scan\", \"Relation Name\": \"users\", \"Plan Rows\": 100}}]");
+    List<QueryRecord> queries =
+        List.of(
+            new QueryRecord("SELECT * FROM users WHERE id = 1", 0L, 0L, null),
+            new QueryRecord("SELECT * FROM users WHERE id = 2", 0L, 0L, null));
+
+    analyzer.analyze(connection, queries);
+
+    verify(statement).executeQuery("EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE id = 1");
+    verify(statement).executeQuery("EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE id = 2");
+  }
+
   @Nested
-  @DisplayName("Placeholder replacement for EXPLAIN")
-  class PlaceholderReplacementTests {
+  @DisplayName("EXPLAIN input safety")
+  class InputSafetyTests {
 
-    @Test
-    @DisplayName("replaces single ? placeholder with dummy value")
-    void replacesSinglePlaceholder() {
-      String result =
-          PostgreSqlExplainAnalyzer.prepareForExplain("SELECT * FROM users WHERE id = ?");
-      assertThat(result).isEqualTo("SELECT * FROM users WHERE id = 1");
+    @ParameterizedTest
+    @ValueSource(
+        strings = {
+          "SELECT * FROM users WHERE id = ?",
+          "SELECT * FROM users WHERE a = ? AND b = ?",
+          "SELECT '?' FROM users",
+          "SELECT * FROM users WHERE payload ? 'active'",
+          "SELECT * FROM users /* ? */"
+        })
+    void rejectsQuestionMarksWithoutExecutingChangedSql(String sql) {
+      assertThatThrownBy(
+              () -> analyzer.analyze(connection, List.of(new QueryRecord(sql, 0L, 0L, null))))
+          .isInstanceOfSatisfying(
+              ExplainAnalysisException.class,
+              failure -> {
+                assertThat(failure.getReason())
+                    .isEqualTo(ExplainAnalysisException.Reason.UNSUPPORTED_PARAMETERS);
+                assertThat(failure.getCompletedIssues()).isEmpty();
+                assertThat(failure).hasMessageContaining("bind values and types are unavailable");
+              });
+      verifyNoInteractions(connection);
     }
 
     @Test
-    @DisplayName("replaces multiple ? placeholders")
-    void replacesMultiplePlaceholders() {
-      String result =
-          PostgreSqlExplainAnalyzer.prepareForExplain("SELECT * FROM users WHERE a = ? AND b = ?");
-      assertThat(result).isEqualTo("SELECT * FROM users WHERE a = 1 AND b = 1");
-    }
-
-    @Test
-    @DisplayName("returns SQL unchanged when no placeholders")
-    void noPlaceholdersUnchanged() {
-      String sql = "SELECT * FROM users WHERE id = 42";
-      String result = PostgreSqlExplainAnalyzer.prepareForExplain(sql);
-      assertThat(result).isEqualTo(sql);
-    }
-
-    @Test
-    @DisplayName("EXPLAIN succeeds with parameterized SQL after replacement")
-    void explainSucceedsWithParameterizedSql() throws SQLException {
-      String json =
-          """
-          [{"Plan": {"Node Type": "Index Scan", "Relation Name": "users", "Plan Rows": 1}}]
-          """;
-      mockExplainResult(json);
-
+    void anEarlierLiteralPlanDoesNotHideUnsupportedParameters() throws SQLException {
+      mockExplainResult(
+          "[{\"Plan\": {\"Node Type\": \"Seq Scan\", \"Relation Name\": \"users\", \"Plan Rows\": 100}}]");
       List<QueryRecord> queries =
-          List.of(new QueryRecord("SELECT * FROM users WHERE id = ?", 0L, 0L, null));
+          List.of(
+              new QueryRecord("SELECT * FROM users WHERE id = 1", 0L, 0L, null),
+              new QueryRecord("SELECT * FROM users WHERE id = ?", 0L, 0L, null));
 
-      List<Issue> issues = analyzer.analyze(connection, queries);
-
-      verify(statement).executeQuery("EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE id = 1");
-    }
-
-    @Test
-    @DisplayName("EXPLAIN succeeds with multi-placeholder SQL after replacement")
-    void explainSucceedsWithMultiPlaceholder() throws SQLException {
-      String json =
-          """
-          [{"Plan": {"Node Type": "Index Scan", "Relation Name": "users", "Plan Rows": 1}}]
-          """;
-      mockExplainResult(json);
-
-      List<QueryRecord> queries =
-          List.of(new QueryRecord("SELECT * FROM users WHERE a = ? AND b = ?", 0L, 0L, null));
-
-      List<Issue> issues = analyzer.analyze(connection, queries);
-
-      verify(statement)
-          .executeQuery("EXPLAIN (FORMAT JSON) SELECT * FROM users WHERE a = 1 AND b = 1");
+      assertThatThrownBy(() -> analyzer.analyze(connection, queries))
+          .isInstanceOfSatisfying(
+              ExplainAnalysisException.class,
+              failure -> {
+                assertThat(failure.getReason())
+                    .isEqualTo(ExplainAnalysisException.Reason.UNSUPPORTED_PARAMETERS);
+                assertThat(failure.getCompletedIssues()).hasSize(1);
+              });
+      verify(statement, times(1)).executeQuery(startsWith("EXPLAIN"));
     }
   }
 
@@ -261,6 +264,39 @@ class PostgreSqlExplainAnalyzerTest {
     void returnsZeroWhenNotFound() {
       assertThat(PostgreSqlExplainAnalyzer.extractJsonLong("{}", "missing")).isEqualTo(0L);
     }
+  }
+
+  @Test
+  void aLaterFailureRetainsCompletedFindingsAndTheOriginalCause() throws SQLException {
+    mockExplainResult("[{\"Plan\": {\"Node Type\": \"Seq Scan\", \"Relation Name\": \"users\"}}]");
+    SQLException failure = new SQLException("private SQL and connection details");
+    when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet).thenThrow(failure);
+    List<QueryRecord> queries =
+        List.of(
+            new QueryRecord("SELECT * FROM users", 0L, 0L, null),
+            new QueryRecord("SELECT * FROM orders", 0L, 0L, null));
+
+    assertThatThrownBy(() -> analyzer.analyze(connection, queries))
+        .isInstanceOfSatisfying(
+            ExplainAnalysisException.class,
+            incomplete -> {
+              assertThat(incomplete.getCause()).isSameAs(failure);
+              assertThat(incomplete.getMessage()).doesNotContain("private SQL");
+              assertThat(incomplete.getCompletedIssues())
+                  .extracting(Issue::type)
+                  .containsExactly(IssueType.FULL_TABLE_SCAN);
+            });
+  }
+
+  @Test
+  void anEmptyExplainResponseIsIncomplete() throws SQLException {
+    when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
+    when(resultSet.next()).thenReturn(false);
+    assertThatThrownBy(
+            () ->
+                analyzer.analyze(
+                    connection, List.of(new QueryRecord("SELECT * FROM users", 0L, 0L, null))))
+        .isInstanceOf(ExplainAnalysisException.class);
   }
 
   private void mockExplainResult(String jsonOutput) throws SQLException {

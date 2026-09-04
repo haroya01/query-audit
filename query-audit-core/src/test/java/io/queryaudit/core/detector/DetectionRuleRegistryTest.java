@@ -21,6 +21,21 @@ class DetectionRuleRegistryTest {
   private static final IndexMetadata EMPTY_INDEX = new IndexMetadata(Map.of());
 
   @Test
+  void onlyRegistryConstructedRulesHaveKnownConfigurationInputs() {
+    QueryAuditConfig config =
+        QueryAuditConfig.builder().addDisabledRule("service-loader-detection-rule").build();
+    assertThat(new QueryAuditAnalyzer(config, List.of()).hasCompleteRuleInputs()).isTrue();
+    assertThat(
+            new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of()).hasCompleteRuleInputs())
+        .isFalse();
+    for (int threshold : List.of(1, 99)) {
+      QueryAuditAnalyzer analyzer =
+          new QueryAuditAnalyzer(config, List.of(), List.of(new TooManyJoinsDetector(threshold)));
+      assertThat(analyzer.hasCompleteRuleInputs()).isFalse();
+    }
+  }
+
+  @Test
   void registersBuiltInDiscoveredAndAdditionalRulesInOrder() {
     DetectionRule firstAdditionalRule = new NoOpRule();
     DetectionRule secondAdditionalRule = new NoOpRule();

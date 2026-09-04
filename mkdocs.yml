@@ -92,6 +92,7 @@ nav:
     - Annotations: guide/annotations.md
     - Configuration: guide/configuration.md
     - Reports: guide/reports.md
+    - Comparison inputs: guide/comparison-inputs.md
     - Suppressing Issues: guide/suppressing.md
     - Query Contracts: guide/contracts.md
     - Audit Coverage: guide/audit-coverage.md

@@ -40,5 +40,17 @@ public enum IncompleteReasonCode {
   REPORT_REDACTION_MISMATCH,
 
   /** A report input used an unsupported schema version. */
-  UNSUPPORTED_SCHEMA
+  UNSUPPORTED_SCHEMA,
+
+  /** An enabled source of audit evidence could not initialize. */
+  CAPABILITY_INITIALIZATION_FAILED,
+
+  /** An available source of audit evidence failed during analysis. */
+  CAPABILITY_EXECUTION_FAILED,
+
+  /** The effective audit inputs could not be identified for a safe comparison. */
+  COMPARISON_INPUTS_UNAVAILABLE,
+
+  /** The compared runs used inputs that can change audit findings. */
+  INCOMPATIBLE_AUDIT_INPUTS
 }

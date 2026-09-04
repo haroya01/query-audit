@@ -27,6 +27,7 @@ import java.util.Set;
 public class QueryAuditAnalyzer {
 
   private final List<DetectionRule> rules;
+  private final boolean ruleInputsComplete;
   private final QueryAuditConfig config;
   private final List<BaselineEntry> baseline;
 
@@ -43,7 +44,10 @@ public class QueryAuditAnalyzer {
    */
   public QueryAuditAnalyzer(QueryAuditConfig config, Path baselinePath) {
     this.config = config;
-    this.rules = new DetectionRuleRegistry(config).createRules();
+    DetectionRuleRegistry.RuleSet registered =
+        new DetectionRuleRegistry(config).createRuleSet(null);
+    this.rules = registered.rules();
+    this.ruleInputsComplete = registered.inputsComplete();
 
     // Load baseline
     if (baselinePath != null) {
@@ -61,7 +65,10 @@ public class QueryAuditAnalyzer {
    */
   public QueryAuditAnalyzer(QueryAuditConfig config, List<BaselineEntry> baseline) {
     this.config = config;
-    this.rules = new DetectionRuleRegistry(config).createRules();
+    DetectionRuleRegistry.RuleSet registered =
+        new DetectionRuleRegistry(config).createRuleSet(null);
+    this.rules = registered.rules();
+    this.ruleInputsComplete = registered.inputsComplete();
     this.baseline = baseline != null ? baseline : List.of();
   }
 
@@ -76,7 +83,10 @@ public class QueryAuditAnalyzer {
   public QueryAuditAnalyzer(
       QueryAuditConfig config, Path baselinePath, List<DetectionRule> additionalRules) {
     this.config = config;
-    this.rules = new DetectionRuleRegistry(config).createRules(additionalRules);
+    DetectionRuleRegistry.RuleSet registered =
+        new DetectionRuleRegistry(config).createRuleSet(additionalRules);
+    this.rules = registered.rules();
+    this.ruleInputsComplete = registered.inputsComplete();
 
     if (baselinePath != null) {
       this.baseline = Baseline.load(baselinePath);
@@ -96,7 +106,10 @@ public class QueryAuditAnalyzer {
   public QueryAuditAnalyzer(
       QueryAuditConfig config, List<BaselineEntry> baseline, List<DetectionRule> additionalRules) {
     this.config = config;
-    this.rules = new DetectionRuleRegistry(config).createRules(additionalRules);
+    DetectionRuleRegistry.RuleSet registered =
+        new DetectionRuleRegistry(config).createRuleSet(additionalRules);
+    this.rules = registered.rules();
+    this.ruleInputsComplete = registered.inputsComplete();
     this.baseline = baseline != null ? baseline : List.of();
   }
 
@@ -281,6 +294,11 @@ public class QueryAuditAnalyzer {
 
   public List<DetectionRule> getRules() {
     return List.copyOf(rules);
+  }
+
+  /** Whether every active rule was constructed from the fingerprinted core configuration. */
+  public boolean hasCompleteRuleInputs() {
+    return ruleInputsComplete;
   }
 
   public List<BaselineEntry> getBaseline() {

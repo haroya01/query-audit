@@ -8,6 +8,12 @@ import java.util.ServiceLoader;
 /** Builds the ordered set of detection rules used by an analyzer. */
 final class DetectionRuleRegistry {
 
+  record RuleSet(List<DetectionRule> rules, boolean inputsComplete) {
+    RuleSet {
+      rules = List.copyOf(rules);
+    }
+  }
+
   private final QueryAuditConfig config;
 
   DetectionRuleRegistry(QueryAuditConfig config) {
@@ -19,14 +25,23 @@ final class DetectionRuleRegistry {
   }
 
   List<DetectionRule> createRules(List<DetectionRule> additionalRules) {
-    List<DetectionRule> rules = createBuiltInRules();
-    ServiceLoader.load(DetectionRule.class).forEach(rules::add);
-    rules.removeIf(this::isRuleDisabled);
+    return createRuleSet(additionalRules).rules();
+  }
 
-    if (additionalRules != null) {
+  RuleSet createRuleSet(List<DetectionRule> additionalRules) {
+    List<DetectionRule> rules = createBuiltInRules();
+    rules.removeIf(this::isRuleDisabled);
+    List<DetectionRule> discovered = new ArrayList<>();
+    ServiceLoader.load(DetectionRule.class).forEach(discovered::add);
+    discovered.removeIf(this::isRuleDisabled);
+    rules.addAll(discovered);
+
+    boolean inputsComplete = discovered.isEmpty();
+    if (additionalRules != null && !additionalRules.isEmpty()) {
       rules.addAll(additionalRules);
+      inputsComplete = false;
     }
-    return rules;
+    return new RuleSet(rules, inputsComplete);
   }
 
   private List<DetectionRule> createBuiltInRules() {

@@ -22,6 +22,8 @@ public interface ExplainAnalyzer {
    * @param connection live JDBC connection to the test database
    * @param queries captured queries from the test execution
    * @return list of issues detected via EXPLAIN analysis
+   * @throws ExplainAnalysisException if one or more selected query plans could not be read;
+   *     implementations must not silently treat a failed plan as a clean result
    */
   List<Issue> analyze(Connection connection, List<QueryRecord> queries);
 }

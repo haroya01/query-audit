@@ -57,6 +57,15 @@ class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
     this.proxyMethodReturnTypes = scanRepositories(applicationContext);
   }
 
+  static boolean isAvailable() {
+    try {
+      Class.forName("org.springframework.data.repository.Repository");
+      return true;
+    } catch (ClassNotFoundException absent) {
+      return false;
+    }
+  }
+
   @Override
   public RepositoryReturnType resolve(String stackTrace) {
     if (stackTrace == null || stackTrace.isEmpty()) {
@@ -127,8 +136,9 @@ class SpringDataReturnTypeResolver implements RepositoryReturnTypeResolver {
       for (Object bean : beans.values()) {
         scanBeanInterfaces(bean, repositoryClass, result);
       }
-    } catch (Exception | NoClassDefFoundError ignored) {
-      // Spring Data not on classpath or context not available — return empty
+    } catch (ReflectiveOperationException failure) {
+      throw new IllegalStateException(
+          "Could not discover Spring Data repository return types", failure);
     }
 
     return result;

@@ -6,6 +6,9 @@ import io.queryaudit.core.model.AuditIncompleteReason;
 import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.model.AuditRunResult;
 import io.queryaudit.core.model.IncompleteReasonCode;
+import io.queryaudit.core.provenance.ComparisonInputCompatibility;
+import io.queryaudit.core.provenance.ComparisonInputDifference;
+import io.queryaudit.core.provenance.ComparisonInputs;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -94,7 +97,8 @@ public final class ReportComparator {
       List<AuditIncompleteReason> incompleteReasons,
       List<ParsedReport> reports,
       ReportRedaction redaction,
-      AuditCoverage coverage) {}
+      AuditCoverage coverage,
+      Map<String, ComparisonInputs> comparisonInputs) {}
 
   /** The comparison result; incomplete comparisons cannot produce a trustworthy success signal. */
   public record Verdict(
@@ -108,7 +112,8 @@ public final class ReportComparator {
       List<TestRef> missingTests,
       AuditOutcome outcome,
       List<AuditIncompleteReason> incompleteReasons,
-      List<TestRef> unexpectedTests) {
+      List<TestRef> unexpectedTests,
+      List<ComparisonInputDifference> inputDifferences) {
 
     public Verdict {
       resolved = List.copyOf(resolved);
@@ -116,8 +121,37 @@ public final class ReportComparator {
       persisting = List.copyOf(persisting);
       missingTests = List.copyOf(missingTests);
       unexpectedTests = List.copyOf(unexpectedTests);
+      inputDifferences = List.copyOf(inputDifferences);
       AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
       incompleteReasons = validated.incompleteReasons();
+    }
+
+    /** Retains the coverage-aware constructor introduced before comparison input checks. */
+    public Verdict(
+        List<Finding> resolved,
+        List<Finding> newFindings,
+        List<Finding> persisting,
+        long queriesBefore,
+        long queriesAfter,
+        long executionTimeMsBefore,
+        long executionTimeMsAfter,
+        List<TestRef> missingTests,
+        AuditOutcome outcome,
+        List<AuditIncompleteReason> incompleteReasons,
+        List<TestRef> unexpectedTests) {
+      this(
+          resolved,
+          newFindings,
+          persisting,
+          queriesBefore,
+          queriesAfter,
+          executionTimeMsBefore,
+          executionTimeMsAfter,
+          missingTests,
+          outcome,
+          incompleteReasons,
+          unexpectedTests,
+          List.of());
     }
 
     /** Retains the outcome-aware constructor introduced before coverage manifests. */
@@ -249,9 +283,12 @@ public final class ReportComparator {
     boolean sameManifest =
         Objects.equals(
             expectedIds(beforeEnvelope.coverage()), expectedIds(afterEnvelope.coverage()));
+    List<ComparisonInputDifference> inputDifferences =
+        compareInputs(beforeEnvelope, afterEnvelope, beforeTests, afterTests);
 
     List<Finding> resolved =
         before.stream()
+            .filter(f -> inputDifferences.isEmpty())
             .filter(f -> sameManifest && !incompleteIds.contains(f.finding().testId()))
             .filter(f -> afterTests.containsKey(f.testIdentity()))
             .filter(f -> !afterKeys.contains(f.finding().key()))
@@ -271,6 +308,14 @@ public final class ReportComparator {
     List<AuditIncompleteReason> incompleteReasons = new ArrayList<>();
     incompleteReasons.addAll(beforeEnvelope.incompleteReasons());
     incompleteReasons.addAll(afterEnvelope.incompleteReasons());
+    if (inputDifferences.stream().anyMatch(ReportComparator::unavailableInput)) {
+      incompleteReasons.add(
+          AuditIncompleteReason.of(IncompleteReasonCode.COMPARISON_INPUTS_UNAVAILABLE));
+    }
+    if (inputDifferences.stream().anyMatch(difference -> !unavailableInput(difference))) {
+      incompleteReasons.add(
+          AuditIncompleteReason.of(IncompleteReasonCode.INCOMPATIBLE_AUDIT_INPUTS));
+    }
     if (!sameManifest) {
       incompleteReasons.add(
           new AuditIncompleteReason(
@@ -297,7 +342,54 @@ public final class ReportComparator {
         missingTests,
         comparisonResult.outcome(),
         comparisonResult.incompleteReasons(),
-        unexpectedTests);
+        unexpectedTests,
+        inputDifferences);
+  }
+
+  private static List<ComparisonInputDifference> compareInputs(
+      Envelope baseline,
+      Envelope candidate,
+      Map<String, TestRef> beforeTests,
+      Map<String, TestRef> afterTests) {
+    Set<String> identities = new LinkedHashSet<>(beforeTests.keySet());
+    identities.addAll(afterTests.keySet());
+    if (identities.isEmpty()) {
+      return List.of(new ComparisonInputDifference(null, "comparisonInputs", null, null));
+    }
+    List<ComparisonInputDifference> differences = new ArrayList<>();
+    for (String identity : identities) {
+      TestRef before = beforeTests.get(identity);
+      TestRef after = afterTests.get(identity);
+      ComparisonInputs previous =
+          before == null || before.testId() == null
+              ? null
+              : baseline.comparisonInputs().get(before.testId());
+      ComparisonInputs current =
+          after == null || after.testId() == null
+              ? null
+              : candidate.comparisonInputs().get(after.testId());
+      String testId = after != null ? after.testId() : before.testId();
+      boolean presentInBothRuns = before != null && after != null;
+      if (presentInBothRuns) {
+        differences.addAll(ComparisonInputCompatibility.compare(testId, previous, current));
+      } else {
+        ComparisonInputs present = before != null ? previous : current;
+        differences.addAll(ComparisonInputCompatibility.compare(testId, present, present));
+      }
+    }
+    return List.copyOf(differences);
+  }
+
+  private static boolean unavailableInput(ComparisonInputDifference difference) {
+    if (difference.field().equals("comparisonInputs")) {
+      return true;
+    }
+    if (difference.field().equals("detectorInputsComplete")
+        || difference.field().endsWith(".inputsComplete")) {
+      return !"true".equals(difference.baseline()) || !"true".equals(difference.candidate());
+    }
+    return difference.field().endsWith(".state")
+        && ("FAILED".equals(difference.baseline()) || "FAILED".equals(difference.candidate()));
   }
 
   private static Verdict inconclusiveVerdict(AuditIncompleteReason reason) {
@@ -339,6 +431,8 @@ public final class ReportComparator {
     appendTests(sb, verdict.missingTests());
     sb.append(",\n  \"unexpectedTests\": ");
     appendTests(sb, verdict.unexpectedTests());
+    sb.append(",\n  \"inputDifferences\": ");
+    appendInputDifferences(sb, verdict.inputDifferences());
     sb.append(",\n  \"queryCountDelta\": {\"before\": ")
         .append(verdict.queriesBefore())
         .append(", \"after\": ")
@@ -351,6 +445,59 @@ public final class ReportComparator {
         .append("}\n");
     sb.append("}");
     return sb.toString();
+  }
+
+  private static void appendInputDifferences(
+      StringBuilder json, List<ComparisonInputDifference> differences) {
+    json.append('[');
+    for (int index = 0; index < differences.size(); index++) {
+      if (index > 0) {
+        json.append(',');
+      }
+      ComparisonInputDifference difference = differences.get(index);
+      json.append("\n    {\"testId\":");
+      ComparisonInputsJson.string(json, difference.testId());
+      json.append(",\"field\":");
+      ComparisonInputsJson.string(json, difference.field());
+      json.append(",\"baseline\":");
+      ComparisonInputsJson.string(
+          json, safeDifferenceValue(difference.field(), difference.baseline()));
+      json.append(",\"candidate\":");
+      ComparisonInputsJson.string(
+          json, safeDifferenceValue(difference.field(), difference.candidate()));
+      json.append('}');
+    }
+    if (!differences.isEmpty()) {
+      json.append("\n  ");
+    }
+    json.append(']');
+  }
+
+  private static String safeDifferenceValue(String field, String value) {
+    if (value == null || value.matches("(?:sha256:)?[0-9a-f]{64}")) {
+      return value;
+    }
+    boolean availability = field.equals("comparisonInputs") && value.equals("available");
+    boolean state =
+        field.endsWith(".state") && Set.of("AVAILABLE", "ABSENT", "FAILED").contains(value);
+    boolean completeness =
+        (field.equals("detectorInputsComplete") || field.endsWith(".inputsComplete"))
+            && Set.of("true", "false").contains(value);
+    boolean version =
+        (field.equals("queryAuditVersion") || field.equals("parser.version"))
+            && value.matches("[0-9]+(?:[.][0-9]+)+(?:[-+][A-Za-z0-9.-]+)?");
+    boolean profile =
+        field.equals("profile") && Set.of("strict", "recommended", "minimal").contains(value);
+    boolean dialect =
+        field.equals("databaseDialect")
+            && Set.of("h2", "mysql", "postgresql", "mariadb", "oracle", "microsoft sql server")
+                .contains(value);
+    boolean parser =
+        field.equals("parser.name") && Set.of("JSqlParser", "jsqlparser").contains(value);
+    if (availability || state || completeness || version || profile || dialect || parser) {
+      return value;
+    }
+    return ComparisonInputsJson.fingerprint(value);
   }
 
   /** One-screen console summary. */
@@ -473,6 +620,8 @@ public final class ReportComparator {
                   testId, (String) report.get("testClass"), (String) report.get("testName"))));
     }
     AuditCoverage coverage = CoverageJson.read(envelope, schemaVersion.minor() >= 5);
+    Map<String, ComparisonInputs> comparisonInputs =
+        ComparisonInputsJson.read(envelope, schemaVersion.minor() >= 6);
 
     if (schemaVersion.minor() < FIRST_OUTCOME_SCHEMA_MINOR) {
       return new Envelope(
@@ -483,7 +632,8 @@ public final class ReportComparator {
                   "schemaVersion " + schemaVersion.text() + " does not declare a run outcome")),
           reports,
           redaction,
-          coverage);
+          coverage,
+          comparisonInputs);
     }
 
     AuditOutcome outcome;
@@ -498,17 +648,24 @@ public final class ReportComparator {
               new AuditIncompleteReason(IncompleteReasonCode.UNSUPPORTED_SCHEMA, e.getMessage())),
           reports,
           redaction,
-          coverage);
+          coverage,
+          comparisonInputs);
     }
     try {
-      AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
+      AuditRunResult validated =
+          new AuditRunResult(List.of(), outcome, incompleteReasons, null, comparisonInputs);
       if (coverage != null
           && coverage.failedToAudit() > 0
           && outcome != AuditOutcome.INCONCLUSIVE) {
         throw invalidEnvelope("coverage gaps require an INCONCLUSIVE outcome");
       }
       return new Envelope(
-          validated.outcome(), validated.incompleteReasons(), reports, redaction, coverage);
+          validated.outcome(),
+          validated.incompleteReasons(),
+          reports,
+          redaction,
+          coverage,
+          comparisonInputs);
     } catch (IllegalArgumentException e) {
       throw invalidEnvelope("outcome and incompleteReasons are inconsistent: " + e.getMessage());
     }

@@ -173,38 +173,36 @@ discover the provider. No configuration or annotation is needed.
     and index metadata. You can skip this step and still get full detection
     from the SQL-parsing and index-metadata rules.
 
-When ready, implement the `ExplainAnalyzer` interface:
+Implement these methods from `io.queryaudit.core.analyzer.ExplainAnalyzer`:
 
 ```java
-package io.queryaudit.postgresql;
-
-import io.queryaudit.core.analyzer.ExplainAnalyzer;
-import io.queryaudit.core.model.Issue;
-import io.queryaudit.core.model.QueryRecord;
-
-import java.util.List;
-
-public class PostgreSqlExplainAnalyzer implements ExplainAnalyzer {
-
-    @Override
-    public String supportedDatabase() {
-        return "postgresql";
-    }
-
-    @Override
-    public List<Issue> analyze(String explainOutput, QueryRecord query) {
-        // Parse PostgreSQL EXPLAIN (FORMAT JSON) output
-        // Look for:
-        //   - Seq Scan nodes (full table scan)
-        //   - Sort nodes without index (filesort equivalent)
-        //   - Materialize nodes (temporary table equivalent)
-        //   - Nested Loop with inner Seq Scan (inefficient join)
-
-        // Return a list of Issue objects for each detected problem.
-        return List.of();
-    }
-}
+String supportedDatabase();
+List<Issue> analyze(Connection connection, List<QueryRecord> queries);
 ```
+
+The extension supplies a live JDBC connection and the captured queries. Retrieve and parse
+plans without executing the queries (`EXPLAIN`, never `EXPLAIN ANALYZE`). For example,
+PostgreSQL's `Seq Scan`, `Sort`, and `Materialize` nodes provide evidence for full scans,
+sorting, and temporary data structures.
+
+If a selected plan cannot be read, throw `ExplainAnalysisException` with the findings collected
+so far and the original cause. Returning an empty list means analysis completed without findings;
+it must not hide a failed connection, unsupported statement, or invalid plan. QueryAudit marks
+an enabled capability failure as `INCONCLUSIVE`. The exception's cause is for local diagnosis;
+do not copy its message or SQL into public report metadata.
+
+The bundled MySQL and PostgreSQL analyzers conservatively reject SELECT statements containing
+`?`, including question marks in literals, comments, or PostgreSQL operators. Captured bind values
+and JDBC types are not available to these analyzers. Substituting a value can change the plan or
+SQL meaning, so the analyzers report `UNSUPPORTED_PARAMETERS` instead. Statements without `?`
+are sent unchanged, and only identical SQL shares a plan. Different literal values are analyzed
+separately. This restriction applies only to EXPLAIN; SQL parsing and index analysis still run.
+
+When all three EXPLAIN rules (`full-scan`, `filesort`, and `temporary-table`) are disabled, the
+bundled analyzers are skipped. The default `recommended` profile excludes those rules. Custom
+analyzers may emit other rules, so they are not skipped on that basis. Custom capability inputs
+that QueryAudit cannot fingerprint remain usable for standalone audits, but report comparison
+returns `INCONCLUSIVE` rather than assuming their configuration stayed the same.
 
 Register it in a second service descriptor file:
 

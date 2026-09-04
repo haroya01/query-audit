@@ -1,5 +1,6 @@
 package io.queryaudit.junit5;
 
+import io.queryaudit.core.analyzer.ExplainAnalysisException;
 import io.queryaudit.core.analyzer.ExplainAnalyzer;
 import io.queryaudit.core.baseline.Baseline;
 import io.queryaudit.core.baseline.BaselineEntry;
@@ -17,6 +18,10 @@ import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
 import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.parser.SqlParser;
+import io.queryaudit.core.provenance.AuditCapability;
+import io.queryaudit.core.provenance.AuditPolicyInputs;
+import io.queryaudit.core.provenance.AuditRuntimeIdentity;
+import io.queryaudit.core.provenance.ComparisonInputs;
 import io.queryaudit.core.regression.QueryContracts;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCountRegressionDetector;
@@ -67,6 +72,9 @@ public class QueryAuditExtension
         AfterTestExecutionCallback,
         AfterEachCallback,
         AfterAllCallback {
+
+  private static final String KEY_INPUT_CONTEXT = "auditInputContext";
+  private static final String KEY_EXPLAIN_CAPABILITY = "explainCapability";
 
   private static final ExtensionContext.Namespace NAMESPACE =
       ExtensionContext.Namespace.create(QueryAuditExtension.class);
@@ -223,20 +231,33 @@ public class QueryAuditExtension
 
     LazyLoadTracker tracker = null;
     try {
-      IndexMetadata metadata = metadataCollector.collect(dataSource);
+      IndexMetadataCollector.Result metadataResult =
+          metadataCollector.collectWithCapabilities(dataSource);
+      recordCapabilityFailure(
+          context,
+          metadataResult.capability(),
+          IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED);
+      IndexMetadata metadata = metadataResult.metadata();
       if (metadata != null) {
         store.put(KEY_INDEX_METADATA, metadata);
       }
 
+      AuditCapability repositoryCapability = AuditCapability.absent();
+      RepositoryReturnTypeResolver initializedRepositoryResolver = null;
       // Build return type resolver from Spring Data repositories if available
       try {
         Object appContext = resolveApplicationContext(context);
-        if (appContext != null) {
-          store.put(KEY_RETURN_TYPE_RESOLVER, new SpringDataReturnTypeResolver(appContext));
+        if (appContext != null && SpringDataReturnTypeResolver.isAvailable()) {
+          SpringDataReturnTypeResolver resolver = new SpringDataReturnTypeResolver(appContext);
+          store.put(KEY_RETURN_TYPE_RESOLVER, resolver);
+          initializedRepositoryResolver = resolver;
+          repositoryCapability =
+              AuditCapability.available(AuditRuntimeIdentity.implementation(resolver.getClass()));
         }
       } catch (Exception | NoClassDefFoundError e) {
-        System.err.println(
-            "[QueryAudit] Failed to initialize return type resolver: " + e.getMessage());
+        repositoryCapability = AuditCapability.failed("spring-data-return-types");
+        recordCapabilityFailure(
+            context, repositoryCapability, IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED);
       }
 
       store.put(KEY_COUNT_BASELINE, countBaseline);
@@ -244,7 +265,21 @@ public class QueryAuditExtension
       store.put(KEY_CONTRACTS, contracts);
 
       // Register Hibernate LazyLoadTracker if Hibernate is on the classpath
-      tracker = hibernateIntegration.registerTracker(context, NAMESPACE);
+      HibernateIntegration.Registration registration =
+          hibernateIntegration.registerWithCapabilities(context);
+      tracker = registration.tracker();
+      recordCapabilityFailure(
+          context,
+          registration.capability(),
+          IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED);
+      store.put(
+          KEY_INPUT_CONTEXT,
+          new AuditInputContext(
+              metadataResult.dialect(),
+              metadataResult.capability(),
+              registration.capability(),
+              repositoryCapability,
+              initializedRepositoryResolver));
       if (tracker != null) {
         store.put(KEY_LAZY_LOAD_TRACKER, tracker);
       }
@@ -576,6 +611,7 @@ public class QueryAuditExtension
 
     report = report.withIndexMetadata(indexMetadata);
     QueryAuditReport outputReport = applyInfoVisibility(report, config.isShowInfo());
+    recordComparisonInputs(context, analyzer, identity.testId(), testClass, testName);
 
     List<BaselineEntry> baseline = analyzer.getBaseline();
     ConsoleReporter reporter =
@@ -651,27 +687,164 @@ public class QueryAuditExtension
       QueryAuditReport report,
       List<QueryRecord> queries,
       QueryAuditAnalyzer analyzer) {
+    ExtensionContext.Store store = context.getStore(NAMESPACE);
+    store.put(KEY_EXPLAIN_CAPABILITY, AuditCapability.absent());
     DataSource dataSource = getDataSource(context);
-    if (dataSource == null || queries.isEmpty()) {
+    if (dataSource == null) {
       return report;
     }
 
-    try (Connection connection = dataSource.getConnection()) {
-      String dbProduct = connection.getMetaData().getDatabaseProductName().toLowerCase();
-
-      ServiceLoader<ExplainAnalyzer> loader = ServiceLoader.load(ExplainAnalyzer.class);
-      for (ExplainAnalyzer explainAnalyzer : loader) {
-        if (dbProduct.contains(explainAnalyzer.supportedDatabase())) {
-          List<Issue> explainIssues = explainAnalyzer.analyze(connection, queries);
-          report = analyzer.mergeDetectedIssues(report, explainIssues);
-          break;
+    String source = "explain-discovery";
+    try {
+      List<ExplainAnalyzer> providers =
+          ServiceLoader.load(ExplainAnalyzer.class).stream()
+              .map(ServiceLoader.Provider::get)
+              .filter(
+                  provider ->
+                      !AuditRuntimeIdentity.hasKnownCapabilityInputs(provider.getClass())
+                          || hasEnabledExplainRules(analyzer.getConfig()))
+              .toList();
+      if (providers.isEmpty()) {
+        return report;
+      }
+      try (Connection connection = dataSource.getConnection()) {
+        String dbProduct =
+            connection.getMetaData().getDatabaseProductName().toLowerCase(Locale.ROOT);
+        for (ExplainAnalyzer explainAnalyzer : providers) {
+          if (dbProduct.contains(explainAnalyzer.supportedDatabase().toLowerCase(Locale.ROOT))) {
+            source =
+                AuditRuntimeIdentity.hasKnownCapabilityInputs(explainAnalyzer.getClass())
+                    ? AuditRuntimeIdentity.implementation(explainAnalyzer.getClass())
+                    : AuditRuntimeIdentity.unverifiedImplementation(explainAnalyzer.getClass());
+            store.put(
+                KEY_EXPLAIN_CAPABILITY,
+                AuditCapability.available(
+                    source,
+                    AuditRuntimeIdentity.hasKnownCapabilityInputs(explainAnalyzer.getClass())));
+            if (!queries.isEmpty()) {
+              report =
+                  analyzer.mergeDetectedIssues(
+                      report, explainAnalyzer.analyze(connection, queries));
+            }
+            break;
+          }
         }
       }
-    } catch (Exception e) {
-      System.err.println("[QueryAudit] EXPLAIN analysis failed: " + e.getMessage());
+    } catch (Exception | LinkageError | ServiceConfigurationError failure) {
+      AuditCapability capability = AuditCapability.failed(source);
+      store.put(KEY_EXPLAIN_CAPABILITY, capability);
+      if (failure instanceof ExplainAnalysisException incomplete) {
+        markIncomplete(
+            context,
+            IncompleteReasonCode.CAPABILITY_EXECUTION_FAILED,
+            "EXPLAIN failed (" + incomplete.getReason() + "): " + incomplete.getMessage());
+        report = analyzer.mergeDetectedIssues(report, incomplete.getCompletedIssues());
+      } else {
+        recordCapabilityFailure(
+            context, capability, IncompleteReasonCode.CAPABILITY_EXECUTION_FAILED);
+      }
     }
 
     return report;
+  }
+
+  private static boolean hasEnabledExplainRules(QueryAuditConfig config) {
+    return List.of(IssueType.FULL_TABLE_SCAN, IssueType.FILESORT, IssueType.TEMPORARY_TABLE)
+        .stream()
+        .anyMatch(type -> !config.isRuleExcluded(type.getCode()));
+  }
+
+  private static void recordCapabilityFailure(
+      ExtensionContext context, AuditCapability capability, IncompleteReasonCode code) {
+    if (capability.state() == AuditCapability.State.FAILED) {
+      markIncomplete(context, code, "Capability failed: " + capability.source());
+    }
+  }
+
+  private void recordComparisonInputs(
+      ExtensionContext context,
+      QueryAuditAnalyzer analyzer,
+      String testId,
+      String testClass,
+      String testName) {
+    AuditInputContext inputs = findInputContext(context);
+    if (inputs == null) {
+      return;
+    }
+    try {
+      Map<String, Integer> inlineLimits = new TreeMap<>();
+      QueryAudit annotation = findAnnotation(context);
+      if (annotation == null || annotation.failOn().length == 0) {
+        inlineLimits.put("failOnAll", 1);
+      } else {
+        for (IssueType type : annotation.failOn()) {
+          inlineLimits.put("failOn." + type.getCode(), 1);
+        }
+      }
+      Method method = context.getRequiredTestMethod();
+      ExpectQueries queries = method.getAnnotation(ExpectQueries.class);
+      if (queries != null) {
+        inlineLimits.put("expectQueriesPresent", 1);
+        inlineLimits.put("select", queries.select());
+        inlineLimits.put("insert", queries.insert());
+        inlineLimits.put("update", queries.update());
+        inlineLimits.put("delete", queries.delete());
+      }
+      ExpectMaxQueryCount maximum = method.getAnnotation(ExpectMaxQueryCount.class);
+      if (maximum != null) {
+        inlineLimits.put("maximumQueries", maximum.value());
+      }
+      boolean detectsNPlusOne = method.isAnnotationPresent(DetectNPlusOne.class);
+      for (Class<?> testType = context.getRequiredTestClass();
+          testType != null;
+          testType = testType.getEnclosingClass()) {
+        detectsNPlusOne |= testType.isAnnotationPresent(DetectNPlusOne.class);
+      }
+      if (detectsNPlusOne) {
+        inlineLimits.put("detectNPlusOne", analyzer.getConfig().getNPlusOneThreshold());
+      }
+      AuditPolicyInputs policy =
+          new AuditPolicyInputs(
+              queries == null
+                  ? effectiveCounts(getContracts(context), testId, testClass, testName)
+                  : Map.of(),
+              effectiveCounts(getCountBaseline(context), testId, testClass, testName),
+              inlineLimits,
+              isContractRecordMode(),
+              Boolean.parseBoolean(
+                  resolveSystemProperty(
+                      "queryAudit.updateBaseline", "queryGuard.updateBaseline", "false")));
+      AuditCapability explain =
+          context.getStore(NAMESPACE).get(KEY_EXPLAIN_CAPABILITY, AuditCapability.class);
+      if (explain == null) {
+        throw new IllegalStateException("EXPLAIN capability was not identified");
+      }
+      getOrCreateRunState(context).recordInputs(testId, inputs.describe(analyzer, policy, explain));
+    } catch (RuntimeException | LinkageError failure) {
+      markIncomplete(
+          context,
+          IncompleteReasonCode.COMPARISON_INPUTS_UNAVAILABLE,
+          "Effective audit inputs could not be identified for " + testId);
+    }
+  }
+
+  private static Map<String, QueryCounts> effectiveCounts(
+      Map<String, QueryCounts> values, String testId, String testClass, String testName) {
+    QueryCounts selected = QueryCountBaseline.find(values, testId, testClass, testName);
+    return selected == null ? Map.of() : Map.of(testId, selected);
+  }
+
+  private static AuditInputContext findInputContext(ExtensionContext context) {
+    for (ExtensionContext current = context;
+        current != null;
+        current = current.getParent().orElse(null)) {
+      AuditInputContext inputs =
+          current.getStore(NAMESPACE).get(KEY_INPUT_CONTEXT, AuditInputContext.class);
+      if (inputs != null) {
+        return inputs;
+      }
+    }
+    return null;
   }
 
   // ── Query count regression detection ────────────────────────────────
@@ -836,6 +1009,7 @@ public class QueryAuditExtension
   static final class AuditRunState {
 
     private final Set<AuditIncompleteReason> incompleteReasons = new LinkedHashSet<>();
+    private final Map<String, ComparisonInputs> comparisonInputs = new LinkedHashMap<>();
     private boolean policyFailed;
 
     synchronized void markPolicyFailed() {
@@ -846,8 +1020,13 @@ public class QueryAuditExtension
       incompleteReasons.add(reason);
     }
 
+    synchronized void recordInputs(String testId, ComparisonInputs inputs) {
+      comparisonInputs.put(testId, inputs);
+    }
+
     synchronized AuditRunResult result(List<QueryAuditReport> reports) {
-      return AuditRunResult.determine(reports, policyFailed, incompleteReasons);
+      return AuditRunResult.determine(reports, policyFailed, incompleteReasons)
+          .withComparisonInputs(comparisonInputs);
     }
   }
 

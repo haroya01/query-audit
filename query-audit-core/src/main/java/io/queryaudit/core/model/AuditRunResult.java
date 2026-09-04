@@ -1,8 +1,10 @@
 package io.queryaudit.core.model;
 
+import io.queryaudit.core.provenance.ComparisonInputs;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -20,14 +22,16 @@ public record AuditRunResult(
     List<QueryAuditReport> reports,
     AuditOutcome outcome,
     List<AuditIncompleteReason> incompleteReasons,
-    AuditCoverage coverage) {
+    AuditCoverage coverage,
+    Map<String, ComparisonInputs> comparisonInputs) {
 
-  /** Retains the constructor for integrations without an expected-test manifest. */
+  /** Retains the constructor for integrations without comparison input metadata. */
   public AuditRunResult(
       List<QueryAuditReport> reports,
       AuditOutcome outcome,
-      List<AuditIncompleteReason> incompleteReasons) {
-    this(reports, outcome, incompleteReasons, null);
+      List<AuditIncompleteReason> incompleteReasons,
+      AuditCoverage coverage) {
+    this(reports, outcome, incompleteReasons, coverage, Map.of());
   }
 
   public AuditRunResult {
@@ -43,6 +47,25 @@ public record AuditRunResult(
       if (!copiedReasons.contains(nonNullReason)) {
         copiedReasons.add(nonNullReason);
       }
+    }
+    comparisonInputs = Map.copyOf(Objects.requireNonNull(comparisonInputs, "comparisonInputs"));
+    for (String testId : comparisonInputs.keySet()) {
+      if (testId.isBlank()) {
+        throw new IllegalArgumentException("Comparison input test IDs must not be blank");
+      }
+    }
+    if (comparisonInputs.values().stream().anyMatch(inputs -> inputs.capabilities().hasFailure())) {
+      boolean failureRecorded =
+          copiedReasons.stream()
+              .anyMatch(
+                  reason ->
+                      reason.code() == IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED
+                          || reason.code() == IncompleteReasonCode.CAPABILITY_EXECUTION_FAILED);
+      if (!failureRecorded) {
+        copiedReasons.add(
+            AuditIncompleteReason.of(IncompleteReasonCode.CAPABILITY_EXECUTION_FAILED));
+      }
+      outcome = AuditOutcome.INCONCLUSIVE;
     }
     incompleteReasons = List.copyOf(copiedReasons);
 
@@ -68,6 +91,18 @@ public record AuditRunResult(
     if (outcome != AuditOutcome.INCONCLUSIVE && !incompleteReasons.isEmpty()) {
       throw new IllegalArgumentException(outcome + " must not carry incomplete reasons");
     }
+  }
+
+  /** Retains the original constructor for callers without comparison provenance. */
+  public AuditRunResult(
+      List<QueryAuditReport> reports,
+      AuditOutcome outcome,
+      List<AuditIncompleteReason> incompleteReasons) {
+    this(reports, outcome, incompleteReasons, null, Map.of());
+  }
+
+  public AuditRunResult withComparisonInputs(Map<String, ComparisonInputs> inputs) {
+    return new AuditRunResult(reports, outcome, incompleteReasons, coverage, inputs);
   }
 
   /** Returns a completed result with no policy or contract failures. */
@@ -126,6 +161,6 @@ public record AuditRunResult(
     List<AuditIncompleteReason> reasons = new ArrayList<>(incompleteReasons);
     reasons.addAll(coverage.incompleteReasons());
     AuditOutcome coveredOutcome = reasons.isEmpty() ? outcome : AuditOutcome.INCONCLUSIVE;
-    return new AuditRunResult(reports, coveredOutcome, reasons, coverage);
+    return new AuditRunResult(reports, coveredOutcome, reasons, coverage, comparisonInputs);
   }
 }

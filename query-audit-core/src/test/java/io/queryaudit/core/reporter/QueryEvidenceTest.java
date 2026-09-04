@@ -92,8 +92,8 @@ class QueryEvidenceTest {
   void compactionDoesNotChangeTheVerdictOrFindingComparison() {
     QueryAuditReport full = report("orders");
     QueryAuditReport compact = full.withoutQueryEvidence();
-    String before = JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(full)));
-    String after = JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(compact)));
+    String before = ComparisonInputFixtures.json(AuditRunResult.pass(List.of(full)));
+    String after = ComparisonInputFixtures.json(AuditRunResult.pass(List.of(compact)));
 
     assertThat(parse(after).get("outcome")).isEqualTo("PASS");
     ReportComparator.Verdict verdict = ReportComparator.compare(before, after);
@@ -132,7 +132,7 @@ class QueryEvidenceTest {
     var mapper = new ObjectMapper();
     var schema =
         JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7)
-            .getSchema(getClass().getResourceAsStream("/report-1.5.schema.json"));
+            .getSchema(getClass().getResourceAsStream("/report-1.6.schema.json"));
     String full = JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(report("full"))));
     String compact =
         JsonReporter.toRunEnvelopeJson(

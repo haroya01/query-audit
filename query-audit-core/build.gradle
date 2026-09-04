@@ -18,6 +18,13 @@ dependencies {
     testImplementation 'org.hibernate.orm:hibernate-core:6.6.4.Final'
 }
 
+tasks.named('processResources') {
+    inputs.property('queryAuditVersion', project.version)
+    filesMatching('META-INF/query-audit/version.properties') {
+        expand(version: project.version)
+    }
+}
+
 publishing {
     repositories {
         maven {
