@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class TestIdentitySchemaContractTest {
 
   private static final Path REPORT_SCHEMA =
-      Path.of("..", "docs", "schema", "report-1.6.schema.json");
+      Path.of("..", "docs", "schema", "report-1.7.schema.json");
 
   @Test
   void reporterIdentityFieldsMatchThePublishedSchema() throws IOException {

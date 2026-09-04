@@ -200,7 +200,7 @@ class ComparisonInputsJsonTest {
   void currentSchemaAcceptsKnownOrUnavailableInputsAndRejectsIncompleteEntries() throws Exception {
     var schema =
         JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7)
-            .getSchema(getClass().getResourceAsStream("/report-1.6.schema.json"));
+            .getSchema(getClass().getResourceAsStream("/report-1.7.schema.json"));
     ObjectNode verified = parse(knownReport(true));
     assertThat(schema.validate(verified)).isEmpty();
     ObjectNode unverified = verified.deepCopy();
