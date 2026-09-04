@@ -27,8 +27,17 @@ public enum IncompleteReasonCode {
   /** A test required by the audit coverage manifest did not run. */
   EXPECTED_TEST_MISSING,
 
+  /** The expected-test manifest was missing, unreadable, empty, or malformed. */
+  COVERAGE_MANIFEST_UNREADABLE,
+
+  /** Reports were produced with different expected-test manifests. */
+  COVERAGE_MANIFEST_MISMATCH,
+
   /** The selected suite report could not be written. */
   REPORT_WRITE_FAILED,
+
+  /** Comparison inputs used different artifact detail policies. */
+  REPORT_REDACTION_MISMATCH,
 
   /** A report input used an unsupported schema version. */
   UNSUPPORTED_SCHEMA
