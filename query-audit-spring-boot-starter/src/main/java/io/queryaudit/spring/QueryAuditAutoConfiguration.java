@@ -9,8 +9,11 @@ import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Severity;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -33,6 +36,8 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(QueryAuditProperties.class)
 public class QueryAuditAutoConfiguration {
 
+  private static final Log logger = LogFactory.getLog(QueryAuditAutoConfiguration.class);
+
   @Bean(name = {"queryAuditConfig", "queryGuardConfig"})
   public QueryAuditConfig queryAuditConfig(QueryAuditProperties properties) {
     Map<String, Severity> severityOverrides = new HashMap<>();
@@ -40,40 +45,46 @@ public class QueryAuditAutoConfiguration {
       severityOverrides.put(entry.getKey(), Severity.valueOf(entry.getValue()));
     }
 
-    return QueryAuditConfig.builder()
-        .enabled(properties.isEnabled())
-        .failOnDetection(properties.isFailOnDetection())
-        .auditMode(AuditMode.parse(properties.getMode()))
-        .ruleProfile(RuleProfile.parse(properties.getProfile()))
-        .enabledRules(new HashSet<>(properties.getEnabledRules()))
-        .nPlusOneThreshold(properties.getNPlusOne().getThreshold())
-        .offsetPaginationThreshold(properties.getOffsetPagination().getThreshold())
-        .orClauseThreshold(properties.getOrClause().getThreshold())
-        .suppressPatterns(new HashSet<>(properties.getSuppressPatterns()))
-        .suppressQueries(new HashSet<>(properties.getSuppressQueries()))
-        .showInfo(properties.getReport().isShowInfo())
-        .reportFormat(ReportFormat.parse(properties.getReport().getFormat()))
-        .reportOutputDir(properties.getReport().getOutputDir())
-        .baselinePath(properties.getBaselinePath())
-        .autoOpenReport(properties.isAutoOpenReport())
-        .maxQueries(properties.getMaxQueries())
-        .disabledRules(new HashSet<>(properties.getDisabledRules()))
-        .severityOverrides(severityOverrides)
-        .largeInListThreshold(properties.getLargeInList().getThreshold())
-        .tooManyJoinsThreshold(properties.getTooManyJoins().getThreshold())
-        .excessiveColumnThreshold(properties.getExcessiveColumn().getThreshold())
-        .repeatedInsertThreshold(properties.getRepeatedInsert().getThreshold())
-        .repeatedInsertExcludeTables(
-            new HashSet<>(properties.getRepeatedInsert().getExcludeTables()))
-        .repeatedUpdateThreshold(properties.getRepeatedUpdate().getThreshold())
-        .repeatedUpdateExcludeTables(
-            new HashSet<>(properties.getRepeatedUpdate().getExcludeTables()))
-        .writeAmplificationThreshold(properties.getWriteAmplification().getThreshold())
-        .slowQueryWarningMs(properties.getSlowQuery().getWarningMs())
-        .slowQueryErrorMs(properties.getSlowQuery().getErrorMs())
-        .countInsteadOfExistsEnabled(properties.getCountInsteadOfExists().isEnabled())
-        .connectionHeldIdleThresholdMs(properties.getConnectionHeldIdle().getThresholdMs())
-        .build();
+    QueryAuditConfig config =
+        QueryAuditConfig.builder()
+            .enabled(properties.isEnabled())
+            .failOnDetection(properties.isFailOnDetection())
+            .auditMode(AuditMode.parse(properties.getMode()))
+            .ruleProfile(RuleProfile.parse(properties.getProfile()))
+            .enabledRules(new HashSet<>(properties.getEnabledRules()))
+            .nPlusOneThreshold(properties.getNPlusOne().getThreshold())
+            .offsetPaginationThreshold(properties.getOffsetPagination().getThreshold())
+            .orClauseThreshold(properties.getOrClause().getThreshold())
+            .suppressPatterns(new HashSet<>(properties.getSuppressPatterns()))
+            .suppressQueries(new HashSet<>(properties.getSuppressQueries()))
+            .showInfo(properties.getReport().isShowInfo())
+            .reportFormat(ReportFormat.parse(properties.getReport().getFormat()))
+            .reportOutputDir(properties.getReport().getOutputDir())
+            .baselinePath(properties.getBaselinePath())
+            .autoOpenReport(properties.isAutoOpenReport())
+            .maxQueries(properties.getMaxQueries())
+            .disabledRules(new HashSet<>(properties.getDisabledRules()))
+            .severityOverrides(severityOverrides)
+            .largeInListThreshold(properties.getLargeInList().getThreshold())
+            .tooManyJoinsThreshold(properties.getTooManyJoins().getThreshold())
+            .excessiveColumnThreshold(properties.getExcessiveColumn().getThreshold())
+            .repeatedInsertThreshold(properties.getRepeatedInsert().getThreshold())
+            .repeatedInsertExcludeTables(
+                new HashSet<>(properties.getRepeatedInsert().getExcludeTables()))
+            .repeatedUpdateThreshold(properties.getRepeatedUpdate().getThreshold())
+            .repeatedUpdateExcludeTables(
+                new HashSet<>(properties.getRepeatedUpdate().getExcludeTables()))
+            .writeAmplificationThreshold(properties.getWriteAmplification().getThreshold())
+            .slowQueryWarningMs(properties.getSlowQuery().getWarningMs())
+            .slowQueryErrorMs(properties.getSlowQuery().getErrorMs())
+            .countInsteadOfExistsEnabled(properties.getCountInsteadOfExists().isEnabled())
+            .connectionHeldIdleThresholdMs(properties.getConnectionHeldIdle().getThresholdMs())
+            .build();
+    if (config.isEnabled()) {
+      logger.info(
+          "QueryAudit rule profile: " + config.getRuleProfile().name().toLowerCase(Locale.ROOT));
+    }
+    return config;
   }
 
   @Bean(name = {"queryAuditInterceptor", "queryGuardInterceptor"})

@@ -333,7 +333,7 @@ public class QueryAuditConfig {
   }
 
   /**
-   * Returns the active rule profile tier. Defaults to {@link RuleProfile#STRICT} (all rules).
+   * Returns the active rule profile tier. Defaults to {@link RuleProfile#RECOMMENDED} since 0.6.0.
    *
    * @since 0.5.0
    */
@@ -432,7 +432,7 @@ public class QueryAuditConfig {
     private boolean countInsteadOfExistsEnabled = false;
     private AuditMode auditMode = AuditMode.ANNOTATED;
     private long connectionHeldIdleThresholdMs = 200;
-    private RuleProfile ruleProfile = RuleProfile.STRICT;
+    private RuleProfile ruleProfile = RuleProfile.RECOMMENDED;
     private Set<String> enabledRules = new HashSet<>();
 
     /**
@@ -695,7 +695,8 @@ public class QueryAuditConfig {
      * @since 0.5.0
      */
     /**
-     * Sets the rule profile tier. {@code null} keeps the default ({@link RuleProfile#STRICT}).
+     * Sets the rule profile tier. {@code null} leaves the current value unchanged.
+     * The initial value is {@link RuleProfile#RECOMMENDED}.
      *
      * @since 0.5.0
      */

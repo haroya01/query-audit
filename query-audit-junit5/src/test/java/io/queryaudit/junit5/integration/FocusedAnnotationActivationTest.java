@@ -88,7 +88,7 @@ class FocusedAnnotationActivationTest {
             report -> {
               assertThat(report.getTotalQueryCount()).isEqualTo(2);
               assertThat(report.getInfoIssues())
-                  .anyMatch(issue -> issue.type() == IssueType.N_PLUS_ONE_SUSPECT);
+                  .noneMatch(issue -> issue.type() == IssueType.N_PLUS_ONE_SUSPECT);
             });
   }
 

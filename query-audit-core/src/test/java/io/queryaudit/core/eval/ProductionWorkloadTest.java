@@ -3,6 +3,7 @@ package io.queryaudit.core.eval;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
@@ -39,6 +40,7 @@ class ProductionWorkloadTest {
   static void setUp() {
     QueryAuditConfig config =
         QueryAuditConfig.builder()
+            .ruleProfile(RuleProfile.STRICT)
             .nPlusOneThreshold(3)
             .offsetPaginationThreshold(1000)
             .orClauseThreshold(3)
