@@ -28,6 +28,8 @@ class HibernateLazyLoadListener
 
   @Override
   public void onInitializeCollection(InitializeCollectionEvent event) {
+    if (!tracker.isActive()) return;
+
     String role = event.getCollection() != null ? event.getCollection().getRole() : "unknown";
     tracker.recordCollectionInitialized(
         role, event.getAffectedOwnerEntityName(), event.getAffectedOwnerIdOrNull());
@@ -35,6 +37,8 @@ class HibernateLazyLoadListener
 
   @Override
   public void onPostLoad(PostLoadEvent event) {
+    if (!tracker.isActive()) return;
+
     String entityName = event.getEntity().getClass().getName();
     Object id = event.getId();
 
