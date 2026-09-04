@@ -143,8 +143,9 @@ class PolicyRecordingFailureLifecycleTest {
         .hasStackTraceContaining("Could not write query contracts");
     assertThat(report())
         .contains("\"outcome\": \"INCONCLUSIVE\"")
-        .contains("Could not write query contracts")
-        .contains("Could not write count baseline");
+        .containsSubsequence(
+            "\"code\": \"POLICY_WRITE_FAILED\"", "\"code\": \"POLICY_WRITE_FAILED\"")
+        .doesNotContain(contracts.toString(), counts.toString());
     assertThat(ClassFixture.dataSource).isSameAs(original);
   }
 
