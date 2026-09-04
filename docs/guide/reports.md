@@ -1,9 +1,9 @@
 # Reports
 
 !!! note "Version scope"
-    This page documents the 0.6 report contract implemented on `main`. QueryAudit 0.5 writes both
-    HTML and schema 1.0 JSON after a session with at least one completed audited result; the
-    differences are called out below.
+    QueryAudit 0.6 uses report schema 1.6. The schema 1.7 finding-ID additions described here are
+    available in the development branch for the upcoming 0.7 release. QueryAudit 0.5 writes both
+    HTML and schema 1.0 JSON after a session with at least one completed audited result.
 
 After each audited test method, QueryAudit prints its findings and adds the result to the suite
 summary. You can also select one suite-level JSON or HTML artifact for later review.
@@ -149,10 +149,11 @@ manifest was verified; this example does not establish whole-suite coverage. See
 [Audit coverage](audit-coverage.md) to declare and enforce the tests a run must audit.
 `comparisonInputs` identifies each test's effective analysis inputs. The empty object in this
 example is valid for a standalone report but cannot support a verified comparison.
+Finding IDs in this example illustrate the schema 1.7 format introduced for QueryAudit 0.7.
 
 ```json
 {
-  "schemaVersion": "1.6.0",
+  "schemaVersion": "1.7.0",
   "redaction": "REDACTED",
   "outcome": "FAIL",
   "incompleteReasons": [],
@@ -178,6 +179,7 @@ example is valid for a standalone report but cannot support a verified compariso
       "queryEvidence": { "status": "COMPLETE", "retainedQueries": 4, "omittedQueries": 0 },
       "confirmedIssues": [
         {
+          "findingId": "qa-finding-v1:59bc641a986b23656ea34c71ac813f87d13615d267dabbb21b60e1e1098975a7",
           "type": "n-plus-one",
           "severity": "ERROR",
           "query": "select id, order_id, sku from order_items where order_id = ?",
@@ -189,6 +191,7 @@ example is valid for a standalone report but cannot support a verified compariso
           "remediation": {"kind": "batch-fetch", "table": "order_items"}
         },
         {
+          "findingId": "qa-finding-v1:8c6edc076f5a403077542389bc217d853b1f242661da693faac278293d8258fb",
           "type": "missing-where-index",
           "severity": "ERROR",
           "query": "select * from orders where user_id = ? order by created_at desc",
@@ -202,6 +205,7 @@ example is valid for a standalone report but cannot support a verified compariso
       ],
       "infoIssues": [
         {
+          "findingId": "qa-finding-v1:29225206fe529999b2ca9ab6c93cf68035fc9e8d9605c146a8a163a441e2e22e",
           "type": "select-all",
           "severity": "INFO",
           "query": "select * from orders where user_id = ? order by created_at desc",
@@ -253,13 +257,15 @@ example is valid for a standalone report but cannot support a verified compariso
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. The current version is **1.6.0**. QueryAudit 0.5.x wrote schema 1.0
+of silently misparsing it. This development branch writes **1.7.0** for the upcoming QueryAudit
+0.7 release; the published QueryAudit 0.6 release writes schema 1.6. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
 infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, 1.2
 added stable test identities, 1.3 added query-evidence retention counts, and 1.4 added the report
-redaction mode. Schema 1.5 added expected-test coverage; 1.6 adds per-test comparison inputs.
+redaction mode. Schema 1.5 added expected-test coverage; 1.6 added per-test comparison inputs.
+Schema 1.7 adds stable finding IDs and preserves repeated observations under `occurrences`.
 
-Each version has a published JSON Schema. The deprecated Java method
+Each version has its own JSON Schema file. The deprecated Java method
 `JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` emits a legacy 1.0 envelope without run
 outcomes or stable identity fields. A list of reports cannot establish whether the audit
 completed or its policies passed. New callers should use
@@ -327,6 +333,10 @@ Field notes for machine consumers:
   frame when one is available, and `null` when capture cannot identify one. High-precision rules
   may also include a structured `remediation` hint (`kind` + optional `table` and `columns`) so
   tooling can act without parsing the prose `suggestion`.
+- Schema 1.7 findings also carry `findingId` in all three issue arrays. Summary issue counts
+  still count original observations; an array contains one entry per logical finding. Repeated
+  observations appear under that entry's `occurrences`. See [Finding identity](#finding-identity)
+  before counting or comparing findings.
 - When database index metadata was collected, `indexMetadata` includes known indexes for finding
   tables, grouped per index with columns in index order. It is `null` when no metadata was attached
   and `{}` when metadata was attached but no reported table has a known index. Consumers should
@@ -339,10 +349,43 @@ The stable schema URLs are
 [`schema/report-1.2.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.2.schema.json),
 [`schema/report-1.3.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.3.schema.json),
 [`schema/report-1.4.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.4.schema.json),
-[`schema/report-1.5.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.5.schema.json), and
-[`schema/report-1.6.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.6.schema.json).
+[`schema/report-1.5.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.5.schema.json),
+[`schema/report-1.6.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.6.schema.json), and
+[`schema/report-1.7.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.7.schema.json).
 [`schema/report.schema.json`](https://haroya01.github.io/query-audit/schema/report.schema.json)
 always points to the current version.
+
+### Finding identity
+
+Starting with schema 1.7, every confirmed, informational, and acknowledged finding has a
+`findingId` in the form `qa-finding-v1:<64 lowercase hexadecimal characters>`. Treat the whole
+value as an opaque identifier. The version prefix lets consumers distinguish identity algorithms
+without confusing them with report schema versions.
+
+The ID uses the stable test identity, rule code, canonical query, normalized source method,
+table, and column. Different columns in the same statement remain separate findings. With the
+same `testId`, source line numbers, display names, prose diagnostics, severity, and observation
+counts do not change the identity. Core constructors that derive `testId` from `testClass` and
+`testName` still produce a different identity when those inputs change.
+
+Query normalization is conservative: it normalizes recognized lexical forms and preserves
+unrecognized syntax. It does not prove that differently written SQL statements are semantically
+equivalent. The same finding receives the same ID in `FULL` and `REDACTED` reports; literal
+values and absolute stack paths do not become part of a public matching key.
+
+Multiple observations of the same logical finding are grouped within their issue array. The
+entry uses the first observation at the highest severity for its evidence fields and adds
+`occurrences` containing **every** original observation in its original order. Each occurrence contains the ordinary issue evidence
+fields, without its own `findingId` or nested `occurrences`. All occurrence evidence follows the
+selected redaction policy. A single observation omits `occurrences`.
+
+For example, three observations of one confirmed finding produce one `confirmedIssues` entry
+with three occurrences, while `summary.confirmedIssues` remains `3`. The same ID cannot appear
+in multiple categories of one test report: that would give one finding conflicting policy states.
+
+An ID identifies a logical finding; it is not a signature, authentication token, or proof that
+the surrounding report is genuine. Keep report generation and policy control in trusted CI.
+IDs alone cannot establish complete coverage, compatible inputs, or successful resolution.
 
 !!! tip "CI artifact storage"
     Store JSON reports as CI artifacts for trend tracking across builds. Parse them
@@ -394,8 +437,9 @@ java -cp query-audit-core-<version>.jar \
   error. A candidate run that already has outcome `FAIL` cannot become a successful comparison
   merely because it introduced no new finding.
 - **`verdict.json`**: `{outcome, incompleteReasons, newFindings, resolved, persisting, complete,
-  missingTests, unexpectedTests, inputDifferences, queryCountDelta, executionTimeMsDelta}` — the termination condition
-  for automated fix loops.
+  missingTests, unexpectedTests, inputDifferences, findingIdentity, queryCountDelta,
+  executionTimeMsDelta}`. Finding entries carry `findingId` when it was present in their source
+  report, and `null` for legacy findings.
 
 !!! warning "Java API compatibility in 0.6"
     `ReportComparator.Finding` and `ReportComparator.TestRef` now prepend `testId` to their record
@@ -403,6 +447,12 @@ java -cp query-audit-core-<version>.jar \
     so ordinary constructor calls continue to work. Record patterns and code that reflects on record
     components or canonical constructors must adopt the new seven- and three-component shapes.
     Generated `equals()`, `hashCode()`, and `toString()` methods now include `testId`.
+
+!!! warning "Java API compatibility in 0.7"
+    Finding identity adds components to `ReportComparator.Finding` and `ReportComparator.Verdict`.
+    Earlier constructor signatures remain available, but record patterns, reflection, and code
+    relying on the canonical component lists must account for the new fields. Values constructed
+    without identity metadata do not imply recorded finding IDs.
 
 - Every test present in the baseline report must also appear in the candidate report. Otherwise,
   `complete` is `false`, `missingTests` identifies the absent tests, and their findings are not
@@ -418,8 +468,14 @@ java -cp query-audit-core-<version>.jar \
   Changed inputs produce `INCOMPATIBLE_AUDIT_INPUTS`. Both make the comparison `INCONCLUSIVE`
   and leave `resolved` empty; `inputDifferences` lists the test ID, field, and safe baseline/candidate
   values. See [Comparison inputs](comparison-inputs.md) before replacing a baseline.
-- **Matching key**: `testId|type|normalized-pattern|sourceLocation`, so findings survive display
-  name edits and unrelated refactors as long as the statement shape and call site are stable.
+- When both reports use schema 1.7 or later, the comparator matches confirmed findings by their
+  recorded `findingId`. It rejects malformed IDs and duplicate IDs within one test report rather
+  than silently collapsing findings.
+- If either report predates schema 1.7, the comparator uses compatibility matching based on the
+  test identity, rule, normalized query and source method, table, and column. It does not claim to
+  reconstruct a native ID for legacy findings. A modern finding retains its recorded ID even
+  when the other side requires compatibility matching. If distinct recorded IDs collapse to
+  one compatibility match, comparison is rejected; regenerate both reports with schema 1.7.
 - The comparator accepts schema 1.0 and 1.1 reports and uses an exact `testClass|testName` fallback
   when one side lacks IDs. Those reports still lack verified comparison inputs and cannot produce
   a passing comparison. It rejects an ambiguous legacy match instead of assigning one old test
@@ -431,6 +487,30 @@ java -cp query-audit-core-<version>.jar \
   `INCONCLUSIVE` input keeps its partial delta but forces comparison exit code `2`. Legacy schema
   1.0 input is also inconclusive; unsupported major versions produce
   `UNSUPPORTED_SCHEMA`. Pre-envelope reports are rejected with a hint.
+
+`findingIdentity` makes the matching mode explicit, including comparisons whose finding arrays
+are empty:
+
+```json
+{
+  "findingIdentity": {
+    "mode": "LEGACY",
+    "baselineSchemaVersion": "1.6.0",
+    "candidateSchemaVersion": "1.7.0"
+  }
+}
+```
+
+`RECORDED` means both reports provide native finding IDs. `LEGACY` means at least one report
+requires compatibility matching. `UNAVAILABLE` means the verdict has no usable identity metadata;
+its schema-version fields may be `null`. Legacy matching preserves access to older reports but
+cannot provide the same identity guarantees as recorded IDs. The mode does not override outcome,
+coverage, input-compatibility, or redaction checks.
+
+The comparison command remains a no-new-regressions gate: an otherwise complete comparison can
+pass while an existing finding persists. Requiring selected IDs to be resolved is tracked in
+[#210](https://github.com/haroya01/query-audit/issues/210); `--require-resolved` is not implemented
+by this finding-ID change.
 
 As a Gradle task in the consuming project:
 

@@ -31,10 +31,10 @@ import java.util.regex.Pattern;
  * which confirmed findings were resolved, which are new, which persist, and how the query profile
  * moved.
  *
- * <p><strong>Matching key:</strong> {@code testId|type|query|sourceMethod}. The query field holds
- * the normalized statement pattern, and source line numbers are removed before matching, so
- * findings survive display-name and line-only changes while still distinguishing different tests
- * and call sites. Only <em>confirmed</em> findings participate — INFO advisories don't gate fix
+ * <p>Reports from schema 1.7 onward match recorded finding IDs within each test. Earlier reports
+ * use a legacy key from the available query, source method, rule, table, and column fields. The
+ * verdict identifies which matching mode was used. Recorded IDs are never reconstructed from
+ * redacted evidence and do not authenticate the report. Only <em>confirmed</em> findings gate fix
  * loops.
  *
  * <p><strong>Exit contract</strong> (CLI): {@code 0} for {@link AuditOutcome#PASS}, {@code 1} for
@@ -49,8 +49,10 @@ public final class ReportComparator {
   private static final int SUPPORTED_SCHEMA_MAJOR = 1;
   private static final int FIRST_OUTCOME_SCHEMA_MINOR = 1;
   private static final int FIRST_STABLE_IDENTITY_SCHEMA_MINOR = 2;
+  private static final int FIRST_FINDING_ID_SCHEMA_MINOR = 7;
   private static final Pattern SCHEMA_VERSION_PATTERN = Pattern.compile("^(\\d+)\\.(\\d+)\\.\\d+$");
-  private static final Pattern SOURCE_LINE_NUMBER = Pattern.compile("(?m):-?\\d+$");
+  private static final Pattern FINDING_ID_PATTERN =
+      Pattern.compile(Pattern.quote(FindingId.PREFIX) + "[0-9a-f]{64}");
 
   private ReportComparator() {
     // static entry points only
@@ -64,12 +66,41 @@ public final class ReportComparator {
       String type,
       String table,
       String detail,
-      String key) {
+      String key,
+      String findingId,
+      String column) {
+
+    /** Retains the constructor introduced with stable test identities. */
+    public Finding(
+        String testId,
+        String testClass,
+        String testName,
+        String type,
+        String table,
+        String detail,
+        String key) {
+      this(testId, testClass, testName, type, table, detail, key, null, null);
+    }
 
     /** Retains the 0.5 constructor signature for ordinary constructor calls. */
     public Finding(
         String testClass, String testName, String type, String table, String detail, String key) {
       this(null, testClass, testName, type, table, detail, key);
+    }
+  }
+
+  /** Identifies the finding-matching contract without claiming that report contents are trusted. */
+  public record FindingIdentity(
+      String mode, String baselineSchemaVersion, String candidateSchemaVersion) {
+
+    public FindingIdentity {
+      if (!Set.of("RECORDED", "LEGACY", "UNAVAILABLE").contains(mode)) {
+        throw new IllegalArgumentException("Unknown finding identity mode");
+      }
+    }
+
+    private static FindingIdentity unavailable() {
+      return new FindingIdentity("UNAVAILABLE", null, null);
     }
   }
 
@@ -98,7 +129,13 @@ public final class ReportComparator {
       List<ParsedReport> reports,
       ReportRedaction redaction,
       AuditCoverage coverage,
-      Map<String, ComparisonInputs> comparisonInputs) {}
+      Map<String, ComparisonInputs> comparisonInputs,
+      SchemaVersion schemaVersion) {
+
+    boolean hasFindingIds() {
+      return schemaVersion.minor() >= FIRST_FINDING_ID_SCHEMA_MINOR;
+    }
+  }
 
   /** The comparison result; incomplete comparisons cannot produce a trustworthy success signal. */
   public record Verdict(
@@ -113,7 +150,8 @@ public final class ReportComparator {
       AuditOutcome outcome,
       List<AuditIncompleteReason> incompleteReasons,
       List<TestRef> unexpectedTests,
-      List<ComparisonInputDifference> inputDifferences) {
+      List<ComparisonInputDifference> inputDifferences,
+      FindingIdentity findingIdentity) {
 
     public Verdict {
       resolved = List.copyOf(resolved);
@@ -122,8 +160,39 @@ public final class ReportComparator {
       missingTests = List.copyOf(missingTests);
       unexpectedTests = List.copyOf(unexpectedTests);
       inputDifferences = List.copyOf(inputDifferences);
+      Objects.requireNonNull(findingIdentity, "findingIdentity");
       AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
       incompleteReasons = validated.incompleteReasons();
+    }
+
+    /** Retains the comparison-input-aware constructor introduced before finding identities. */
+    public Verdict(
+        List<Finding> resolved,
+        List<Finding> newFindings,
+        List<Finding> persisting,
+        long queriesBefore,
+        long queriesAfter,
+        long executionTimeMsBefore,
+        long executionTimeMsAfter,
+        List<TestRef> missingTests,
+        AuditOutcome outcome,
+        List<AuditIncompleteReason> incompleteReasons,
+        List<TestRef> unexpectedTests,
+        List<ComparisonInputDifference> inputDifferences) {
+      this(
+          resolved,
+          newFindings,
+          persisting,
+          queriesBefore,
+          queriesAfter,
+          executionTimeMsBefore,
+          executionTimeMsAfter,
+          missingTests,
+          outcome,
+          incompleteReasons,
+          unexpectedTests,
+          inputDifferences,
+          FindingIdentity.unavailable());
     }
 
     /** Retains the coverage-aware constructor introduced before comparison input checks. */
@@ -258,8 +327,11 @@ public final class ReportComparator {
     List<ParsedReport> afterReports = afterEnvelope.reports();
     Map<ParsedReport, String> beforeIdentities = comparisonIdentities(beforeReports, afterReports);
     Map<ParsedReport, String> afterIdentities = comparisonIdentities(afterReports, beforeReports);
-    List<ComparedFinding> before = confirmedFindings(beforeReports, beforeIdentities);
-    List<ComparedFinding> after = confirmedFindings(afterReports, afterIdentities);
+    boolean recordedIdentity = beforeEnvelope.hasFindingIds() && afterEnvelope.hasFindingIds();
+    List<ComparedFinding> before =
+        confirmedFindings(beforeEnvelope, beforeIdentities, recordedIdentity);
+    List<ComparedFinding> after =
+        confirmedFindings(afterEnvelope, afterIdentities, recordedIdentity);
 
     Set<String> beforeKeys = new LinkedHashSet<>();
     before.forEach(f -> beforeKeys.add(f.finding().key()));
@@ -343,7 +415,11 @@ public final class ReportComparator {
         comparisonResult.outcome(),
         comparisonResult.incompleteReasons(),
         unexpectedTests,
-        inputDifferences);
+        inputDifferences,
+        new FindingIdentity(
+            recordedIdentity ? "RECORDED" : "LEGACY",
+            beforeEnvelope.schemaVersion().text(),
+            afterEnvelope.schemaVersion().text()));
   }
 
   private static List<ComparisonInputDifference> compareInputs(
@@ -418,6 +494,13 @@ public final class ReportComparator {
     sb.append("{\n");
     sb.append("  \"redaction\": \"").append(redaction).append("\",\n");
     sb.append("  \"outcome\": \"").append(verdict.outcome()).append("\",\n");
+    sb.append("  \"findingIdentity\": {\"mode\": ");
+    appendString(sb, verdict.findingIdentity().mode());
+    sb.append(", \"baselineSchemaVersion\": ");
+    appendString(sb, verdict.findingIdentity().baselineSchemaVersion());
+    sb.append(", \"candidateSchemaVersion\": ");
+    appendString(sb, verdict.findingIdentity().candidateSchemaVersion());
+    sb.append("},\n");
     sb.append("  \"incompleteReasons\": ");
     appendIncompleteReasons(sb, verdict.incompleteReasons(), redactor);
     sb.append(",\n  \"newFindings\": ");
@@ -610,7 +693,11 @@ public final class ReportComparator {
       if (!(entry instanceof Map<?, ?> report)) {
         throw invalidEnvelope("reports[" + i + "] must be an object");
       }
-      validateReport(report, i, stableIdentityRequired);
+      validateReport(
+          report,
+          i,
+          stableIdentityRequired,
+          schemaVersion.minor() >= FIRST_FINDING_ID_SCHEMA_MINOR);
       String testId = optionalString(report, "testId");
       reports.add(
           new ParsedReport(
@@ -633,7 +720,8 @@ public final class ReportComparator {
           reports,
           redaction,
           coverage,
-          comparisonInputs);
+          comparisonInputs,
+          schemaVersion);
     }
 
     AuditOutcome outcome;
@@ -649,7 +737,8 @@ public final class ReportComparator {
           reports,
           redaction,
           coverage,
-          comparisonInputs);
+          comparisonInputs,
+          schemaVersion);
     }
     try {
       AuditRunResult validated =
@@ -665,7 +754,8 @@ public final class ReportComparator {
           reports,
           redaction,
           coverage,
-          comparisonInputs);
+          comparisonInputs,
+          schemaVersion);
     } catch (IllegalArgumentException e) {
       throw invalidEnvelope("outcome and incompleteReasons are inconsistent: " + e.getMessage());
     }
@@ -726,7 +816,10 @@ public final class ReportComparator {
   }
 
   private static void validateReport(
-      Map<?, ?> report, int reportIndex, boolean stableIdentityRequired) {
+      Map<?, ?> report,
+      int reportIndex,
+      boolean stableIdentityRequired,
+      boolean findingIdsRequired) {
     String path = "reports[" + reportIndex + "]";
     if (stableIdentityRequired) {
       requireNonBlankString(report, "testId", path);
@@ -744,19 +837,47 @@ public final class ReportComparator {
     requireInteger(summary, "totalQueries", path + ".summary");
     requireInteger(summary, "executionTimeMs", path + ".summary");
 
-    List<?> confirmedIssues = requireArray(report, "confirmedIssues", path);
-    for (int i = 0; i < confirmedIssues.size(); i++) {
-      Object entry = confirmedIssues.get(i);
-      String findingPath = path + ".confirmedIssues[" + i + "]";
-      if (!(entry instanceof Map<?, ?> finding)) {
-        throw invalidEnvelope(findingPath + " must be an object");
+    Set<String> findingIds = new LinkedHashSet<>();
+    for (String field : List.of("confirmedIssues", "infoIssues", "acknowledgedIssues")) {
+      if (!findingIdsRequired && !field.equals("confirmedIssues") && !report.containsKey(field)) {
+        continue;
       }
-      requireString(finding, "type", findingPath);
-      requireNullableString(finding, "query", findingPath);
-      requireNullableString(finding, "sourceLocation", findingPath);
-      requireNullableString(finding, "table", findingPath);
-      requireNullableString(finding, "detail", findingPath);
+      List<?> issues = requireArray(report, field, path);
+      for (int i = 0; i < issues.size(); i++) {
+        String findingPath = path + "." + field + "[" + i + "]";
+        if (!(issues.get(i) instanceof Map<?, ?> finding)) {
+          throw invalidEnvelope(findingPath + " must be an object");
+        }
+        requireString(finding, "type", findingPath);
+        requireNullableString(finding, "query", findingPath);
+        requireNullableString(finding, "sourceLocation", findingPath);
+        requireNullableString(finding, "table", findingPath);
+        requireNullableString(finding, "detail", findingPath);
+        if (findingIdsRequired || finding.containsKey("column")) {
+          requireNullableString(finding, "column", findingPath);
+        }
+        if (findingIdsRequired) {
+          String findingId = requireFindingId(finding, findingPath);
+          if (!findingIds.add(findingId)) {
+            throw invalidEnvelope(
+                findingPath + ".findingId duplicates another finding in this test");
+          }
+        }
+      }
     }
+  }
+
+  private static String requireFindingId(Map<?, ?> finding, String path) {
+    requireString(finding, "findingId", path);
+    String findingId = (String) finding.get("findingId");
+    if (FINDING_ID_PATTERN.matcher(findingId).matches()) {
+      return findingId;
+    }
+    if (!findingId.startsWith(FindingId.PREFIX) && findingId.matches("qa-finding-v[0-9]+:.*")) {
+      throw unsupportedEvolution("unsupported findingId algorithm");
+    }
+    throw invalidEnvelope(
+        path + ".findingId must use qa-finding-v1: followed by 64 lowercase hex digits");
   }
 
   private static Map<?, ?> requireObject(Map<?, ?> object, String field, String path) {
@@ -953,20 +1074,34 @@ public final class ReportComparator {
   }
 
   private static List<ComparedFinding> confirmedFindings(
-      List<ParsedReport> reports, Map<ParsedReport, String> identities) {
+      Envelope envelope, Map<ParsedReport, String> identities, boolean recordedIdentity) {
     List<ComparedFinding> findings = new ArrayList<>();
-    for (ParsedReport parsedReport : reports) {
+    for (ParsedReport parsedReport : envelope.reports()) {
       Map<?, ?> report = parsedReport.value();
       String testClass = parsedReport.ref().testClass();
       String testName = parsedReport.ref().testName();
       String testIdentity = identities.get(parsedReport);
       List<?> confirmed = (List<?>) report.get("confirmedIssues");
+      Set<String> legacyKeys = new LinkedHashSet<>();
       for (Object entry : confirmed) {
         Map<?, ?> issue = (Map<?, ?>) entry;
         String type = (String) issue.get("type");
-        String query = (String) issue.get("query");
-        String sourceLocation = stableSourceLocation((String) issue.get("sourceLocation"));
-        String key = testIdentity + "|" + type + "|" + query + "|" + sourceLocation;
+        String findingId = envelope.hasFindingIds() ? (String) issue.get("findingId") : null;
+        String column = (String) issue.get("column");
+        String key =
+            recordedIdentity
+                ? "recorded:" + lengthPrefixed(testIdentity) + findingId
+                : FindingId.legacyKey(
+                    testIdentity,
+                    type,
+                    (String) issue.get("query"),
+                    (String) issue.get("sourceLocation"),
+                    (String) issue.get("table"),
+                    column);
+        if (envelope.hasFindingIds() && !recordedIdentity && !legacyKeys.add(key)) {
+          throw invalidEnvelope(
+              "legacy finding identity is ambiguous; regenerate both reports with schema 1.7 or later");
+        }
         findings.add(
             new ComparedFinding(
                 new Finding(
@@ -976,18 +1111,13 @@ public final class ReportComparator {
                     type,
                     (String) issue.get("table"),
                     (String) issue.get("detail"),
-                    key),
+                    key,
+                    findingId,
+                    column),
                 testIdentity));
       }
     }
     return findings;
-  }
-
-  private static String stableSourceLocation(String sourceLocation) {
-    if (sourceLocation == null) {
-      return null;
-    }
-    return SOURCE_LINE_NUMBER.matcher(sourceLocation).replaceAll("");
   }
 
   private static Map<String, TestRef> auditedTests(
@@ -1087,7 +1217,9 @@ public final class ReportComparator {
     sb.append("[\n");
     for (int i = 0; i < findings.size(); i++) {
       Finding f = findings.get(i);
-      sb.append("    {\"testId\": ");
+      sb.append("    {\"findingId\": ");
+      appendString(sb, f.findingId());
+      sb.append(", \"testId\": ");
       appendString(sb, f.testId());
       sb.append(", \"test\": \"")
           .append(JsonReporter.escapeJson(f.testClass() + "." + f.testName()))
@@ -1099,6 +1231,8 @@ public final class ReportComparator {
             .append(JsonReporter.escapeJson(redactor.sql(f.table())))
             .append("\"");
       }
+      sb.append(", \"column\": ");
+      appendString(sb, redactor.sql(f.column()));
       if (f.detail() != null) {
         sb.append(", \"detail\": \"")
             .append(JsonReporter.escapeJson(redactor.diagnostic(f.detail())))

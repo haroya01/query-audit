@@ -132,7 +132,7 @@ class QueryEvidenceTest {
     var mapper = new ObjectMapper();
     var schema =
         JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7)
-            .getSchema(getClass().getResourceAsStream("/report-1.6.schema.json"));
+            .getSchema(getClass().getResourceAsStream("/report-1.7.schema.json"));
     String full = JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(report("full"))));
     String compact =
         JsonReporter.toRunEnvelopeJson(
