@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import javax.sql.DataSource;
@@ -189,7 +190,8 @@ class QueryAuditAutoConfigurationTest {
     @DisplayName("report outputDir defaults to 'build/reports/query-audit'")
     void reportOutputDirDefault() {
       QueryAuditProperties props = new QueryAuditProperties();
-      assertThat(props.getReport().getOutputDir()).isEqualTo("build/reports/query-audit");
+      assertThat(props.getReport().getOutputDir())
+          .isEqualTo(QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR);
     }
 
     @Test
@@ -267,6 +269,46 @@ class QueryAuditAutoConfigurationTest {
   @Nested
   @DisplayName("Property binding to QueryAuditConfig")
   class PropertyBindingTests {
+
+    @Test
+    @DisplayName("report format defaults to console in QueryAuditConfig")
+    void reportFormatDefaultsInConfig() {
+      contextRunner.run(
+          context ->
+              assertThat(context.getBean(QueryAuditConfig.class).getReportFormat())
+                  .isEqualTo(ReportFormat.CONSOLE));
+    }
+
+    @Test
+    @DisplayName("query-audit.report.format binds to QueryAuditConfig")
+    void reportFormatPropertyBinding() {
+      contextRunner
+          .withPropertyValues("query-audit.report.format=json")
+          .run(
+              context ->
+                  assertThat(context.getBean(QueryAuditConfig.class).getReportFormat())
+                      .isEqualTo(ReportFormat.JSON));
+    }
+
+    @Test
+    @DisplayName("report output directory uses the documented default")
+    void reportOutputDirectoryDefaultsInConfig() {
+      contextRunner.run(
+          context ->
+              assertThat(context.getBean(QueryAuditConfig.class).getReportOutputDir())
+                  .isEqualTo(QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR));
+    }
+
+    @Test
+    @DisplayName("query-audit.report.output-dir binds to QueryAuditConfig")
+    void reportOutputDirectoryPropertyBinding() {
+      contextRunner
+          .withPropertyValues("query-audit.report.output-dir=build/custom-query-reports")
+          .run(
+              context ->
+                  assertThat(context.getBean(QueryAuditConfig.class).getReportOutputDir())
+                      .isEqualTo("build/custom-query-reports"));
+    }
 
     @Test
     @DisplayName("suppressQueries property binds to QueryAuditConfig")

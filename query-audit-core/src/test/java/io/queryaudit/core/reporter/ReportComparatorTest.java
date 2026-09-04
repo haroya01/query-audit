@@ -3,16 +3,25 @@ package io.queryaudit.core.reporter;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.queryaudit.core.model.AuditIncompleteReason;
+import io.queryaudit.core.model.AuditOutcome;
+import io.queryaudit.core.model.AuditRunResult;
+import io.queryaudit.core.model.IncompleteReasonCode;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.model.TestSelector;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Round-trip tests for the delta verdict (issue #167): envelopes are produced by the real {@link
@@ -35,7 +44,7 @@ class ReportComparatorTest {
   }
 
   private static String envelope(QueryAuditReport... reports) {
-    return JsonReporter.toEnvelopeJson(List.of(reports));
+    return JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(reports)));
   }
 
   private static String envelopeWithRawReport(String report) {
@@ -59,6 +68,31 @@ class ReportComparatorTest {
         1,
         queries,
         2_000_000L);
+  }
+
+  private static QueryAuditReport reportWithIdentity(
+      String testClass, String testName, String testId, List<Issue> confirmed, int queries) {
+    return new QueryAuditReport(
+            testClass,
+            testName,
+            confirmed,
+            List.of(),
+            List.of(),
+            List.of(new QueryRecord("SELECT 1", 2_000_000L, 0L, "at T.m:1")),
+            1,
+            queries,
+            2_000_000L)
+        .withTestIdentity(testId, new TestSelector("junit-unique-id", testId));
+  }
+
+  private static String legacyEnvelope(QueryAuditReport report) {
+    return "{\"schemaVersion\":\"1.0.0\",\"reports\":[" + reportWithoutIdentity(report) + "]}";
+  }
+
+  private static String reportWithoutIdentity(QueryAuditReport report) {
+    String json = JsonReporter.toJson(report);
+    String withoutTestId = "{\n" + json.substring(json.indexOf("  \"testClass\""));
+    return withoutTestId.replace("  \"testSelector\": null,\n", "");
   }
 
   @Nested
@@ -117,6 +151,139 @@ class ReportComparatorTest {
       assertThat(verdict.executionTimeMsBefore()).isEqualTo(2);
       assertThat(verdict.complete()).isTrue();
       assertThat(ReportComparator.exitCode(verdict)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("stable test identity survives a display-name change")
+    void displayNameChangeDoesNotSplitTheFinding() {
+      String testId = "[engine:junit-jupiter]/[class:com.example.OrderTest]/[method:findOrders()]";
+      Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(
+              envelope(
+                  reportWithIdentity(
+                      "OrderTest", "loads recent orders", testId, List.of(finding), 5)),
+              envelope(
+                  reportWithIdentity(
+                      "OrderTest", "recent order query", testId, List.of(finding), 5)));
+
+      assertThat(verdict.persisting()).hasSize(1);
+      assertThat(verdict.newFindings()).isEmpty();
+      assertThat(verdict.resolved()).isEmpty();
+      assertThat(verdict.missingTests()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("duplicate display names remain different tests")
+    void stableIdsDistinguishDuplicateDisplayNames() {
+      Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+      QueryAuditReport alpha =
+          reportWithIdentity(
+              "OrderTest",
+              "duplicate",
+              "[engine:junit-jupiter]/[class:com.alpha.OrderTest]/[method:load()]",
+              List.of(finding),
+              5);
+      QueryAuditReport beta =
+          reportWithIdentity(
+              "OrderTest",
+              "duplicate",
+              "[engine:junit-jupiter]/[class:com.beta.OrderTest]/[method:load()]",
+              List.of(finding),
+              5);
+
+      ReportComparator.Verdict verdict = ReportComparator.compare(envelope(alpha), envelope(beta));
+
+      assertThat(verdict.newFindings()).hasSize(1);
+      assertThat(verdict.resolved()).isEmpty();
+      assertThat(verdict.persisting()).isEmpty();
+      assertThat(verdict.missingTests())
+          .containsExactly(
+              new ReportComparator.TestRef(
+                  "[engine:junit-jupiter]/[class:com.alpha.OrderTest]/[method:load()]",
+                  "OrderTest",
+                  "duplicate"));
+    }
+
+    @Test
+    @DisplayName("a 0.5 report matches one new report through its exact legacy identity")
+    void legacyReportHasAnExactCompatibilityPath() {
+      Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+      QueryAuditReport oldReport = report("findOrders", List.of(finding), 5);
+      QueryAuditReport newReport =
+          reportWithIdentity(
+              "OrderServiceTest",
+              "findOrders",
+              "[engine:junit-jupiter]/[class:example.OrderServiceTest]/[method:findOrders()]",
+              List.of(finding),
+              5);
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(legacyEnvelope(oldReport), envelope(newReport));
+
+      assertThat(verdict.persisting()).hasSize(1);
+      assertThat(verdict.newFindings()).isEmpty();
+      assertThat(verdict.resolved()).isEmpty();
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.incompleteReasons())
+          .extracting(reason -> reason.code())
+          .containsExactly(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+    }
+
+    @Test
+    @DisplayName("a schema 1.1 report uses the legacy identity fallback")
+    void outcomeEnvelopeWithoutStableIdentityHasACompatibilityPath() {
+      Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+      QueryAuditReport oldReport = report("findOrders", List.of(finding), 5);
+      QueryAuditReport newReport =
+          reportWithIdentity(
+              "OrderServiceTest",
+              "findOrders",
+              "[engine:junit-jupiter]/[class:example.OrderServiceTest]/[method:findOrders()]",
+              List.of(finding),
+              5);
+      String schema11 =
+          "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"PASS\","
+              + "\"incompleteReasons\":[],\"reports\":["
+              + reportWithoutIdentity(oldReport)
+              + "]}";
+
+      ReportComparator.Verdict verdict = ReportComparator.compare(schema11, envelope(newReport));
+
+      assertThat(verdict.persisting()).hasSize(1);
+      assertThat(verdict.newFindings()).isEmpty();
+      assertThat(verdict.resolved()).isEmpty();
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.PASS);
+    }
+
+    @Test
+    @DisplayName("an ambiguous legacy identity fails with a migration diagnostic")
+    void ambiguousLegacyIdentityIsRejected() {
+      QueryAuditReport oldReport = report("duplicate", List.of(), 1);
+      QueryAuditReport first =
+          reportWithIdentity("OrderServiceTest", "duplicate", "junit:first", List.of(), 1);
+      QueryAuditReport second =
+          reportWithIdentity("OrderServiceTest", "duplicate", "junit:second", List.of(), 1);
+
+      assertThatThrownBy(
+              () -> ReportComparator.compare(legacyEnvelope(oldReport), envelope(first, second)))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("legacy test identity is ambiguous")
+          .hasMessageContaining("regenerate the 0.5 report");
+    }
+
+    @Test
+    @DisplayName("duplicate stable IDs are rejected")
+    void duplicateStableIdsAreRejected() {
+      QueryAuditReport first =
+          reportWithIdentity("OrderServiceTest", "first", "junit:same", List.of(), 1);
+      QueryAuditReport second =
+          reportWithIdentity("OrderServiceTest", "second", "junit:same", List.of(), 1);
+
+      assertThatThrownBy(() -> ReportComparator.compare(envelope(first, second), envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("duplicate testId junit:same");
     }
 
     @Test
@@ -183,16 +350,19 @@ class ReportComparatorTest {
     @DisplayName("does not resolve findings when their audited test is missing")
     void missingFindingProducerIsIncomplete() {
       Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+      QueryAuditReport baseline = report("findOrders", List.of(finding), 11);
 
-      ReportComparator.Verdict verdict =
-          ReportComparator.compare(
-              envelope(report("findOrders", List.of(finding), 11)), envelope());
+      ReportComparator.Verdict verdict = ReportComparator.compare(envelope(baseline), envelope());
 
       assertThat(verdict.resolved()).isEmpty();
       assertThat(verdict.newFindings()).isEmpty();
       assertThat(verdict.persisting()).isEmpty();
       assertThat(verdict.missingTests())
-          .containsExactly(new ReportComparator.TestRef("OrderServiceTest", "findOrders"));
+          .containsExactly(
+              new ReportComparator.TestRef(baseline.getTestId(), "OrderServiceTest", "findOrders"));
+      assertThat(verdict.incompleteReasons())
+          .extracting(reason -> reason.code())
+          .containsExactly(IncompleteReasonCode.EXPECTED_TEST_MISSING);
       assertThat(verdict.complete()).isFalse();
       assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
     }
@@ -200,12 +370,13 @@ class ReportComparatorTest {
     @Test
     @DisplayName("is incomplete when a clean audited test is missing")
     void missingCleanTestIsIncomplete() {
-      ReportComparator.Verdict verdict =
-          ReportComparator.compare(envelope(report("findOrders", List.of(), 3)), envelope());
+      QueryAuditReport baseline = report("findOrders", List.of(), 3);
+      ReportComparator.Verdict verdict = ReportComparator.compare(envelope(baseline), envelope());
 
       assertThat(verdict.resolved()).isEmpty();
       assertThat(verdict.missingTests())
-          .containsExactly(new ReportComparator.TestRef("OrderServiceTest", "findOrders"));
+          .containsExactly(
+              new ReportComparator.TestRef(baseline.getTestId(), "OrderServiceTest", "findOrders"));
       assertThat(verdict.complete()).isFalse();
       assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
     }
@@ -216,11 +387,9 @@ class ReportComparatorTest {
       Issue unverified = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
       Issue fixed = nPlusOne("select * from payments where order_id = ?", "S.pay:20");
       Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
+      QueryAuditReport missing = report("missingOrders", List.of(unverified), 11);
 
-      String before =
-          envelope(
-              report("missingOrders", List.of(unverified), 11),
-              report("findPayments", List.of(fixed), 5));
+      String before = envelope(missing, report("findPayments", List.of(fixed), 5));
       String after =
           envelope(
               report("findPayments", List.of(), 3), report("findRefunds", List.of(introduced), 7));
@@ -234,7 +403,9 @@ class ReportComparatorTest {
           .extracting(ReportComparator.Finding::testName)
           .containsExactly("findRefunds");
       assertThat(verdict.missingTests())
-          .containsExactly(new ReportComparator.TestRef("OrderServiceTest", "missingOrders"));
+          .containsExactly(
+              new ReportComparator.TestRef(
+                  missing.getTestId(), "OrderServiceTest", "missingOrders"));
       assertThat(verdict.complete()).isFalse();
       assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
     }
@@ -250,12 +421,128 @@ class ReportComparatorTest {
     @Test
     @DisplayName("accepts compatible 1.x schema versions")
     void acceptsCompatibleSchemaVersion() {
-      String compatibleEnvelope = "{\"schemaVersion\":\"1.42.7\",\"reports\":[]}";
+      String compatibleEnvelope =
+          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"PASS\","
+              + "\"incompleteReasons\":[],\"reports\":[]}";
 
       ReportComparator.Verdict verdict =
           ReportComparator.compare(compatibleEnvelope, compatibleEnvelope);
 
       assertThat(verdict.complete()).isTrue();
+    }
+
+    @Test
+    @DisplayName("future outcome values produce a structured inconclusive verdict")
+    void futureOutcomeIsInconclusive() {
+      Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
+      String futureEnvelope =
+          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"SKIPPED\","
+              + "\"incompleteReasons\":[],\"reports\":["
+              + JsonReporter.toJson(report("findOrders", List.of(introduced), 9))
+              + "]}";
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(envelope(report("findOrders", List.of(), 5)), futureEnvelope);
+
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.newFindings()).hasSize(1);
+      assertThat(verdict.queriesBefore()).isEqualTo(5);
+      assertThat(verdict.queriesAfter()).isEqualTo(9);
+      assertThat(verdict.incompleteReasons())
+          .singleElement()
+          .satisfies(
+              reason -> {
+                assertThat(reason.code()).isEqualTo(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+                assertThat(reason.detail()).contains("unknown outcome 'SKIPPED'");
+              });
+    }
+
+    @Test
+    @DisplayName("future incomplete reason values produce a structured inconclusive verdict")
+    void futureIncompleteReasonIsInconclusive() {
+      Issue resolved = nPlusOne("select * from payments where order_id = ?", "S.pay:20");
+      String futureEnvelope =
+          "{\"schemaVersion\":\"1.42.7\",\"outcome\":\"INCONCLUSIVE\","
+              + "\"incompleteReasons\":[{\"code\":\"FUTURE_REASON\",\"detail\":null}],"
+              + "\"reports\":["
+              + JsonReporter.toJson(report("findOrders", List.of(resolved), 8))
+              + "]}";
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(futureEnvelope, envelope(report("findOrders", List.of(), 3)));
+
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.resolved()).hasSize(1);
+      assertThat(verdict.queriesBefore()).isEqualTo(8);
+      assertThat(verdict.queriesAfter()).isEqualTo(3);
+      assertThat(verdict.incompleteReasons())
+          .singleElement()
+          .satisfies(
+              reason -> {
+                assertThat(reason.code()).isEqualTo(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+                assertThat(reason.detail()).contains("unknown incomplete reason 'FUTURE_REASON'");
+              });
+    }
+
+    @Test
+    @DisplayName("a legacy 1.0 input is inconclusive instead of being inferred as PASS")
+    void legacyEnvelopeWithoutOutcomeIsInconclusive() {
+      Issue finding = nPlusOne("select * from order_items where order_id = ?", "S.load:10");
+      QueryAuditReport baselineReport = report("findOrders", List.of(finding), 11);
+      String legacyEnvelope =
+          "{\"schemaVersion\":\"1.0.0\",\"reports\":[" + JsonReporter.toJson(baselineReport) + "]}";
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(legacyEnvelope, envelope(report("findOrders", List.of(), 7)));
+
+      assertThat(verdict.resolved()).hasSize(1);
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.incompleteReasons())
+          .extracting(reason -> reason.code())
+          .containsExactly(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("an inconclusive candidate retains partial finding deltas")
+    void inconclusiveCandidateRetainsPartialDeltas() {
+      Issue fixed = nPlusOne("select * from payments where order_id = ?", "S.pay:20");
+      Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
+      String before = envelope(report("findPayments", List.of(fixed), 5));
+      String after =
+          JsonReporter.toRunEnvelopeJson(
+              AuditRunResult.inconclusive(
+                  List.of(
+                      report("findPayments", List.of(), 3),
+                      report("findRefunds", List.of(introduced), 7)),
+                  new AuditIncompleteReason(
+                      IncompleteReasonCode.QUERY_LIMIT_REACHED, "findRefunds retained 7 queries")));
+
+      ReportComparator.Verdict verdict = ReportComparator.compare(before, after);
+
+      assertThat(verdict.resolved()).hasSize(1);
+      assertThat(verdict.newFindings()).hasSize(1);
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.incompleteReasons())
+          .extracting(reason -> reason.code())
+          .containsExactly(IncompleteReasonCode.QUERY_LIMIT_REACHED);
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("a completed candidate policy failure remains FAIL without new findings")
+    void candidateFailureIsNotHiddenByAnEmptyDelta() {
+      QueryAuditReport unchanged = report("findOrders", List.of(), 3);
+
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare(
+              envelope(unchanged),
+              JsonReporter.toRunEnvelopeJson(AuditRunResult.fail(List.of(unchanged))));
+
+      assertThat(verdict.newFindings()).isEmpty();
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.FAIL);
+      assertThat(verdict.complete()).isTrue();
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(1);
     }
 
     @Test
@@ -268,15 +555,85 @@ class ReportComparatorTest {
     }
 
     @Test
-    @DisplayName("rejects an unsupported schema major version")
-    void rejectsUnsupportedSchemaVersion() {
+    @DisplayName("schema 1.1 requires explicit outcome fields")
+    void rejectsMissingOutcomeFields() {
       assertThatThrownBy(
               () ->
                   ReportComparator.compare(
-                      "{\"schemaVersion\":\"999.0.0\",\"reports\":[]}", envelope()))
+                      "{\"schemaVersion\":\"1.1.0\",\"reports\":[]}", envelope()))
           .isInstanceOf(IllegalArgumentException.class)
-          .hasMessageContaining("unsupported schemaVersion")
-          .hasMessageContaining("1.x");
+          .hasMessageContaining("envelope.outcome is required");
+
+      assertThatThrownBy(
+              () ->
+                  ReportComparator.compare(
+                      "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"PASS\"," + "\"reports\":[]}",
+                      envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("envelope.incompleteReasons is required");
+    }
+
+    @Test
+    @DisplayName("schema 1.2 requires stable identity fields")
+    void currentSchemaRequiresStableIdentity() {
+      QueryAuditReport report = report("findOrders", List.of(), 1);
+      String withoutIdentity =
+          "{\"schemaVersion\":\"1.2.0\",\"outcome\":\"PASS\","
+              + "\"incompleteReasons\":[],\"reports\":["
+              + reportWithoutIdentity(report)
+              + "]}";
+
+      assertThatThrownBy(() -> ReportComparator.compare(envelope(), withoutIdentity))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("reports[0].testId is required");
+
+      String withoutSelector =
+          JsonReporter.toRunEnvelopeJson(AuditRunResult.pass(List.of(report)))
+              .replace("      \"testSelector\": null,\n", "");
+      assertThatThrownBy(() -> ReportComparator.compare(envelope(), withoutSelector))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("reports[0].testSelector is required");
+    }
+
+    @Test
+    @DisplayName("outcome and incomplete reasons must form a valid run result")
+    void validatesOutcomeAndIncompleteReasons() {
+      assertThatThrownBy(
+              () ->
+                  ReportComparator.compare(
+                      "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"PASS\","
+                          + "\"incompleteReasons\":[{\"code\":\"QUERY_LIMIT_REACHED\","
+                          + "\"detail\":null}],\"reports\":[]}",
+                      envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("inconsistent")
+          .hasMessageContaining("PASS must not carry");
+
+      assertThatThrownBy(
+              () ->
+                  ReportComparator.compare(
+                      "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"INCONCLUSIVE\","
+                          + "\"incompleteReasons\":[],\"reports\":[]}",
+                      envelope()))
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining("requires at least one");
+    }
+
+    @Test
+    @DisplayName("an unsupported schema major produces a structured inconclusive verdict")
+    void unsupportedSchemaVersionIsInconclusive() {
+      ReportComparator.Verdict verdict =
+          ReportComparator.compare("{\"schemaVersion\":\"999.0.0\",\"reports\":[]}", envelope());
+
+      assertThat(verdict.outcome()).isEqualTo(AuditOutcome.INCONCLUSIVE);
+      assertThat(verdict.incompleteReasons())
+          .singleElement()
+          .satisfies(
+              reason -> {
+                assertThat(reason.code()).isEqualTo(IncompleteReasonCode.UNSUPPORTED_SCHEMA);
+                assertThat(reason.detail()).contains("999.0.0").contains("1.x");
+              });
+      assertThat(ReportComparator.exitCode(verdict)).isEqualTo(2);
     }
 
     @Test
@@ -419,6 +776,27 @@ class ReportComparatorTest {
   }
 
   @Nested
+  @DisplayName("command-line exit contract")
+  class CommandLine {
+
+    @Test
+    @DisplayName("a verdict write failure exits as inconclusive")
+    void verdictWriteFailureUsesExitCodeTwo(@TempDir Path tempDir) throws IOException {
+      Path before = tempDir.resolve("before.json");
+      Path after = tempDir.resolve("after.json");
+      Files.writeString(before, envelope());
+      Files.writeString(after, envelope());
+      Path blockedVerdict = Files.createDirectory(tempDir.resolve("verdict.json"));
+
+      int exitCode =
+          ReportComparator.run(
+              new String[] {before.toString(), after.toString(), blockedVerdict.toString()});
+
+      assertThat(exitCode).isEqualTo(2);
+    }
+  }
+
+  @Nested
   @DisplayName("verdict rendering")
   class Rendering {
 
@@ -427,13 +805,21 @@ class ReportComparatorTest {
     void verdictJsonRoundTrips() {
       Issue introduced = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
       String before = envelope(report("findOrders", List.of(), 5));
-      String after = envelope(report("findOrders", List.of(introduced), 9));
+      QueryAuditReport candidate = report("findOrders", List.of(introduced), 9);
+      String after = envelope(candidate);
 
       ReportComparator.Verdict verdict = ReportComparator.compare(before, after);
       String json = ReportComparator.toJson(verdict);
 
       Map<?, ?> parsed = (Map<?, ?>) MiniJsonParser.parse(json);
+      assertThat(parsed.get("outcome")).isEqualTo("FAIL");
+      assertThat((List<?>) parsed.get("incompleteReasons")).isEmpty();
       assertThat((List<?>) parsed.get("newFindings")).hasSize(1);
+      assertThat((List<?>) parsed.get("newFindings"))
+          .singleElement()
+          .satisfies(
+              finding ->
+                  assertThat(((Map<?, ?>) finding).get("testId")).isEqualTo(candidate.getTestId()));
       assertThat((List<?>) parsed.get("resolved")).isEmpty();
       assertThat(parsed.get("complete")).isEqualTo(Boolean.TRUE);
       assertThat((List<?>) parsed.get("missingTests")).isEmpty();
@@ -446,17 +832,27 @@ class ReportComparatorTest {
     @DisplayName("verdict.json and summary identify an incomplete comparison")
     void rendersMissingTests() {
       Issue finding = nPlusOne("select * from refunds where order_id = ?", "S.refund:30");
-      ReportComparator.Verdict verdict =
-          ReportComparator.compare(envelope(report("findOrders", List.of(finding), 5)), envelope());
+      QueryAuditReport baseline = report("findOrders", List.of(finding), 5);
+      ReportComparator.Verdict verdict = ReportComparator.compare(envelope(baseline), envelope());
 
       Map<?, ?> parsed = (Map<?, ?>) MiniJsonParser.parse(ReportComparator.toJson(verdict));
+      assertThat(parsed.get("outcome")).isEqualTo("INCONCLUSIVE");
       assertThat(parsed.get("complete")).isEqualTo(Boolean.FALSE);
       assertThat((List<?>) parsed.get("resolved")).isEmpty();
+      assertThat((List<?>) parsed.get("incompleteReasons"))
+          .singleElement()
+          .satisfies(
+              entry -> {
+                Map<?, ?> reason = (Map<?, ?>) entry;
+                assertThat(reason.get("code")).isEqualTo("EXPECTED_TEST_MISSING");
+                assertThat(reason.get("detail")).isNull();
+              });
       assertThat((List<?>) parsed.get("missingTests"))
           .singleElement()
           .satisfies(
               entry -> {
                 Map<?, ?> missing = (Map<?, ?>) entry;
+                assertThat(missing.get("testId")).isEqualTo(baseline.getTestId());
                 assertThat(missing.get("testClass")).isEqualTo("OrderServiceTest");
                 assertThat(missing.get("testName")).isEqualTo("findOrders");
               });

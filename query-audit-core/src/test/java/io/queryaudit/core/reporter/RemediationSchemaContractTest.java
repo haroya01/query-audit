@@ -17,7 +17,8 @@ import org.junit.jupiter.api.Test;
 
 class RemediationSchemaContractTest {
 
-  private static final Path REPORT_SCHEMA = Path.of("..", "docs", "schema", "report.schema.json");
+  private static final Path REPORT_SCHEMA =
+      Path.of("..", "docs", "schema", "report-1.2.schema.json");
 
   @Test
   void schemaAcceptsEveryEmittedRemediationKind() throws IOException {

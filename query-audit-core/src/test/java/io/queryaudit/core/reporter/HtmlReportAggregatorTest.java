@@ -6,6 +6,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.model.TestSelector;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -22,7 +23,9 @@ class HtmlReportAggregatorTest {
 
   @BeforeEach
   void setUp() {
-    HtmlReportAggregator.getInstance().reset();
+    HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
+    aggregator.reset();
+    aggregator.setMaxInMemoryReports(HtmlReportAggregator.DEFAULT_MAX_IN_MEMORY_REPORTS);
   }
 
   // ── Helpers ──────────────────────────────────────────────────────
@@ -46,6 +49,25 @@ class HtmlReportAggregatorTest {
   @Nested
   @DisplayName("Issue #41: singleton accumulation behavior")
   class SingletonAccumulation {
+
+    @Test
+    @DisplayName("lightweight reports retain stable test identity")
+    void lightweightReportsRetainStableIdentity() {
+      HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
+      aggregator.setMaxInMemoryReports(1);
+      String testId = "[engine:junit-jupiter]/[class:example.OrderTest]/[method:loadsOrders()]";
+      QueryAuditReport report =
+          dummyReport("OrderTest", "loads orders")
+              .withTestIdentity(testId, new TestSelector("junit-unique-id", testId));
+
+      aggregator.addReport(dummyReport("WarmupTest", "warmup"));
+      aggregator.addReport(report);
+
+      QueryAuditReport lightweight = aggregator.getReports().get(1);
+      assertThat(lightweight.getTestId()).isEqualTo(testId);
+      assertThat(lightweight.getTestSelector()).isEqualTo(report.getTestSelector());
+      assertThat(lightweight.getAllQueries()).isEmpty();
+    }
 
     /**
      * The aggregator is a singleton that accumulates reports without resetting. Calling

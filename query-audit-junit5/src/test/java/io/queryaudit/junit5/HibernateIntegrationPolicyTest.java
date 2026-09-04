@@ -93,7 +93,21 @@ class HibernateIntegrationPolicyTest {
     QueryAuditAnalyzer analyzer =
         new QueryAuditAnalyzer(
             QueryAuditConfig.defaults(),
-            List.of(baseline("n-plus-one"), baseline("find-by-id-for-association")));
+            List.of(
+                new BaselineEntry(
+                    "n-plus-one",
+                    null,
+                    null,
+                    "Lazy load: example.Team.members",
+                    "team",
+                    "accepted"),
+                new BaselineEntry(
+                    "find-by-id-for-association",
+                    null,
+                    null,
+                    "findById: example.User#42",
+                    "team",
+                    "accepted")));
 
     QueryAuditReport report = mergeAllFindings(analyzer);
 
@@ -169,10 +183,6 @@ class HibernateIntegrationPolicyTest {
 
   private static QueryAuditAnalyzer analyzer(QueryAuditConfig config) {
     return new QueryAuditAnalyzer(config, List.of());
-  }
-
-  private static BaselineEntry baseline(String issueCode) {
-    return new BaselineEntry(issueCode, null, null, null, "team", "accepted");
   }
 
   private static LazyLoadRecord lazyLoad(String ownerId) {

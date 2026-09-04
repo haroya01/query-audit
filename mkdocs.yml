@@ -1,6 +1,6 @@
 site_name: QueryAudit
 site_url: https://haroya01.github.io/query-audit
-site_description: Automatic query performance analysis for JUnit tests
+site_description: Database behavior contracts and SQL analysis for JUnit 5 tests
 site_author: QueryAudit Contributors
 repo_url: https://github.com/haroya01/query-audit
 repo_name: haroya01/query-audit

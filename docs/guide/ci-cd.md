@@ -1,39 +1,98 @@
 # CI/CD Integration
 
-QueryAudit is designed to catch query performance issues before they reach production.
-By running as part of your test suite, it integrates naturally into any CI/CD pipeline.
+QueryAudit runs inside the JUnit test process, so the existing test job remains the build gate. CI
+adds two responsibilities: select a machine-readable report and retain it even when the tests fail.
 
-## How It Works
+!!! note "Version scope"
+    The `outcome` checks, selectable suite format, configurable output directory, and fail-on-write
+    behavior on this page require QueryAudit 0.6. After a session with at least one completed
+    audited result, QueryAudit 0.5 writes both HTML and schema 1.0 JSON and does not include a suite
+    outcome.
 
-When `fail-on-detection` is `true` (the default), QueryAudit throws an `AssertionError`
-on confirmed issues (ERROR or WARNING severity). This causes the test to fail, which in
-turn causes the CI build to fail -- no extra configuration needed.
+## Select JSON for CI
 
+For Spring Boot, keep the CI settings in `src/test/resources/application-ci.yml`:
+
+```yaml
+query-audit:
+  enabled: true
+  fail-on-detection: true
+  auto-open-report: false
+  report:
+    format: json
+    output-dir: build/reports/query-audit
 ```
-BUILD FAILED
 
-OrderServiceTest > findRecentOrders_shouldUseIndex FAILED
-    java.lang.AssertionError: QueryAudit detected 2 issue(s) in findRecentOrders_shouldUseIndex:
+Activate the profile with `SPRING_PROFILES_ACTIVE=ci`. QueryAudit writes one aggregate file to
+`build/reports/query-audit/report.json` after the participating test classes finish.
 
-      [ERROR] N+1 Query detected (table: order_items)
-        Detail: Query repeated 12 times (threshold: 3)
-        Suggestion: Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)
+## Plain JUnit build-tool setup
 
-      [ERROR] Missing index on WHERE column (table: orders)
-        Detail: Column 'user_id' is used in WHERE clause but has no index
-        Suggestion: CREATE INDEX idx_orders_user_id ON orders (user_id);
+Plain JUnit projects configure the same value as a test-JVM system property. Maven forwards a user
+property passed with `-D` to the test process:
+
+```bash
+mvn test -DqueryAudit.reportFormat=json
 ```
 
-Per-test query contracts fail the build the same way: `@ExpectMaxQueryCount` caps the
-total query count, and `@ExpectQueries` sets independent SELECT / INSERT / UPDATE / DELETE
-budgets -- catching a silently growing SELECT count or an accidental write on a read-only
-path in CI. See the [Annotations Guide](annotations.md#expectqueries) for details.
+Gradle does not forward command-line system properties to forked `Test` workers by default. Add a
+small project-property bridge once, then use the `-P` commands throughout this guide:
 
----
+=== "Groovy DSL"
 
-## GitHub Actions
+    ```groovy
+    def queryAuditTestProperties = [
+        queryAuditReportFormat: 'queryAudit.reportFormat',
+        queryAuditMode: 'queryAudit.mode',
+        queryAuditUpdateBaseline: 'queryAudit.updateBaseline',
+        queryAuditContractsRecord: 'queryAudit.contracts.record',
+        queryAuditContractsPath: 'queryAudit.contractsPath',
+        queryAuditCountBaselinePath: 'queryAudit.countBaselinePath',
+        queryAuditAutoOpenReport: 'queryaudit.autoOpenReport'
+    ]
 
-### Basic Setup with MySQL
+    tasks.withType(Test).configureEach {
+        queryAuditTestProperties.each { projectProperty, systemPropertyName ->
+            def value = providers.gradleProperty(projectProperty)
+            if (value.isPresent()) {
+                systemProperty systemPropertyName, value.get()
+            }
+        }
+    }
+    ```
+
+=== "Kotlin DSL"
+
+    ```kotlin
+    val queryAuditTestProperties = mapOf(
+        "queryAuditReportFormat" to "queryAudit.reportFormat",
+        "queryAuditMode" to "queryAudit.mode",
+        "queryAuditUpdateBaseline" to "queryAudit.updateBaseline",
+        "queryAuditContractsRecord" to "queryAudit.contracts.record",
+        "queryAuditContractsPath" to "queryAudit.contractsPath",
+        "queryAuditCountBaselinePath" to "queryAudit.countBaselinePath",
+        "queryAuditAutoOpenReport" to "queryaudit.autoOpenReport"
+    )
+
+    tasks.withType<Test>().configureEach {
+        for ((projectProperty, systemPropertyName) in queryAuditTestProperties) {
+            providers.gradleProperty(projectProperty).orNull?.let {
+                systemProperty(systemPropertyName, it)
+            }
+        }
+    }
+    ```
+
+A plain JUnit JSON run is now:
+
+```bash
+./gradlew test -PqueryAuditReportFormat=json
+```
+
+## GitHub Actions with MySQL
+
+This workflow preserves both test failures and the QueryAudit report. The final step rejects a
+missing report, a non-`PASS` audit outcome, invalid JSON, or an unrelated test failure.
 
 ```yaml
 name: CI
@@ -43,6 +102,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -65,426 +127,147 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: '17'
-          distribution: 'temurin'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-
-      - name: Run tests (including QueryAudit analysis)
-        run: ./gradlew test
-        env:
-          SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/testdb
-          SPRING_DATASOURCE_USERNAME: root
-          SPRING_DATASOURCE_PASSWORD: test
-
-      - name: Upload QueryAudit reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: query-audit-reports
-          path: build/reports/query-audit/
-          if-no-files-found: ignore
-```
-
-!!! tip "The `if: always()` on the upload step"
-    This ensures reports are uploaded even when tests fail, so you can review the
-    QueryAudit output in the build artifacts.
-
-### Inline PR annotations + step summary
-
-When `GITHUB_ACTIONS=true` (set by the runner), QueryAudit emits
-[workflow commands](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions)
-in addition to the console report:
-
-- `ERROR` → `::error`, `WARNING` → `::warning`, `INFO` → `::notice`
-- Markdown summary appended to `$GITHUB_STEP_SUMMARY`
-
-Activation is automatic; no workflow changes needed. For a PR comment, pair
-the JSON report with a `github-script` step:
-
-```yaml
-      - name: Post QueryAudit summary as PR comment
-        if: github.event_name == 'pull_request' && always()
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const path = 'build/reports/query-audit/report.json';
-            if (!fs.existsSync(path)) return;
-            // report.json is a versioned envelope: { schemaVersion, reports: [...] }.
-            const tests = JSON.parse(fs.readFileSync(path, 'utf8')).reports;
-            const confirmed = tests.reduce((s, t) => s + (t.summary?.confirmedIssues || 0), 0);
-            const info = tests.reduce((s, t) => s + (t.summary?.infoIssues || 0), 0);
-            const body = `**QueryAudit**: ${confirmed} confirmed, ${info} info across ${tests.length} test method(s).`;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
-```
-
-!!! info "Report file layout"
-    QueryAudit writes a single aggregate `report.json` at the configured
-    `report.output-dir` (default `build/reports/query-audit/`). The top-level value is a
-    **versioned envelope** — `schemaVersion` plus a `reports` array with one entry per test
-    method. Each entry has a `summary` object (`confirmedIssues`, `infoIssues`,
-    `acknowledgedIssues`, ...) plus `confirmedIssues` / `infoIssues` arrays of individual
-    findings. See [Reports — JSON schema](reports.md#json-schema) for the full contract.
-    Per-test HTML files (`<TestClass>.html`) and an `index.html` aggregate sit alongside.
-
-### With PostgreSQL
-
-```yaml
-jobs:
-  test:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: testdb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd="pg_isready -U test"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v4
 
       - name: Run tests
+        id: tests
+        continue-on-error: true
         run: ./gradlew test
         env:
-          SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
-          SPRING_DATASOURCE_USERNAME: test
-          SPRING_DATASOURCE_PASSWORD: test
-
-      - name: Upload QueryAudit reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: query-audit-reports
-          path: build/reports/query-audit/
-          if-no-files-found: ignore
-```
-
-### With Baseline Files
-
-To use baseline-based regression detection in CI, commit the baseline file and
-update it explicitly when query counts change intentionally.
-
-```yaml
-      - name: Run tests with baseline
-        run: ./gradlew test
-
-      # Only update baseline on main branch merges, not PRs
-      - name: Update baseline (main only)
-        if: github.ref == 'refs/heads/main' && success()
-        run: |
-          ./gradlew test -DqueryAudit.updateBaseline=true
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .query-audit-counts
-          git diff --cached --quiet || git commit -m "chore: update query-audit baseline"
-          git push
-```
-
-### With PR Comment (JSON Report Parsing)
-
-Post a summary of QueryAudit findings as a PR comment:
-
-```yaml
-      - name: Run tests with JSON report
-        run: ./gradlew test
-        env:
+          SPRING_PROFILES_ACTIVE: ci
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/testdb
           SPRING_DATASOURCE_USERNAME: root
           SPRING_DATASOURCE_PASSWORD: test
-        continue-on-error: true
 
-      - name: Comment on PR with QueryAudit summary
-        if: github.event_name == 'pull_request' && always()
-        uses: actions/github-script@v7
+      - name: Upload QueryAudit report
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const fs = require('fs');
-            const path = 'build/reports/query-audit/report.json';
-            if (!fs.existsSync(path)) return;
-            // report.json is a versioned envelope: { schemaVersion, reports: [...] }.
-            const tests = JSON.parse(fs.readFileSync(path, 'utf8')).reports;
-            const totalConfirmed = tests.reduce((s, t) => s + (t.summary?.confirmedIssues || 0), 0);
-            const totalInfo = tests.reduce((s, t) => s + (t.summary?.infoIssues || 0), 0);
-            if (totalConfirmed > 0 || totalInfo > 0) {
-              const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: `**QueryAudit Report**: ${totalConfirmed} confirmed, ${totalInfo} info. See the [build artifacts](${runUrl}) for the per-test HTML reports.`
-              });
-            }
+          name: query-audit-report
+          path: build/reports/query-audit/report.json
+          if-no-files-found: error
+
+      - name: Verify test and audit outcomes
+        if: always()
+        env:
+          TEST_OUTCOME: ${{ steps.tests.outcome }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          path = Path("build/reports/query-audit/report.json")
+          if not path.is_file():
+              sys.exit("QueryAudit report.json is missing")
+
+          report = json.loads(path.read_text())
+          outcome = report.get("outcome")
+          if outcome != "PASS":
+              sys.exit(f"QueryAudit outcome is {outcome!r}")
+          if os.environ["TEST_OUTCOME"] != "success":
+              sys.exit("The test task failed")
+          PY
 ```
 
----
+When `GITHUB_ACTIONS=true`, QueryAudit also emits native error, warning, and notice commands and
+adds a Markdown step summary. No comment-writing permission is needed for those annotations.
 
-## GitLab CI
+If you add a bot-authored PR comment, grant `pull-requests: write` only to the job that posts it.
+Tokens for fork pull requests are read-only by default; do not move untrusted pull-request code into
+a privileged workflow without reviewing the security boundary.
 
-### Basic Setup with MySQL
+## PostgreSQL service
+
+Use the same steps and replace the service and datasource variables:
 
 ```yaml
-test:
-  image: eclipse-temurin:17-jdk
-  services:
-    - name: mysql:8.0
-      alias: mysql
-      variables:
-        MYSQL_ROOT_PASSWORD: test
-        MYSQL_DATABASE: testdb
-  variables:
-    SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/testdb"
-    SPRING_DATASOURCE_USERNAME: root
-    SPRING_DATASOURCE_PASSWORD: test
-  script:
-    - ./gradlew test
-  artifacts:
-    when: always
-    paths:
-      - build/reports/query-audit/
-    expire_in: 7 days
+services:
+  postgres:
+    image: postgres:16
+    env:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: testdb
+    ports:
+      - 5432:5432
+    options: >-
+      --health-cmd="pg_isready -U test"
+      --health-interval=10s
+      --health-timeout=5s
+      --health-retries=5
+
+env:
+  SPRING_PROFILES_ACTIVE: ci
+  SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/testdb
+  SPRING_DATASOURCE_USERNAME: test
+  SPRING_DATASOURCE_PASSWORD: test
 ```
 
-### With PostgreSQL
+## Maven jobs
 
-```yaml
-test:
-  image: eclipse-temurin:17-jdk
-  services:
-    - name: postgres:16
-      alias: postgres
-      variables:
-        POSTGRES_USER: test
-        POSTGRES_PASSWORD: test
-        POSTGRES_DB: testdb
-  variables:
-    SPRING_DATASOURCE_URL: "jdbc:postgresql://postgres:5432/testdb"
-    SPRING_DATASOURCE_USERNAME: test
-    SPRING_DATASOURCE_PASSWORD: test
-  script:
-    - ./gradlew test
-  artifacts:
-    when: always
-    paths:
-      - build/reports/query-audit/
-    expire_in: 7 days
-```
-
-### With Baseline Update on Main
-
-```yaml
-test:
-  image: eclipse-temurin:17-jdk
-  services:
-    - name: mysql:8.0
-      alias: mysql
-      variables:
-        MYSQL_ROOT_PASSWORD: test
-        MYSQL_DATABASE: testdb
-  variables:
-    SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/testdb"
-    SPRING_DATASOURCE_USERNAME: root
-    SPRING_DATASOURCE_PASSWORD: test
-  script:
-    - ./gradlew test
-  artifacts:
-    when: always
-    paths:
-      - build/reports/query-audit/
-    expire_in: 7 days
-
-update-baseline:
-  image: eclipse-temurin:17-jdk
-  stage: deploy
-  only:
-    - main
-  services:
-    - name: mysql:8.0
-      alias: mysql
-      variables:
-        MYSQL_ROOT_PASSWORD: test
-        MYSQL_DATABASE: testdb
-  variables:
-    SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/testdb"
-    SPRING_DATASOURCE_USERNAME: root
-    SPRING_DATASOURCE_PASSWORD: test
-  script:
-    - ./gradlew test -DqueryAudit.updateBaseline=true
-    - git config user.name "GitLab CI"
-    - git config user.email "ci@example.com"
-    - git add .query-audit-counts
-    - git diff --cached --quiet || git commit -m "chore: update query-audit baseline"
-    - git push
-```
-
----
-
-## Jenkins
-
-=== "Declarative Pipeline"
-
-    ```groovy
-    pipeline {
-        agent any
-
-        stages {
-            stage('Test') {
-                steps {
-                    sh './gradlew test'
-                }
-            }
-        }
-
-        post {
-            always {
-                archiveArtifacts artifacts: 'build/reports/query-audit/**', allowEmptyArchive: true
-                junit 'build/test-results/test/*.xml'
-            }
-        }
-    }
-    ```
-
-=== "Scripted Pipeline"
-
-    ```groovy
-    node {
-        stage('Checkout') {
-            checkout scm
-        }
-        stage('Test') {
-            try {
-                sh './gradlew test'
-            } finally {
-                archiveArtifacts artifacts: 'build/reports/query-audit/**', allowEmptyArchive: true
-                junit 'build/test-results/test/*.xml'
-            }
-        }
-    }
-    ```
-
----
-
-## Maven Projects
-
-All examples above use Gradle. For Maven projects, replace `./gradlew test` with:
+The Spring profile above works without build-tool-specific flags:
 
 ```bash
-mvn test
+SPRING_PROFILES_ACTIVE=ci mvn test
 ```
 
-And adjust artifact paths from `build/reports/query-audit/` to `target/reports/query-audit/`.
+The configured output directory remains `build/reports/query-audit/` for both Maven and Gradle.
+Change `report.output-dir` to `target/query-audit/` if the Maven job should keep all generated
+artifacts under `target`.
 
----
+## Other CI systems
 
-## Recommended CI Configuration
+Use the same sequence in GitLab CI, Jenkins, Buildkite, or another runner:
 
-For CI environments, use these application.yml settings:
+1. Run the tests without preventing the artifact and verification steps from executing.
+2. Upload `report.json` even when the test command fails, and treat a missing file as an error.
+3. Parse the 0.6 suite `outcome` and require `PASS`.
+4. Restore the original test command result so unrelated test failures still fail the job.
 
-```yaml
-query-audit:
-  enabled: true
-  fail-on-detection: true
-  auto-open-report: false              # No browser in CI
-  report:
-    format: console
-    output-dir: build/reports/query-audit
-  suppress-queries:
-    - "SELECT 1"                       # Health-check queries
-```
+Do not configure an optional or empty artifact archive for a required QueryAudit gate. A test-engine
+failure can happen before the suite finalizer writes the file, so absence is an incomplete result.
 
-!!! tip "Separate CI profile"
-    Create a `src/test/resources/application-ci.yml` with CI-specific settings
-    and activate it with `SPRING_PROFILES_ACTIVE=ci` in your CI environment.
+## Gradual adoption
 
----
+Start with a contract the team can explain:
 
-## Strategies for Gradual Adoption
+- Set `fail-on-detection: false` or use `@EnableQueryInspector` while reviewing existing findings.
+- Use the `recommended` profile to omit context-dependent style rules from the first pass.
+- Add `@ExpectQueries` or `@ExpectMaxQueryCount` to established paths before widening coverage.
+- Move to `@QueryAudit`, `fail-on-detection: true`, or `mode: all` as the accepted surface grows.
 
-If you are introducing QueryAudit to a large existing project, you may not want every
-pre-existing issue to break the build immediately. Here are some strategies:
+Finding acknowledgement and query-count baselines solve different problems:
 
-### 1. Report-Only Mode First
+| File | Purpose | Update path |
+|---|---|---|
+| `.query-audit-baseline` | Acknowledge specific known findings | Review entries as suppressions; see [Suppressing issues](suppressing.md) |
+| `.query-audit-counts` | Detect count increases for tests without a stronger inline budget | Record intentionally, review the count diff, then rerun normally |
+| `.query-audit-contracts` | Enforce exact SELECT, INSERT, UPDATE, and DELETE counts for selected tests | Use the explicit contract recording workflow |
 
-Start with `fail-on-detection: false` to see what QueryAudit finds without failing
-any builds:
-
-```yaml
-query-audit:
-  fail-on-detection: false
-```
-
-Review the reports, fix what you can, and then switch to `true`.
-
-### 2. Fail Only on Critical Issues
-
-Use `@QueryAudit(failOn = {...})` to limit which issue types cause failures:
-
-```java
-@QueryAudit(failOn = {IssueType.N_PLUS_ONE, IssueType.MISSING_WHERE_INDEX})
-@SpringBootTest
-class OrderServiceTest { }
-```
-
-### 3. Suppress Known Issues
-
-Suppress issues that are known and accepted, then enable `fail-on-detection` for
-everything else:
-
-```yaml
-query-audit:
-  fail-on-detection: true
-  suppress-patterns:
-    - "select-all"
-    - "missing-where-index:legacy_table.old_column"
-```
-
-### 4. Use Baseline for Regression Detection
-
-Establish a baseline of existing issues, then only fail on new regressions:
+With the Gradle bridge above, record a query-count baseline locally with:
 
 ```bash
-# First run: create the baseline
-./gradlew test -DqueryAudit.updateBaseline=true
-
-# Subsequent runs: detect regressions against baseline
-./gradlew test
+./gradlew test -PqueryAuditUpdateBaseline=true
 ```
 
-Commit the `.query-audit-counts` baseline file to your repository so all team members
-and CI use the same baseline.
+The recording run can still report the old baseline as a regression. Review the resulting
+`.query-audit-counts` diff, then rerun `./gradlew test` and commit the file in the same change that
+justifies the new counts. Do not let a pull-request job push baseline changes automatically.
 
----
+For snapshot contracts, use `-PqueryAuditContractsRecord=true` and follow the
+[query contract workflow](contracts.md).
 
-## See Also
+## See also
 
-- [Configuration Reference](configuration.md) -- All CI-relevant configuration options
-- [Reports](reports.md) -- Understanding report formats and output
-- [Suppressing Issues](suppressing.md) -- Suppressing known issues in CI
-- [Troubleshooting](troubleshooting.md) -- Fixing CI-specific issues
+- [Configuration reference](configuration.md)
+- [Reports and comparison](reports.md)
+- [Query contracts](contracts.md)
+- [Suppressing known findings](suppressing.md)
+- [Troubleshooting](troubleshooting.md)

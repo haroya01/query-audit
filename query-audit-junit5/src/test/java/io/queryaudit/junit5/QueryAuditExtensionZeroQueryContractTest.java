@@ -9,6 +9,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.queryaudit.core.interceptor.QueryInterceptor;
+import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCounts;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
@@ -28,6 +29,9 @@ import org.junit.jupiter.api.parallel.Resources;
 @DisplayName("QueryAuditExtension — zero-query contracts (issue #182)")
 @ResourceLock(Resources.SYSTEM_PROPERTIES)
 class QueryAuditExtensionZeroQueryContractTest {
+
+  private static final String TEST_ID =
+      "[engine:junit-jupiter]/[class:io.queryaudit.junit5.QueryAuditExtensionZeroQueryContractTest]/[method:auditedMethod()]";
 
   private static final ExtensionContext.Namespace NAMESPACE =
       ExtensionContext.Namespace.create(QueryAuditExtension.class);
@@ -63,6 +67,11 @@ class QueryAuditExtensionZeroQueryContractTest {
         .hasMessageContaining("SELECT: contract 1, executed 0");
 
     assertZeroQueryExecutionWasRecorded(fixture);
+    assertThat(
+            runState(fixture.context())
+                .result(HtmlReportAggregator.getInstance().getReports())
+                .outcome())
+        .isEqualTo(AuditOutcome.FAIL);
   }
 
   @Test
@@ -75,6 +84,11 @@ class QueryAuditExtensionZeroQueryContractTest {
         .doesNotThrowAnyException();
 
     assertZeroQueryExecutionWasRecorded(fixture);
+    assertThat(
+            runState(fixture.context())
+                .result(HtmlReportAggregator.getInstance().getReports())
+                .outcome())
+        .isEqualTo(AuditOutcome.PASS);
   }
 
   private static void assertZeroQueryExecutionWasRecorded(ContractContext fixture) {
@@ -82,6 +96,9 @@ class QueryAuditExtensionZeroQueryContractTest {
         .singleElement()
         .satisfies(
             report -> {
+              assertThat(report.getTestId()).isEqualTo(TEST_ID);
+              assertThat(report.getTestSelector().type()).isEqualTo("junit-unique-id");
+              assertThat(report.getTestSelector().value()).isEqualTo(TEST_ID);
               assertThat(report.getTestName()).isEqualTo("auditedMethod()");
               assertThat(report.getTotalQueryCount()).isZero();
             });
@@ -102,23 +119,40 @@ class QueryAuditExtensionZeroQueryContractTest {
     when(classContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(classStore);
     when(classContext.getParent()).thenReturn(Optional.empty());
 
+    MapStore rootStore = new MapStore();
+    rootStore.put(
+        QueryAuditExtension.AuditRunState.class.getName(), new QueryAuditExtension.AuditRunState());
+    ExtensionContext rootContext = mock(ExtensionContext.class);
+    when(rootContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(rootStore);
+    when(rootContext.getRoot()).thenReturn(rootContext);
+    when(classContext.getRoot()).thenReturn(rootContext);
+
     Method testMethod =
         QueryAuditExtensionZeroQueryContractTest.class.getDeclaredMethod("auditedMethod");
     ExtensionContext methodContext = mock(ExtensionContext.class);
     when(methodContext.getStore(any(ExtensionContext.Namespace.class))).thenReturn(methodStore);
     when(methodContext.getParent()).thenReturn(Optional.of(classContext));
+    when(methodContext.getRoot()).thenReturn(rootContext);
     doReturn(QueryAuditExtensionZeroQueryContractTest.class)
         .when(methodContext)
         .getRequiredTestClass();
     when(methodContext.getRequiredTestMethod()).thenReturn(testMethod);
     when(methodContext.getTestMethod()).thenReturn(Optional.of(testMethod));
     when(methodContext.getDisplayName()).thenReturn("auditedMethod()");
+    when(methodContext.getUniqueId()).thenReturn(TEST_ID);
     return new ContractContext(methodContext, currentCounts);
   }
 
   private static String contractKey() {
-    return QueryCountBaseline.key(
-        QueryAuditExtensionZeroQueryContractTest.class.getSimpleName(), "auditedMethod()");
+    return QueryCountBaseline.key(TEST_ID);
+  }
+
+  private static QueryAuditExtension.AuditRunState runState(ExtensionContext context) {
+    return (QueryAuditExtension.AuditRunState)
+        context
+            .getRoot()
+            .getStore(NAMESPACE)
+            .get(QueryAuditExtension.AuditRunState.class.getName());
   }
 
   private static void restoreProperty(String key, String value) {

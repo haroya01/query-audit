@@ -57,11 +57,17 @@ and the full lifecycle of a query from execution to report.
 
   @AfterAll
       |
-      +- 16. Write HTML report to build/reports/query-audit/
-      +- 17. Write JSON report (if configured)
-      +- 18. Update query count baseline (if -DqueryAudit.updateBaseline=true)
-      +- 19. Auto-open report in browser (if configured)
+      +- 16. Write the selected JSON or HTML suite artifact (if configured)
+      +- 17. Update query count baseline (if queryAudit.updateBaseline=true in the test JVM)
+      +- 18. Auto-open the selected HTML report (if configured)
 ```
+
+QueryAudit supports ordinary `@Test` methods and each `@ParameterizedTest` invocation as a
+separate audit boundary. An active `@TestFactory` is rejected before query capture because JUnit's
+lifecycle callbacks surround the factory method but do not expose a separate boundary for each
+`DynamicTest` child. The run is reported as `INCONCLUSIVE` with
+`AUDIT_INITIALIZATION_FAILED`. Move audited cases to `@Test` or `@ParameterizedTest`, or add
+`@QueryAuditExclude` to a factory that should run without auditing.
 
 ---
 
@@ -479,8 +485,8 @@ QueryAudit tracks query counts per test method across runs using a baseline file
 (`.query-audit-counts`).
 
 ```
-  Run 1:  OrderServiceTest.findOrders -> 5 SELECT, 0 INSERT -> saved to baseline
-  Run 2:  OrderServiceTest.findOrders -> 15 SELECT, 0 INSERT -> regression detected!
+  Run 1:  JUnit unique ID for OrderServiceTest.findOrders -> 5 SELECT, 0 INSERT -> saved
+  Run 2:  same stable test ID -> 15 SELECT, 0 INSERT -> regression detected!
           (3x increase, +10 queries)
 ```
 
@@ -501,8 +507,17 @@ QueryAudit tracks query counts per test method across runs using a baseline file
 
 ### Updating the Baseline
 
+QueryAudit reads the update flag from the test JVM. With the
+[Gradle property bridge](../guide/ci-cd.md#plain-junit-build-tool-setup), run:
+
 ```bash
-./gradlew test -DqueryAudit.updateBaseline=true
+./gradlew test -PqueryAuditUpdateBaseline=true
+```
+
+Maven users can pass the system property directly:
+
+```bash
+mvn test -DqueryAudit.updateBaseline=true
 ```
 
 ---

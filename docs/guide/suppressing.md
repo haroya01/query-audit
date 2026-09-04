@@ -279,21 +279,37 @@ query-audit:
 
 ## Baseline-Based Suppression
 
-The query count baseline tracks known issue counts per test. Issues that match
-the baseline are classified as **ACKNOWLEDGED** rather than CONFIRMED, and do
-not cause test failures.
+The `.query-audit-baseline` file records findings that have been reviewed and accepted. Matching
+findings are classified as **ACKNOWLEDGED** rather than CONFIRMED and do not cause test failures.
 
-```bash
-# Create or update the baseline from current test results
-./gradlew test -DqueryAudit.updateBaseline=true
+```text
+# issue-code | table | column | acknowledged-by | reason | query-pattern
+missing-where-index | orders | status | db-team | Low-cardinality lookup | select id from orders where status = ?
 ```
 
-This is useful for gradual adoption: establish a baseline of existing issues, then
-only fail on new regressions.
+The query pattern is normalized before comparison, so changes to whitespace, letter case, and
+literal values do not invalidate an acknowledgement. A structurally different query remains a new
+finding even when its rule, table, and column are the same.
 
-An existing malformed or unreadable `.query-audit-counts` file fails audit initialization. The
-error identifies the file and, for malformed entries, the line number. A missing file remains valid
-before the first baseline is recorded.
+Five-field rows written before 0.6 still load, but they no longer acknowledge findings that contain
+SQL. Review each legacy entry and append its query pattern before relying on it again. This
+fail-closed migration prevents an old table-level acknowledgement from hiding a new query.
+Upgrade every runner before relying on the new scope: QueryAudit 0.5 and earlier ignore the sixth
+field and continue using coordinate-only matching.
+
+The separate query-count baseline uses `.query-audit-counts`. An existing malformed or unreadable
+count file fails audit initialization. The error identifies the file and, for malformed entries,
+the line number. A missing file remains valid before the first count baseline is recorded.
+
+Count entries recorded by QueryAudit 0.6 use JUnit's stable unique ID in the existing seven-column
+file format: `@junit | <uniqueId> | select | insert | update | delete | total`. Older
+`testClass | displayName | ...` rows remain readable as a migration fallback. QueryAudit warns when
+it uses one and fails if that fallback also matches another stable test. QueryAudit 0.5 does not
+match `@junit` rows to ordinary tests, so upgrade every runner before relying on stable identities.
+Re-run the full suite in baseline-recording mode to create stable rows for every matching test.
+With the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), use
+`./gradlew test -PqueryAuditUpdateBaseline=true`; with Maven, use
+`mvn test -DqueryAudit.updateBaseline=true`.
 
 ---
 
@@ -323,7 +339,7 @@ query-audit:
 | application.yml | `disabled-rules` | All tests in the project | Rule code (never runs) |
 | application.yml | `severity-overrides` | All tests in the project | Change severity per rule |
 | Programmatic | `addSuppressQuery(...)` | All tests using that config | SQL substring |
-| Baseline | `.query-audit-baseline` file | All tests in the project | Per-test issue matching |
+| Baseline | `.query-audit-baseline` file | All tests in the project | Rule, target, and query pattern |
 
 ---
 

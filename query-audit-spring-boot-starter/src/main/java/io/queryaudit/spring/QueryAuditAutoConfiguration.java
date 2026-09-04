@@ -2,6 +2,7 @@ package io.queryaudit.spring;
 
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.interceptor.DataSourceProxyFactory;
 import io.queryaudit.core.interceptor.QueryInterceptor;
@@ -51,6 +52,8 @@ public class QueryAuditAutoConfiguration {
         .suppressPatterns(new HashSet<>(properties.getSuppressPatterns()))
         .suppressQueries(new HashSet<>(properties.getSuppressQueries()))
         .showInfo(properties.getReport().isShowInfo())
+        .reportFormat(ReportFormat.parse(properties.getReport().getFormat()))
+        .reportOutputDir(properties.getReport().getOutputDir())
         .baselinePath(properties.getBaselinePath())
         .autoOpenReport(properties.isAutoOpenReport())
         .maxQueries(properties.getMaxQueries())
