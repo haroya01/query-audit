@@ -286,6 +286,7 @@ may be `null` when no additional context is available:
 | `AUDIT_INITIALIZATION_FAILED` | An active JUnit audit could not install reliable query capture, including unsupported concurrent execution. |
 | `AUDIT_ANALYSIS_FAILED` | QueryAudit could not complete analysis for an active test. Earlier per-test reports remain available, but the suite is incomplete. |
 | `CONTRACT_UNREADABLE` | The query contract or query-count baseline was unreadable or malformed. |
+| `POLICY_WRITE_FAILED` | Requested contract or query-count baseline recording failed. The launcher fails and the suite outcome is `INCONCLUSIVE`, even in report-only mode. |
 | `UNSUPPORTED_SCHEMA` | Report comparison received a schema it cannot evaluate safely, including legacy 1.0 input with no outcome. |
 | `EXPECTED_TEST_MISSING` | An expected test was not discovered, skipped, failed before completing its audit, or otherwise did not supply complete audit evidence. Report comparison also uses this for baseline-relative missing tests. |
 | `COVERAGE_MANIFEST_UNREADABLE` | An explicitly configured expected-test manifest was missing, or the selected manifest was unreadable, empty, or malformed. |
@@ -348,6 +349,18 @@ always points to the current version.
     ```
 
 ---
+
+### Parser identity
+
+From 0.6.0, every standard installation includes the same structural parser dependency. Tools
+can read its name and actual runtime version through `EnhancedSqlParser.parserName()` and
+`EnhancedSqlParser.parserVersion()`. The version comes from the loaded JSqlParser dependency's
+metadata, including when dependency management selects another version.
+
+Unsupported SQL and statements above 10,000 characters still use the regex fallback. This is a
+per-statement behavior, not a separate classpath-selected parser mode. Schema 1.2 does not yet
+include parser identity or audit-configuration fingerprints; use the same dependency versions and
+audit settings for both runs when comparing reports.
 
 ## Delta Verdict (compare two runs)
 

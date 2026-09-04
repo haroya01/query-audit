@@ -24,6 +24,21 @@ your tests; it provides the JUnit extension and the matching index metadata prov
 You still need your normal JDBC driver and a test database. QueryAudit does not create the
 database or replace your migration and fixture setup.
 
+### SQL parser dependency
+
+Starting with 0.6.0, `query-audit-core` brings JSqlParser 5.3 onto the runtime classpath
+transitively. No separate parser dependency is needed. Do not exclude it: a missing or incompatible
+parser is an installation error, not a switch to a different analysis mode.
+
+Structural extraction uses JSqlParser first. Statements it cannot parse, and statements longer
+than 10,000 characters, retain the regex fallback. Simple pattern checks and SQL normalization
+continue to use the built-in parser. A fallback is limited to that statement; later statements
+still use JSqlParser.
+
+If dependency management overrides the parser version, QueryAudit exposes the resolved version
+through `EnhancedSqlParser.parserVersion()`. Repackaged JARs must retain JSqlParser's Maven version
+metadata; QueryAudit fails initialization when it cannot identify the parser version.
+
 ## Spring Boot
 
 Add the starter and either the MySQL or PostgreSQL module. The starter discovers and wraps the
