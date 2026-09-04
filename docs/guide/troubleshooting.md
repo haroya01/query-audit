@@ -183,12 +183,16 @@ query-audit:
 
 ### SQL is too complex for the parser
 
-QueryAudit uses JSQLParser for structural SQL analysis (extracting WHERE columns,
-JOIN columns, table names, etc.) with a regex-based fallback for simpler pattern
-checks. Extremely complex or non-standard SQL (CTEs with multiple levels of nesting,
-database-specific syntax extensions) may not be fully parsed. If you suspect a
-parsing issue, check the console report to see if the query's normalized form
-looks correct.
+QueryAudit uses JSqlParser for structural SQL analysis (extracting WHERE columns, JOIN columns,
+table names, etc.). From 0.6.0 it is a required transitive dependency, so consumers use the same
+parser path as the tests. Unsupported statements and inputs longer than 10,000 characters fall
+back to the built-in regex parser; this may provide less complete structural information. Simple
+pattern checks and normalization always use the built-in parser.
+
+If a statement produces an unexpected finding, include the SQL and the values returned by
+`EnhancedSqlParser.parserName()` and `EnhancedSqlParser.parserVersion()` in the bug report.
+Check for exclusions or dependency overrides if the runtime parser cannot load. Missing version
+metadata is also an installation error; it must not be replaced with a guessed version.
 
 ---
 

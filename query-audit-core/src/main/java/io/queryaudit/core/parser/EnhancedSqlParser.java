@@ -1,7 +1,10 @@
 package io.queryaudit.core.parser;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import net.sf.jsqlparser.expression.Expression;
@@ -40,11 +43,9 @@ import net.sf.jsqlparser.util.deparser.StatementDeParser;
 
 /**
  * JSqlParser-backed SQL parser for extraction methods that benefit from AST-level accuracy. Falls
- * back to {@link SqlParser} when JSqlParser is not on the classpath or fails to parse.
- *
- * <p>JSqlParser is an optional dependency ({@code compileOnly}). All JSqlParser types are used only
- * inside {@link JSqlParserDelegate}, which the JVM loads lazily when {@link #JSQLPARSER_AVAILABLE}
- * is true.
+ * back to {@link SqlParser} for unsupported statements and inputs above the parsing size limit.
+ * JSqlParser is a required runtime dependency; a broken installation does not select a different
+ * parser silently.
  *
  * @author haroya
  * @since 0.2.0
@@ -53,27 +54,57 @@ public final class EnhancedSqlParser {
 
   private static final System.Logger LOG = System.getLogger(EnhancedSqlParser.class.getName());
 
-  private static final boolean JSQLPARSER_AVAILABLE;
-
-  static {
-    boolean available;
-    try {
-      Class.forName("net.sf.jsqlparser.parser.CCJSqlParserUtil");
-      available = true;
-    } catch (ClassNotFoundException e) {
-      available = false;
-    }
-    JSQLPARSER_AVAILABLE = available;
-  }
+  private static final String PARSER_VERSION = readParserVersion();
 
   private EnhancedSqlParser() {}
 
   /** Skip JSqlParser for SQL above this length; the regex baseline handles pathological inputs. */
   private static final int LENGTH_BAIL_OUT = 10_000;
 
-  /** Returns true if JSqlParser is on the classpath and available for use. */
+  /**
+   * Returns true. JSqlParser is now a required runtime dependency.
+   *
+   * @deprecated use {@link #parserName()} and {@link #parserVersion()} to identify the parser
+   */
+  @Deprecated(since = "0.6.0")
   public static boolean isJSqlParserAvailable() {
-    return JSQLPARSER_AVAILABLE;
+    return true;
+  }
+
+  /**
+   * Returns the structural parser used by this installation.
+   *
+   * @since 0.6.0
+   */
+  public static String parserName() {
+    return "JSqlParser";
+  }
+
+  /**
+   * Returns the version packaged with the loaded JSqlParser dependency.
+   *
+   * @since 0.6.0
+   */
+  public static String parserVersion() {
+    return PARSER_VERSION;
+  }
+
+  private static String readParserVersion() {
+    String metadata = "/META-INF/maven/com.github.jsqlparser/jsqlparser/pom.properties";
+    try (InputStream input = CCJSqlParserUtil.class.getResourceAsStream(metadata)) {
+      if (input == null) {
+        throw new IllegalStateException("JSqlParser version metadata is missing");
+      }
+      Properties properties = new Properties();
+      properties.load(input);
+      String version = properties.getProperty("version");
+      if (version == null || version.isBlank()) {
+        throw new IllegalStateException("JSqlParser version metadata contains no version");
+      }
+      return version.trim();
+    } catch (IOException e) {
+      throw new IllegalStateException("Could not read JSqlParser version metadata", e);
+    }
   }
 
   // ── WHERE columns ──────────────────────────────────────────────────
@@ -83,10 +114,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return new ArrayList<>();
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractWhereColumns(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -103,10 +134,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return new ArrayList<>();
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractJoinColumns(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -123,10 +154,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return new ArrayList<>();
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractTableNames(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -143,10 +174,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return new ArrayList<>();
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractOrderByColumns(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -163,10 +194,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return new ArrayList<>();
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractGroupByColumns(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -183,10 +214,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return new ArrayList<>();
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractWhereColumnsWithOperators(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -203,10 +234,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return new ArrayList<>();
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractJoinOnBodies(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -223,10 +254,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return null;
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractHavingClause(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -243,10 +274,10 @@ public final class EnhancedSqlParser {
     if (sql == null) {
       return null;
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.extractWhereBody(sql);
-      } catch (Throwable e) {
+      } catch (Exception | StackOverflowError e) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -267,10 +298,10 @@ public final class EnhancedSqlParser {
     if (!containsNestedSelect(sql)) {
       return sql;
     }
-    if (JSQLPARSER_AVAILABLE && sql.length() <= LENGTH_BAIL_OUT) {
+    if (sql.length() <= LENGTH_BAIL_OUT) {
       try {
         return JSqlParserDelegate.removeSubqueries(sql);
-      } catch (Throwable t) {
+      } catch (Exception | StackOverflowError t) {
         LOG.log(
             System.Logger.Level.DEBUG,
             "JSqlParser failed, falling back to regex: {0}",
@@ -327,7 +358,7 @@ public final class EnhancedSqlParser {
     return SqlParser.isSelectQuery(sql);
   }
 
-  /** Holds every JSqlParser reference; loaded lazily so the outer class runs without the dep. */
+  /** Parses and traverses SQL syntax trees, with a bounded cache shared by the extraction methods. */
   static final class JSqlParserDelegate {
 
     private JSqlParserDelegate() {}

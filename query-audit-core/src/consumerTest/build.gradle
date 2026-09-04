@@ -1,0 +1,37 @@
+plugins {
+    id 'application'
+}
+
+def queryAuditProperties = new Properties()
+file('../../../gradle.properties').withInputStream { queryAuditProperties.load(it) }
+
+repositories {
+    exclusiveContent {
+        forRepository {
+            maven {
+                url = file('../../build/consumer-test-repository')
+                metadataSources {
+                    mavenPom()
+                    ignoreGradleMetadataRedirection()
+                }
+            }
+        }
+        filter {
+            includeModule('io.github.haroya01', 'query-audit-core')
+        }
+    }
+    mavenCentral()
+}
+
+dependencies {
+    implementation "io.github.haroya01:query-audit-core:${queryAuditProperties.getProperty('version')}"
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+application {
+    mainClass = 'io.queryaudit.consumer.ParserConsumer'
+}
