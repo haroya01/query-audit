@@ -18,6 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Test release source validation
+        run: python3 -m unittest discover -s .github/scripts/tests -v
+
       - uses: actions/setup-java@v4
         with:
           java-version: ${{ matrix.java }}
