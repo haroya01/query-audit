@@ -21,6 +21,9 @@ public enum IncompleteReasonCode {
   /** A configured query contract or count baseline could not be read. */
   CONTRACT_UNREADABLE,
 
+  /** Requested query contract or count-baseline recording did not complete. */
+  POLICY_WRITE_FAILED,
+
   /** A test required by the audit coverage manifest did not run. */
   EXPECTED_TEST_MISSING,
 

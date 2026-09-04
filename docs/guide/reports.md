@@ -279,6 +279,7 @@ may be `null` when no additional context is available:
 | `AUDIT_INITIALIZATION_FAILED` | An active JUnit audit could not install reliable query capture, including unsupported concurrent execution. |
 | `AUDIT_ANALYSIS_FAILED` | QueryAudit could not complete analysis for an active test. Earlier per-test reports remain available, but the suite is incomplete. |
 | `CONTRACT_UNREADABLE` | The query contract or query-count baseline was unreadable or malformed. |
+| `POLICY_WRITE_FAILED` | Requested contract or query-count baseline recording failed. The launcher fails and the suite outcome is `INCONCLUSIVE`, even in report-only mode. |
 | `UNSUPPORTED_SCHEMA` | Report comparison received a schema it cannot evaluate safely, including legacy 1.0 input with no outcome. |
 | `EXPECTED_TEST_MISSING` | Report comparison can derive this from a baseline-relative missing test. Suite-wide expected-test generation remains part of [#240](https://github.com/haroya01/query-audit/issues/240). |
 | `REPORT_WRITE_FAILED` | The selected JSON or HTML artifact could not be written. QueryAudit records the incomplete state and fails the JUnit run; the missing artifact cannot contain its own failure reason. |
