@@ -1515,6 +1515,13 @@ public class HtmlReporter implements Reporter {
 
   private void appendQueryTimeline(StringBuilder sb, QueryAuditReport report) {
     List<QueryRecord> queries = report.getAllQueries();
+    if (report.getOmittedQueryCount() > 0) {
+      sb.append("<p class=\"query-evidence-notice\">Query evidence: ")
+          .append(report.getRetainedQueryCount())
+          .append(" retained, ")
+          .append(report.getOmittedQueryCount())
+          .append(" omitted from this report. Query totals and findings are unchanged.</p>\n");
+    }
     if (queries == null || queries.isEmpty()) return;
 
     // Build set of repeated normalized patterns (3+ occurrences)

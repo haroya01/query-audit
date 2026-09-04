@@ -29,11 +29,11 @@ public class QueryAuditProperties {
   private String mode = "annotated";
 
   /**
-   * Rule profile tier: {@code strict} (all rules, the default), {@code recommended} (opinionated
-   * rules off), or {@code minimal} (safety-critical only). {@code disabled-rules} / {@code
+   * Rule profile tier: {@code strict} (all rules), {@code recommended} (the default, with
+   * opinionated rules off), or {@code minimal} (safety-critical only). {@code disabled-rules} / {@code
    * enabled-rules} always win over the profile.
    */
-  private String profile = "strict";
+  private String profile = "recommended";
 
   /** Rule codes to run even when the profile tier excludes them. */
   private List<String> enabledRules = new ArrayList<>();
@@ -310,8 +310,17 @@ public class QueryAuditProperties {
 
   public static class Report {
     private String format = "console";
+    private String redaction = "redacted";
     private String outputDir = QueryAuditConfig.DEFAULT_REPORT_OUTPUT_DIR;
     private boolean showInfo = true;
+
+    public String getRedaction() {
+      return redaction;
+    }
+
+    public void setRedaction(String redaction) {
+      this.redaction = redaction;
+    }
 
     public String getFormat() {
       return format;

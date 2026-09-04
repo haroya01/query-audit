@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Issue;
@@ -82,7 +83,8 @@ class QueryAuditJpaIntegrationTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("nPlusOneTest", queries, null);
 
       // Should have 1 (findAll teams) + 5 (per team members) = 6 queries
@@ -110,7 +112,8 @@ class QueryAuditJpaIntegrationTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("independentCalls", queries, null);
 
       // Below threshold: no N+1 at any level
@@ -136,7 +139,8 @@ class QueryAuditJpaIntegrationTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("selectAll", queries, null);
 
       // SELECT_ALL is now INFO severity
@@ -151,7 +155,8 @@ class QueryAuditJpaIntegrationTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("hibernateQuery", queries, null);
 
       // Hibernate generates specific columns, NOT SELECT *
@@ -273,7 +278,8 @@ class QueryAuditJpaIntegrationTest {
       queryInterceptor.stop();
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("accuracy", queries, null);
 
       assertThat(report.getTotalQueryCount()).isEqualTo(queries.size());
@@ -373,7 +379,8 @@ class QueryAuditJpaIntegrationTest {
           .as("Derived findFirst query should have LIMIT/FETCH FIRST added by Spring Data")
           .isTrue();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("unboundedTest", queries, null);
 
       List<Issue> unboundedIssues =
@@ -413,7 +420,8 @@ class QueryAuditJpaIntegrationTest {
           .as("Custom @Query should NOT have LIMIT/FETCH FIRST added by Spring Data")
           .isFalse();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("unboundedTest", queries, null);
 
       List<Issue> unboundedIssues =
@@ -444,7 +452,8 @@ class QueryAuditJpaIntegrationTest {
       queryInterceptor.stop();
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("HtmlReportTests", "htmlTest", queries, null);
 
       HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();

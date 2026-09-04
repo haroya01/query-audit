@@ -5,13 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
-      version:
+      release_tag:
         description: >-
-          Version label for the Summary section. The actual version that gets
-          published is always whatever gradle.properties reads from the latest
-          main commit at run time.
-        required: false
-        default: ''
+          Existing published release tag to retry, for example v0.6.0.
+          The selected workflow branch does not select the artifact source.
+        type: string
+        required: true
 
 permissions:
   contents: write
@@ -39,8 +38,36 @@ jobs:
       needs.release-please.outputs.release_created == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    environment: maven-central
+    permissions:
+      contents: read
     steps:
+      - name: Check out release validation tools
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: release-tools
+          persist-credentials: false
+
+      - name: Resolve published release tag
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_EVENT: ${{ github.event_name }}
+          RETRY_TAG: ${{ inputs.release_tag }}
+          CREATED_TAG: ${{ needs.release-please.outputs.tag_name }}
+          CREATED_VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          python3 release-tools/.github/scripts/validate_release.py resolve \
+            --repository "$GITHUB_REPOSITORY" --event "$RELEASE_EVENT" \
+            --retry-tag "$RETRY_TAG" --created-tag "$CREATED_TAG" \
+            --created-version "$CREATED_VERSION"
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.commit }}
+          path: release-source
+          persist-credentials: false
 
       - uses: actions/setup-java@v4
         with:
@@ -51,9 +78,20 @@ jobs:
 
       - name: Build and Test
         run: ./gradlew build test
+        working-directory: release-source
+
+      - name: Validate release source before publication
+        id: validate
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.commit }}
+        run: |
+          python3 release-tools/.github/scripts/validate_release.py validate \
+            --source release-source --tag "$RELEASE_TAG" --commit "$RELEASE_COMMIT"
 
       - name: Publish to Maven Central
         run: ./gradlew publishAllPublicationsToMavenCentralRepository
+        working-directory: release-source
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -61,18 +99,21 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.GPG_SIGNING_PASSWORD }}
 
       - name: Summary
+        env:
+          VERSION: ${{ steps.validate.outputs.version }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_COMMIT: ${{ steps.release.outputs.commit }}
         run: |
-          VERSION="${{ needs.release-please.outputs.version || inputs.version }}"
-          if [ -z "$VERSION" ]; then
-            VERSION=$(grep -E '^version=' gradle.properties | head -n 1 | sed 's/^version=//; s/ *#.*//')
-          fi
-          echo "## Release ${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Published to Maven Central:" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-core:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-junit5:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-mysql:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-postgresql:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo "io.github.haroya01:query-audit-spring-boot-starter:${VERSION}" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' \
+            "## Release ${VERSION}" \
+            "" \
+            "Source: ${RELEASE_TAG} (${RELEASE_COMMIT})" \
+            "" \
+            "Published to Maven Central:" \
+            '```' \
+            "io.github.haroya01:query-audit-core:${VERSION}" \
+            "io.github.haroya01:query-audit-junit5:${VERSION}" \
+            "io.github.haroya01:query-audit-mysql:${VERSION}" \
+            "io.github.haroya01:query-audit-postgresql:${VERSION}" \
+            "io.github.haroya01:query-audit-spring-boot-starter:${VERSION}" \
+            '```' >> "$GITHUB_STEP_SUMMARY"

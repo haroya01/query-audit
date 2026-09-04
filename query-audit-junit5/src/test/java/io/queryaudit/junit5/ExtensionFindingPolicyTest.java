@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.ConnectionUsageTracker;
 import io.queryaudit.core.interceptor.QueryInterceptor;
@@ -46,7 +47,7 @@ class ExtensionFindingPolicyTest {
   @EnumSource(FindingSource.class)
   void disabledRulesExcludeEveryExternalFinding(FindingSource source) throws Exception {
     QueryAuditConfig config =
-        QueryAuditConfig.builder().addDisabledRule(source.issueType.getCode()).build();
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addDisabledRule(source.issueType.getCode()).build();
 
     QueryAuditReport report = merge(source, analyzer(config));
 
@@ -57,7 +58,7 @@ class ExtensionFindingPolicyTest {
   @EnumSource(FindingSource.class)
   void suppressPatternsRemoveEveryExternalFinding(FindingSource source) throws Exception {
     QueryAuditConfig config =
-        QueryAuditConfig.builder().addSuppressPattern(source.issueType.getCode()).build();
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSuppressPattern(source.issueType.getCode()).build();
 
     QueryAuditReport report = merge(source, analyzer(config));
 
@@ -68,7 +69,7 @@ class ExtensionFindingPolicyTest {
   @EnumSource(FindingSource.class)
   void severityOverridesReclassifyEveryExternalFinding(FindingSource source) throws Exception {
     QueryAuditConfig config =
-        QueryAuditConfig.builder()
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT)
             .addSeverityOverride(source.issueType.getCode(), Severity.ERROR)
             .build();
 
@@ -97,7 +98,7 @@ class ExtensionFindingPolicyTest {
             "performance-team",
             "accepted");
     QueryAuditAnalyzer analyzer =
-        new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of(entry));
+        new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of(entry));
 
     QueryAuditReport report = merge(source, analyzer);
 
@@ -111,7 +112,7 @@ class ExtensionFindingPolicyTest {
   @ParameterizedTest
   @EnumSource(FindingSource.class)
   void mergesPreserveReportMeasurementsAndIndexMetadata(FindingSource source) throws Exception {
-    QueryAuditReport report = merge(source, analyzer(QueryAuditConfig.defaults()));
+    QueryAuditReport report = merge(source, analyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build()));
 
     assertThat(allFindings(report)).extracting(Issue::type).containsExactly(source.issueType);
     assertThat(report.getIndexMetadata()).isSameAs(INDEX_METADATA);

@@ -15,8 +15,8 @@ import java.util.regex.Pattern;
  * {@code hasSelectAll}, etc.) where regex is perfectly adequate.
  *
  * <p>For complex structural extraction (WHERE columns, JOIN columns, table names), prefer {@link
- * EnhancedSqlParser} instead — it uses JSqlParser for accurate AST-level parsing when available and
- * falls back to the regex methods in this class automatically.
+ * EnhancedSqlParser} instead — it uses the required JSqlParser dependency for AST-level parsing
+ * and falls back to the regex methods in this class for unsupported statements.
  *
  * @author haroya
  * @since 0.2.0

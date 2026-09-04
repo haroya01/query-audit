@@ -2,6 +2,7 @@ package io.queryaudit.core.reporter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.AuditIncompleteReason;
 import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.model.AuditRunResult;
@@ -26,7 +27,7 @@ class JsonReporterTest {
   // ------------------------------------------------------------------
 
   private String generateJson(QueryAuditReport report) {
-    JsonReporter reporter = new JsonReporter();
+    JsonReporter reporter = new JsonReporter(ReportRedaction.FULL);
     reporter.report(report);
     String json = reporter.getJson();
     assertThat(json).isNotNull();
@@ -253,8 +254,8 @@ class JsonReporterTest {
 
     // Count opening braces for issues
     long issueObjectCount = json.chars().filter(c -> c == '{').count();
-    // 1 root + 1 summary + 2 issues + 1 remediation (n-plus-one only) + 2 queries = 7
-    assertThat(issueObjectCount).isEqualTo(7);
+    // Root, summary, evidence, two issues, remediation, and two queries.
+    assertThat(issueObjectCount).isEqualTo(8);
 
     assertThat(json).contains("\"type\": \"n-plus-one\"");
     assertThat(json).contains("\"type\": \"or-abuse\"");

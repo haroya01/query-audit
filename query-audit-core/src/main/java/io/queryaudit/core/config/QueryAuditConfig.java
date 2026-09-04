@@ -42,6 +42,7 @@ public class QueryAuditConfig {
   private final Set<String> suppressQueries;
   private final boolean showInfo;
   private final ReportFormat reportFormat;
+  private final ReportRedaction reportRedaction;
   private final String reportOutputDir;
   private final String baselinePath;
   private final boolean autoOpenReport;
@@ -76,6 +77,7 @@ public class QueryAuditConfig {
     this.suppressQueries = Collections.unmodifiableSet(new HashSet<>(builder.suppressQueries));
     this.showInfo = builder.showInfo;
     this.reportFormat = builder.reportFormat;
+    this.reportRedaction = builder.reportRedaction;
     this.reportOutputDir = builder.reportOutputDir;
     this.baselinePath = builder.baselinePath;
     this.autoOpenReport = builder.autoOpenReport;
@@ -146,6 +148,11 @@ public class QueryAuditConfig {
   /** Returns the selected suite report artifact. */
   public ReportFormat getReportFormat() {
     return reportFormat;
+  }
+
+  /** Detail policy for machine reports; the default removes SQL values and raw diagnostics. */
+  public ReportRedaction getReportRedaction() {
+    return reportRedaction;
   }
 
   /**
@@ -333,7 +340,7 @@ public class QueryAuditConfig {
   }
 
   /**
-   * Returns the active rule profile tier. Defaults to {@link RuleProfile#STRICT} (all rules).
+   * Returns the active rule profile tier. Defaults to {@link RuleProfile#RECOMMENDED} since 0.6.0.
    *
    * @since 0.5.0
    */
@@ -409,6 +416,7 @@ public class QueryAuditConfig {
     private Set<String> suppressQueries = new HashSet<>();
     private boolean showInfo = true;
     private ReportFormat reportFormat = ReportFormat.CONSOLE;
+    private ReportRedaction reportRedaction = ReportRedaction.REDACTED;
     private String reportOutputDir = DEFAULT_REPORT_OUTPUT_DIR;
     private String baselinePath = null;
     private boolean autoOpenReport = true;
@@ -432,7 +440,7 @@ public class QueryAuditConfig {
     private boolean countInsteadOfExistsEnabled = false;
     private AuditMode auditMode = AuditMode.ANNOTATED;
     private long connectionHeldIdleThresholdMs = 200;
-    private RuleProfile ruleProfile = RuleProfile.STRICT;
+    private RuleProfile ruleProfile = RuleProfile.RECOMMENDED;
     private Set<String> enabledRules = new HashSet<>();
 
     /**
@@ -451,6 +459,7 @@ public class QueryAuditConfig {
       b.suppressQueries = new HashSet<>(source.suppressQueries);
       b.showInfo = source.showInfo;
       b.reportFormat = source.reportFormat;
+      b.reportRedaction = source.reportRedaction;
       b.reportOutputDir = source.reportOutputDir;
       b.baselinePath = source.baselinePath;
       b.autoOpenReport = source.autoOpenReport;
@@ -524,6 +533,12 @@ public class QueryAuditConfig {
 
     public Builder showInfo(boolean showInfo) {
       this.showInfo = showInfo;
+      return this;
+    }
+
+    /** Selects the detail policy for machine-readable artifacts. */
+    public Builder reportRedaction(ReportRedaction reportRedaction) {
+      this.reportRedaction = Objects.requireNonNull(reportRedaction, "reportRedaction");
       return this;
     }
 
@@ -695,7 +710,8 @@ public class QueryAuditConfig {
      * @since 0.5.0
      */
     /**
-     * Sets the rule profile tier. {@code null} keeps the default ({@link RuleProfile#STRICT}).
+     * Sets the rule profile tier. {@code null} leaves the current value unchanged.
+     * The initial value is {@link RuleProfile#RECOMMENDED}.
      *
      * @since 0.5.0
      */

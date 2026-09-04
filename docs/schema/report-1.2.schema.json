@@ -50,6 +50,7 @@
             "AUDIT_INITIALIZATION_FAILED",
             "AUDIT_ANALYSIS_FAILED",
             "CONTRACT_UNREADABLE",
+            "POLICY_WRITE_FAILED",
             "EXPECTED_TEST_MISSING",
             "REPORT_WRITE_FAILED",
             "UNSUPPORTED_SCHEMA"

@@ -13,7 +13,10 @@ import io.queryaudit.core.model.AuditOutcome;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCounts;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -76,12 +79,22 @@ class QueryAuditExtensionZeroQueryContractTest {
 
   @Test
   @DisplayName("a recorded zero-query contract still passes")
+  @ResourceLock(Resources.SYSTEM_OUT)
   void zeroContractPassesForZeroQueries() throws Exception {
     QueryCounts expected = new QueryCounts(0, 0, 0, 0, 0);
     ContractContext fixture = contextWithContract(expected);
 
-    assertThatCode(() -> new QueryAuditExtension().afterEach(fixture.context()))
-        .doesNotThrowAnyException();
+    ByteArrayOutputStream output = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    try (PrintStream console = new PrintStream(output, true, StandardCharsets.UTF_8)) {
+      System.setOut(console);
+      assertThatCode(() -> new QueryAuditExtension().afterEach(fixture.context()))
+          .doesNotThrowAnyException();
+    } finally {
+      System.setOut(originalOut);
+    }
+    assertThat(output.toString(StandardCharsets.UTF_8))
+        .contains("[QueryAudit] Rule profile: recommended");
 
     assertZeroQueryExecutionWasRecorded(fixture);
     assertThat(
