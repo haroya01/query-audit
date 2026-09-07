@@ -1,147 +1,147 @@
 ---
-title: Spring Boot Integration
-description: Install the starter, verify DataSource capture, and configure an existing proxy.
+title: Spring Boot read-path policy
+description: Add a query policy to a Spring Boot test, verify a failure, and inspect SQL in the audit.
 ---
 
-# Spring Boot Integration
+# Spring Boot read-path policy
 
-The Spring Boot starter wraps test `DataSource` beans and makes QueryAudit configuration available
-through `application.yml`. SQL is captured when it passes through that wrapped `DataSource` during
-an active JUnit audit.
-
-!!! note "Version scope"
-    Dependency snippets use the current Maven Central release. The report-selection properties and
-    run outcomes on this page require QueryAudit 0.6.0 or later. On 0.5.x, omit the format
-    selection; a session with at least one completed audited result writes both HTML and schema 1.0
-    JSON.
+Use your existing database test to enforce a SELECT limit and zero INSERT/UPDATE/DELETEs.
+The starter wraps the Spring `DataSource`; these snippets use published `0.6.0`.
 
 ## Add the starter
 
-Add the starter and the module for the database used by the test. PostgreSQL users can replace
-`query-audit-mysql` with `query-audit-postgresql`.
-
-=== "Gradle · Kotlin"
-
-    ```kotlin
-    dependencies {
-        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.6.0") // x-release-please-version
-        testImplementation("io.github.haroya01:query-audit-mysql:0.6.0") // x-release-please-version
-    }
-    ```
-
-=== "Gradle · Groovy"
-
-    ```groovy
-    dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.6.0' // x-release-please-version
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.6.0' // x-release-please-version
-    }
-    ```
-
-=== "Maven"
-
-    ```xml
-    <dependencies>
-        <dependency>
-            <groupId>io.github.haroya01</groupId>
-            <artifactId>query-audit-spring-boot-starter</artifactId>
-            <version>0.6.0</version> <!-- x-release-please-version -->
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.github.haroya01</groupId>
-            <artifactId>query-audit-mysql</artifactId>
-            <version>0.6.0</version> <!-- x-release-please-version -->
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-    ```
-
-Keep both dependencies in the test scope so the proxy and analyzer are absent from the production
-runtime classpath.
+[Copy the test dependencies](installation.md#spring-boot). For budgets and count contracts,
+the starter is sufficient. Add a database module when you need its index or EXPLAIN checks.
 
 ## Run a controlled first audit
 
-Start with report-only behavior on one database-facing test:
+Create `QueryAuditInstallationTest.java` under your application's test package.
+Add your package declaration above these imports:
 
 ```java
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import io.queryaudit.junit5.EnableQueryInspector;
+import io.queryaudit.junit5.ExpectQueries;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+
 @SpringBootTest
 @EnableQueryInspector
-class OrderServiceQueryTest {
+class QueryAuditInstallationTest {
 
     @Autowired
-    private OrderService orderService;
+    private JdbcTemplate jdbc;
 
     @Test
-    void loadsRecentOrders() {
-        orderService.findRecentOrders();
+    @ExpectQueries(select = 0, insert = 0, update = 0, delete = 0)
+    void capturesOneSelect() {
+        assertEquals(1, jdbc.queryForObject("select 1", Integer.class));
     }
 }
 ```
 
-Run `./gradlew test --tests OrderServiceQueryTest` or
-`mvn -Dtest=OrderServiceQueryTest test`. The console report should name the test and show the SQL
-captured through the application `DataSource`. Replace `@EnableQueryInspector` with `@QueryAudit`
-when configured findings should fail the test.
+Run only this test:
 
-Use the [quick start](quickstart.md) to add a read/write budget and work through the first failure.
+=== "Gradle"
 
-## Configure the test profile
+    ```bash
+    ./gradlew test --tests '*QueryAuditInstallationTest'
+    ```
 
-All starter properties use the `query-audit` prefix. Keep them in `src/test/resources` or a profile
-that only tests activate:
+=== "Maven"
 
-```yaml
-query-audit:
-  enabled: true
-  profile: recommended
-  fail-on-detection: false
-  report:
-    format: console
-    show-info: true
+    ```bash
+    mvn -Dtest=QueryAuditInstallationTest test
+    ```
+
+**Expected failure:**
+
+```text
+QueryAudit: capturesOneSelect() exceeded its query budget.
+SELECT: executed 1, expected at most 0.
 ```
 
-A common adoption sequence is:
+Change `select = 0` to `select = 1` and rerun: **the test should pass**.
+If the zero-budget run passes, use the [capture checklist](../guide/troubleshooting.md#queryaudit-not-detecting-any-queries).
 
-1. Use `@EnableQueryInspector` or `fail-on-detection: false` to review existing findings.
-2. Add explicit query budgets to the paths whose behavior is understood.
-3. Use `@QueryAudit` or restore `fail-on-detection: true` where confirmed findings should fail.
-4. Select `json` for CI automation or `html` for a browser artifact.
+## Apply the policy to an existing read test
+
+Keep its functional assertions and add these annotations directly:
+
+```java
+@EnableQueryInspector
+@ExpectQueries(select = 1, insert = 0, update = 0, delete = 0)
+```
+
+Choose the SELECT limit for the service or repository operation. If a change adds an UPDATE,
+the policy fails even when the functional assertions still pass:
+
+```text
+UPDATE: executed 1, expected at most 0.
+```
+
+`@EnableQueryInspector` reports detector findings while explicit budgets remain assertions.
+Verify an intentional violation through the real operation before relying on a pass.
+The [runnable example](quickstart.md) demonstrates the added-write and added-SELECT failures.
+
+!!! note "Direct annotations and stable contexts"
+    Use direct annotations for this installation proof. If you share composed/inherited policies
+    or replace a context with `@DirtiesContext`, verify capture through that exact setup.
+    See the [reported cases and their reproduction scope](../guide/limitations.md).
+
+## Inspect the result
+
+Add this to the active test profile, for example `src/test/resources/application.yml`:
 
 ```yaml
 query-audit:
-  fail-on-detection: true
-  auto-open-report: false
   report:
     format: json
-    output-dir: build/reports/query-audit
 ```
 
-See the [configuration reference](../guide/configuration.md) for every property, its default, rule
-profiles, suppression precedence, and full-suite coverage.
+Open `build/reports/query-audit/report.json`:
+
+| Read | Use it to |
+| --- | --- |
+| `outcome` | Check the final `PASS`, `FAIL`, or `INCONCLUSIVE` result |
+| `reports[].queries[].sql` | Inspect captured statements |
+| `reports[].queries[].stackTrace` | Locate application callers |
+
+For multiple tests, [record their counts in a contract file](../guide/contracts.md) and review
+intentional changes in its diff. [Require complete results in CI](../guide/first-ci-check.md),
+with [coverage](../guide/audit-coverage.md) and [comparison checks](../guide/comparison-inputs.md)
+to keep missing tests or changed audit settings visible.
+
+## Optional settings
+
+| Goal | Setting or annotation |
+| --- | --- |
+| Review detector findings; enforce explicit budgets | `@EnableQueryInspector` with `@ExpectQueries` |
+| Fail on configured detector findings | `@QueryAudit` |
+| Choose the rule set | `query-audit.profile: recommended` |
+| Generate a browser report locally | `query-audit.report.format: html` |
+| Analyze per-test setup/teardown SQL for detector findings | `@QueryAudit(includeSetupQueries = true)`; raw reports and budgets already include captured lifecycle SQL |
+
+See [configuration](../guide/configuration.md) for defaults and overrides. JSON/Actions redaction
+does not currently redact console or HTML diagnostics; see [report privacy](../guide/reports.md#machine-report-redaction).
 
 ## How DataSource capture works
 
-At test application startup, the starter:
+The starter wraps Spring `DataSource` beans. The JUnit extension attaches the active test's
+capture listener to the selected query-aware datasource. Application SQL must pass through that
+same object during the audit window.
 
-1. registers `QueryAuditAutoConfiguration`;
-2. creates the shared configuration and interceptor beans; and
-3. applies a `BeanPostProcessor` that wraps each Spring `DataSource` bean with
-   [datasource-proxy](https://github.com/ttddyy/datasource-proxy).
-
-When an audited test starts, the JUnit extension resolves the Spring `DataSource` and attaches its
-per-test listener to the query-aware proxy. The listener is detached when the test class finishes.
-Only statements routed through that object during the active audit window can be attributed to the
-test.
-
-If the context contains several `DataSource` beans, make the one used by the audited repository
-resolvable by type, normally with `@Primary`. A missing or ambiguous active `DataSource` fails with
-setup guidance instead of producing a trustworthy empty audit.
+If you have several datasources, make the one used by the audited code unambiguous, usually with
+`@Primary`. This does not merge every datasource into one audit. Run the capture proof through the
+actual repository path when validating a multi-datasource application.
 
 ## Reuse an existing datasource-proxy
 
-If another library already exposes a datasource-proxy `DataSource`, disable only QueryAudit's
-automatic wrapper:
+If another library already provides the query-aware Spring datasource, disable only the starter's
+additional wrapper:
 
 ```yaml
 query-audit:
@@ -149,53 +149,41 @@ query-audit:
     enabled: false
 ```
 
-The JUnit extension finds the existing proxy and attaches its listener for the audit. No custom
-`BeanPostProcessor` or second `QueryInterceptor` bean is required.
-
-Do not set `query-audit.enabled: false` for this integration. That disables QueryAudit's
-configuration as well as its wrapper. Also do not disable wrapping when the context exposes only a
-raw `DataSource`; an active audit requires a query-aware Spring object and will fail during setup if
-capture cannot be installed reliably.
-
-Leaving automatic wrapping enabled around an existing proxy can create a nested proxy. It may still
-capture SQL, but disabling the extra wrapper keeps the data path easier to reason about.
+Keep QueryAudit enabled. The extension attaches to the existing datasource-proxy; a custom
+interceptor bean is not required. If the context only contains a raw datasource, keep automatic
+wrapping enabled. Verify one-query/zero-budget failure after changing this setting.
 
 ## Audit a full suite
 
-The default `annotated` mode only audits tests marked with a QueryAudit annotation. To use opt-out
-coverage, enable JUnit extension autodetection in `src/test/resources/junit-platform.properties`:
+??? info "Enable opt-out auditing after the first test works"
 
-```properties
-junit.jupiter.extensions.autodetection.enabled=true
-```
+    Add to `src/test/resources/junit-platform.properties`:
 
-Then select full-suite mode:
+    ```properties
+    junit.jupiter.extensions.autodetection.enabled=true
+    ```
 
-```yaml
-query-audit:
-  mode: all
-  profile: recommended
-```
+    Then add to the active test YAML:
 
-Use `@QueryAuditExclude` on tests that should remain outside the audit. Enabling autodetection by
-itself does not widen coverage while the mode remains `annotated`.
+    ```yaml
+    query-audit:
+      mode: all
+      profile: recommended
+    ```
+
+    Exclude intentional non-audited tests with `@QueryAuditExclude`. Autodetection alone does not
+    widen the default `annotated` mode. Use an [audit coverage manifest](../guide/audit-coverage.md)
+    when CI must prove that specified tests actually supplied audit evidence. Review
+    [lifecycle limitations](../guide/limitations.md) before making the whole suite required.
 
 ## Disable QueryAudit
 
-Disable QueryAudit behavior when the test profile should perform no audit work:
-
-```yaml
-query-audit:
-  enabled: false
-```
-
-For a temporary report-only run, keep the starter enabled and use `@EnableQueryInspector` or
-`fail-on-detection: false` instead.
+Set `query-audit.enabled: false` only when you intend to run without auditing. For a temporary
+report-only run, keep it enabled and use `@EnableQueryInspector` instead; explicit budgets remain
+assertions.
 
 ## Next steps
 
-- [Complete the first fix loop](quickstart.md)
-- [Choose annotations and budgets](../guide/annotations.md)
-- [Configure profiles and coverage](../guide/configuration.md)
-- [Keep JSON or HTML in CI](../guide/ci-cd.md)
-- [Troubleshoot missing capture](../guide/troubleshooting.md#queryaudit-not-detecting-any-queries)
+- [Review per-test count changes](../guide/contracts.md)
+- [Require audited tests and compare CI results](../guide/first-ci-check.md)
+- [Find a symptom and its first check](../guide/troubleshooting.md)

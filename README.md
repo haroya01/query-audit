@@ -1,226 +1,175 @@
 # QueryAudit
 
-**Make database behavior part of your test contract.**
+**Keep query changes under test.**
 
 [![Build](https://github.com/haroya01/query-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/haroya01/query-audit/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.haroya01/query-audit-core)](https://central.sonatype.com/artifact/io.github.haroya01/query-audit-core)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Documentation](https://img.shields.io/badge/docs-haroya01.github.io-blue)](https://haroya01.github.io/query-audit)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://openjdk.org/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-QueryAudit observes SQL executed by database-backed JUnit 5 tests. It can report or fail a test on
-N+1 patterns, missing-index findings when database metadata is available, and unsafe DML. Explicit
-query budgets enforce upper bounds on reads and writes. With test-scoped dependencies, its
-instrumentation stays on the test runtime path.
+Review query-count contracts across your JUnit 5 tests. Compare CI runs with checks for
+missing audits and changed analysis settings. Start with read/write limits and inspect
+the captured SQL when a policy fails.
 
-**Java 17+ · JUnit 5 · Spring Boot · MySQL · PostgreSQL**
+## Keep a read path free of writes
 
-See [CI-verified compatibility](#compatibility-tested-by-this-project) for the exact tested versions.
-
-[**Run the 5-minute quick start**](https://haroya01.github.io/query-audit/getting-started/quickstart/)
-· [Choose an installation](https://haroya01.github.io/query-audit/getting-started/installation/)
-· [Browse detection rules](https://haroya01.github.io/query-audit/detections/overview/)
-· [Add QueryAudit to CI](https://haroya01.github.io/query-audit/guide/ci-cd/)
-
-The dependency coordinates below use the current Maven Central release. Features labeled 0.6.0+
-require QueryAudit 0.6.0 or later.
-
-## See the evidence in the test output
-
-A finding stays attached to the test and carries the context available to that check. An
-abbreviated Hibernate N+1 failure looks like this:
-
-```text
-QueryAudit detected 1 issue(s) in findOrdersWithItems:
-
-  [ERROR] N+1 Query detected (table: items)
-    Detail: Lazy collection 'items' on Order initialized 5 times for 5 different entities
-    Suggestion: Use @EntityGraph, JOIN FETCH, or @BatchSize
-```
-
-Reports may also include the normalized SQL, application call site, table, column, index context,
-and a suggested fix. The available evidence depends on the check and the test environment.
-
-## Try it on one Spring Boot test
-
-Add the starter and the module for the database used by the test. PostgreSQL users can replace
-`query-audit-mysql` with `query-audit-postgresql`.
-
-<details open>
-<summary>Gradle</summary>
-
-```groovy
-dependencies {
-    testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.6.0' // x-release-please-version
-    testImplementation 'io.github.haroya01:query-audit-mysql:0.6.0' // x-release-please-version
-}
-```
-
-</details>
-
-<details>
-<summary>Maven</summary>
-
-```xml
-<dependencies>
-    <dependency>
-        <groupId>io.github.haroya01</groupId>
-        <artifactId>query-audit-spring-boot-starter</artifactId>
-        <version>0.6.0</version> <!-- x-release-please-version -->
-        <scope>test</scope>
-    </dependency>
-    <dependency>
-        <groupId>io.github.haroya01</groupId>
-        <artifactId>query-audit-mysql</artifactId>
-        <version>0.6.0</version> <!-- x-release-please-version -->
-        <scope>test</scope>
-    </dependency>
-</dependencies>
-```
-
-</details>
-
-Start in report-only mode. QueryAudit captures SQL and prints findings without making those
-findings fail the test:
-
-```java
-@SpringBootTest
-@EnableQueryInspector
-class OrderServiceQueryTest {
-
-    @Autowired
-    private OrderService orderService;
-
-    @Test
-    void loadsOrdersWithItems() {
-        List<Order> orders = orderService.findRecentOrders();
-        orders.forEach(order -> assertThat(order.getItems()).isNotEmpty());
-    }
-}
-```
-
-Run only that test and read the console report:
-
-```bash
-./gradlew test --tests OrderServiceQueryTest
-# or: mvn -Dtest=OrderServiceQueryTest test
-```
-
-Once the result makes sense, replace `@EnableQueryInspector` with `@QueryAudit` to fail on
-configured findings. Add an explicit budget when upper bounds on reads and writes are part of the
-contract:
+After [enabling SQL capture](docs/getting-started/installation.md), put the policy beside your test:
 
 ```java
 @Test
 @ExpectQueries(select = 2, insert = 0, update = 0, delete = 0)
-void loadsOrdersWithItemsWithinBudget() {
-    orderService.findRecentOrdersWithItems();
+void loadsOrders() {
+    var orders = orderService.findRecentOrders();
+    assertEquals(3, orders.size());
 }
 ```
 
-Using plain JUnit 5? The
-[installation guide](https://haroya01.github.io/query-audit/getting-started/installation/#plain-junit-5)
-shows the portable `DataSource` setup and a capture verification test.
+At most two SELECTs. No INSERT, UPDATE, or DELETE. If the path adds an UPDATE,
+the budget fails even when the returned orders are correct:
 
-## What you can put under test
+```text
+UPDATE: executed 1, expected at most 0.
+```
 
-| Workflow | What QueryAudit provides |
-|---|---|
-| Query review | More than 60 finding types for repeated access, missing or ineffective indexes, SQL and DML anti-patterns, locking, ORM behavior, and connection use |
-| Database context | MySQL `SHOW INDEX` and PostgreSQL `pg_catalog` metadata for checks that need the real index state |
-| Per-test budgets | A total cap with `@ExpectMaxQueryCount`, or separate SELECT, INSERT, UPDATE, and DELETE limits with `@ExpectQueries` |
-| Snapshot contracts | A reviewable statement-count file for selected tests; 0.6.0+ also records zero-query expectations, and an inline `@ExpectQueries` budget takes precedence for that method |
-| Test lifecycle | Test-body SQL by default, with an option to include setup and teardown SQL |
-| Gradual adoption | Report-only mode, rule profiles, suppressions, and baselines for known findings |
-| Review and automation | Console diagnostics, an HTML report, or schema-versioned JSON selected for the job at hand |
+Omitted fields are unchecked. Keep functional assertions for returned data and affected rows.
 
-Availability depends on the SQL shape and whether Hibernate events, database metadata, or EXPLAIN
-output are available. The [detection overview](https://haroya01.github.io/query-audit/detections/overview/)
-explains those requirements.
+### Run a failure, then pass
 
-## Use reports in a verification loop
+Requires **Java 17+** and Git. This example uses the published library and in-memory H2.
 
-**0.5.x:** QueryAudit writes both `index.html` and `report.json` under
-`build/reports/query-audit/` after a session with at least one completed audited result. Its
-comparator reports a finding delta; an empty delta alone does not prove that the two runs contain
-the same tests.
+```sh
+git clone https://github.com/haroya01/query-audit.git
+cd query-audit
+./gradlew -p examples/first-audit test -PextraWrite=true --rerun-tasks
+```
 
-**0.6.0+:** `query-audit.report.format` selects one suite report format. The default `console` mode
-writes no file; choose `json` or `html`. JSON reports and comparisons carry `PASS`, `FAIL`, or
-`INCONCLUSIVE`, and a failed or incomplete candidate cannot produce exit code `0`.
+Expected: a query-budget failure for one unexpected UPDATE. Remove the write and rerun:
 
-For a Spring Boot test on 0.6.0+, select JSON when CI or another tool needs a stable artifact:
+```sh
+./gradlew -p examples/first-audit test --rerun-tasks
+```
+
+Expected: the test passes and `report.json` contains `"outcome": "PASS"`.
+Use `-PextraQuery=true` to try the extra-SELECT failure too.
+
+[Complete code and output](docs/getting-started/quickstart.md)
+· [Install in your project](docs/getting-started/installation.md)
+· [Troubleshoot a setup failure](docs/guide/troubleshooting.md)
+
+## Review count changes with your code
+
+In your own Maven project with capture enabled, record SELECT/INSERT/UPDATE/DELETE counts
+for tests without an inline budget:
+
+```sh
+mvn test -DqueryAudit.contracts.record=true
+```
+
+Commit `.query-audit-contracts`. Subsequent `mvn test` runs fail when a recorded count changes:
+
+```text
+QueryAudit: placeOrder() deviates from its recorded query contract (.query-audit-contracts).
+  INSERT: contract 1, executed 3 (+2)
+```
+
+If the change is intended, re-record and review the contract file's diff in the same PR.
+Contracts compare counts in both directions; they do not snapshot SQL text or result rows.
+
+[Recording, Gradle setup, and contract updates](docs/guide/contracts.md)
+
+## Find the SQL and call site
+
+Select JSON in your Spring test configuration:
 
 ```yaml
-# src/test/resources/application.yml
 query-audit:
+  auto-open-report: false
   report:
     format: json
 ```
 
-Run the same test command as before. QueryAudit writes one aggregate
-`build/reports/query-audit/report.json`. Use its findings, query shapes, call sites, and available
-database context to make a focused change, then rerun the same tests from a clean checkout. The
-report comparator classifies confirmed findings as new, resolved, or persisting and refuses to
-report success when the candidate audit is failed or incomplete.
+After running the test, inspect the captured statements and application frames:
+
+```sh
+jq '.reports[].queries[] | {sql, stackTrace}' \
+  build/reports/query-audit/report.json
+```
+
+For the runnable example, use `examples/first-audit/build/reports/query-audit/report.json`.
+The unexpected write has this JSON evidence (excerpt; source line numbers can change):
+
+```json
+{
+  "sql": "UPDATE orders SET status = ? WHERE id = ?",
+  "stackTrace": "example.audit.FirstAuditTest.writeOnReadPath:43\nexample.audit.FirstAuditTest.readsOnce:26"
+}
+```
+
+[Read a failure](docs/guide/reports.md#read-a-policy-failure)
+· [Investigate an N+1, SQL, or index finding](docs/detections/overview.md)
+
+## Compare the same tests in CI
+
+Save a baseline and candidate JSON report, then compare them with the matching core JAR:
+
+```sh
+java -cp "$QUERY_AUDIT_CORE_JAR" \
+  io.queryaudit.core.reporter.ReportComparator before.json after.json verdict.json
+```
+
+Set `QUERY_AUDIT_CORE_JAR` to the downloaded `query-audit-core` JAR path.
+The comparator prints a result such as:
 
 ```text
 [QueryAudit] compare: PASS; 0 new, 1 resolved, 0 persisting; queries 11 -> 7
 ```
 
-Set `format: html` when a browser artifact is more useful. A 0.6.0+ run selects one suite report
-format; console diagnostics remain available in either case. Plain JUnit users can pass the
-setting into the test JVM with the build-tool setup in the CI guide. Read the
-[report contract](https://haroya01.github.io/query-audit/guide/reports/) for schema versions,
-stable test identities, exit codes, and comparison rules, or the
-[CI guide](https://haroya01.github.io/query-audit/guide/ci-cd/) for copy-ready pipelines.
+| Candidate result | CI comparison |
+| --- | --- |
+| Compatible, complete audit; no new confirmed finding or policy failure | `PASS` |
+| Query budget or contract fails | `FAIL` |
+| An expected test is missing or skipped | `INCONCLUSIVE` |
+| Analysis settings changed or required analysis evidence is missing | `INCONCLUSIVE` |
 
-## Compatibility tested by this project
+Declare expected tests with an [audit coverage manifest](docs/guide/audit-coverage.md).
+Require the JUnit run and audit verdict to pass. Budgets and contracts enforce query counts;
+the comparator's count delta is a summary, not its own limit.
 
-The current `main` branch verifies these combinations in the
-[pull-request CI workflow](https://github.com/haroya01/query-audit/blob/main/.github/workflows/ci.yml):
+[First CI check](docs/guide/first-ci-check.md)
+· [Baseline and comparison setup](docs/guide/ci-cd.md)
+· [Comparison inputs](docs/guide/comparison-inputs.md)
 
-| CI coverage | Java | Verified version | Scope |
-|---|---|---|---|
-| Build and regular tests | 17 and 21 | Spring Boot 3.4.1 | Compilation and regular starter tests |
-| Dedicated `boot4Test` suite | 17 and 21 | Spring Boot 4.0.6 | Multi-context lifecycle regression, included in `check` and therefore `build` |
-| MySQL integration tests | 21 | MySQL 8.0 (`mysql:8.0`) | Database metadata and EXPLAIN |
-| PostgreSQL integration tests | 21 | PostgreSQL 16 (`postgres:16-alpine`) | Database metadata and EXPLAIN |
+## Add to an existing project
 
-The [starter build](https://github.com/haroya01/query-audit/blob/main/query-audit-spring-boot-starter/build.gradle)
-pins the Spring Boot versions and wires `boot4Test` into `check`.
-The [MySQL](https://github.com/haroya01/query-audit/blob/main/query-audit-mysql/src/test/java/io/queryaudit/mysql/MySqlIntegrationTest.java)
-and [PostgreSQL](https://github.com/haroya01/query-audit/blob/main/query-audit-postgresql/src/test/java/io/queryaudit/postgresql/PostgreSqlIntegrationTest.java)
-test fixtures select the database images.
+For Spring Boot, add the starter to the test classpath:
 
-Java 17 is the source/target baseline; the regular JUnit 5 suite uses 5.11.4.
-Artifacts are published to Maven Central for Gradle and Maven consumers. These baselines
-and Spring Boot 3.x/4.x integration are not a guarantee that every version in those lines,
-or every Java/Boot/database combination, has been verified. In particular, the dedicated
-Boot 4 suite is not the full Boot 3 suite rerun against Boot 4.
-The broader scheduled matrix and support policy are tracked in
-[#208](https://github.com/haroya01/query-audit/issues/208).
+```kotlin
+dependencies {
+    testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.6.0") // x-release-please-version
+}
+```
 
-## Modules
+Enable capture with `@EnableQueryInspector` on the test class, then add `@ExpectQueries`
+to the method. Findings remain advisory; explicit budgets still fail.
+The [installation guide](docs/getting-started/installation.md) includes Maven, Groovy,
+plain JUnit, and a capture check. MySQL and PostgreSQL modules add database index metadata.
 
-| Module | Purpose |
-|---|---|
-| `query-audit-core` | Analysis engine, models, report schema, and comparator |
-| `query-audit-junit5` | JUnit 5 lifecycle integration and annotations |
-| `query-audit-mysql` | MySQL index metadata support |
-| `query-audit-postgresql` | PostgreSQL index metadata support |
-| `query-audit-spring-boot-starter` | Spring Boot auto-configuration and properties |
+## Supported scope
 
-Ready to evaluate it? [Start with one test in report-only mode](https://haroya01.github.io/query-audit/getting-started/quickstart/),
-then promote the behavior you trust into a budget, finding gate, or snapshot contract.
+Java 17+, JUnit 5, and database-backed tests. The checks cover the paths exercised by
+those tests; representative fixtures and ordinary assertions remain necessary.
 
-Configuration options, suppression formats, report settings, and troubleshooting steps are in the
-[documentation](https://haroya01.github.io/query-audit/).
+| Source CI check | Tested combination |
+| --- | --- |
+| Build and regular tests | Java 17 / 21; Spring Boot 3.4.1 |
+| Dedicated Boot 4 lifecycle suite | Java 17 / 21; Spring Boot 4.0.6 |
+| MySQL integration | Java 21; MySQL 8.0 |
+| PostgreSQL integration | Java 21; PostgreSQL 16 |
 
-## Contributing
+The Boot 4 lane is a focused lifecycle suite. See [versions](docs/getting-started/versions.md)
+and [known limitations](docs/guide/limitations.md) for the published release's supported scope.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the development setup and contribution process.
-
-## License
-
-QueryAudit is licensed under the [Apache License 2.0](LICENSE).
+[Documentation](https://haroya01.github.io/query-audit/)
+· [Coming from QuickPerf](docs/guide/coming-from-quickperf.md)
+· [Contributing](CONTRIBUTING.md)
+· [Apache 2.0 license](LICENSE)

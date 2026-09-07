@@ -78,7 +78,7 @@ public class ConsoleReporter implements Reporter {
     // Confirmed section — grouped by issue type, sorted by severity
     if (!errors.isEmpty() || !warnings.isEmpty()) {
       out.println();
-      out.println(color(BOLD, "--- CONFIRMED (100% reliable, sorted by priority) ---"));
+      out.println(color(BOLD, "--- CONFIRMED (sorted by priority) ---"));
       out.println();
 
       // Group by IssueType, keep severity order (errors first)

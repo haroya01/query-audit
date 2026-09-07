@@ -1,14 +1,21 @@
 # SQL Anti-Pattern Detection
 
-QueryAudit detects SQL anti-patterns by analyzing the **structure** of your queries. This page
-covers all SQL-related detectors organized by severity, including MySQL-specific patterns,
-JOIN issues, locking risks, and query structure rules.
+Use this page to interpret an issue code reported by an audited test. Start with
+`@EnableQueryInspector`, inspect the captured SQL and available call site, and check the rule's
+database assumptions before choosing a fix or making the finding fatal. The
+[workflow guide](../guide/choose-your-workflow.md) covers budgets, contract diffs, diagnostics,
+and CI comparison.
+
+These rules provide supporting evidence from SQL structure. Parsing and schema support have
+[known limits](../guide/limitations.md), and a pattern match alone does not measure production
+performance. The reference below includes MySQL-specific patterns, JOINs, locking, and query structure.
 
 ---
 
 ## ERROR Severity
 
-These anti-patterns are logic bugs or guaranteed performance killers. **Always fix these.**
+Review these findings first for possible correctness, locking, or access-cost problems.
+Confirm the matched SQL and database behavior before applying a suggested change.
 
 ---
 
@@ -18,14 +25,13 @@ These anti-patterns are logic bugs or guaranteed performance killers. **Always f
 |---|---|
 | **Issue code** | `where-function` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
-Wrapping a column in a function inside a `WHERE` clause **disables any index** on that column.
-MySQL cannot use an index to satisfy `WHERE DATE(created_at) = '2024-01-01'` even if
-`created_at` is indexed, because the index stores raw `created_at` values, not `DATE(created_at)`
-values.
+Wrapping a column in a function can prevent a direct lookup through an ordinary index on its
+raw values. For example, `DATE(created_at)` differs from indexed `created_at`. Expression indexes,
+generated columns, other predicates, and engine optimizations can change the access path;
+inspect the full query plan before changing the SQL.
 
 ```
 Index on created_at:
@@ -36,8 +42,8 @@ Index on created_at:
     2024-01-02 09:00:00
 
 WHERE DATE(created_at) = '2024-01-01'
-  --> MySQL must apply DATE() to EVERY row, then compare
-  --> Full table scan (index is useless)
+  --> The predicate compares derived dates rather than the indexed raw values
+  --> Review whether a date range or expression index gives a useful access path
 ```
 
 #### Detection
@@ -105,7 +111,8 @@ Common functions caught: `DATE()`, `YEAR()`, `MONTH()`, `LOWER()`, `UPPER()`, `T
 
 #### Configuration
 
-No threshold -- this rule is always active. Suppress per-test if needed:
+This rule has no numeric threshold. When enabled by the effective rule policy, it checks
+matching SQL. Suppress a reviewed pattern per test if needed:
 
 ```java
 @QueryAudit(suppress = {"where-function"})
@@ -119,7 +126,6 @@ No threshold -- this rule is always active. Suppress per-test if needed:
 |---|---|
 | **Issue code** | `non-sargable` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -193,7 +199,6 @@ before being compared.
 |---|---|
 | **Issue code** | `null-comparison` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -241,7 +246,6 @@ SELECT * FROM users WHERE email IS NOT NULL;
 |---|---|
 | **Issue code** | `order-by-rand` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -251,7 +255,8 @@ SELECT * FROM users WHERE email IS NOT NULL;
 2. Sort **all rows** by that random number
 3. Return the requested number of rows
 
-This is always a full table scan + full sort, regardless of indexes.
+An index cannot supply the random order. Filtering can still narrow the candidate rows, so
+review the full query and plan to determine how much work the random ordering adds.
 
 #### Examples and Fixes
 
@@ -292,7 +297,6 @@ This is always a full table scan + full sort, regardless of indexes.
 |---|---|
 | **Issue code** | `not-in-subquery` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -345,7 +349,6 @@ entire `NOT IN` condition evaluates to UNKNOWN, returning **zero rows**.
 |---|---|
 | **Issue code** | `cartesian-join` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -393,7 +396,6 @@ Table A: 1,000 rows   x   Table B: 1,000 rows   =   1,000,000 rows
 |---|---|
 | **Issue code** | `for-update-no-index` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -425,7 +427,6 @@ These patterns indicate issues that should be reviewed and typically fixed.
 |---|---|
 | **Issue code** | `implicit-type-conversion` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -455,7 +456,6 @@ SELECT * FROM users WHERE phone_code = '82';
 |---|---|
 | **Issue code** | `or-abuse` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 | **Default threshold** | 3 OR conditions |
 
 #### Why It Matters
@@ -508,7 +508,6 @@ query-audit:
 |---|---|
 | **Issue code** | `offset-pagination` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 | **Default threshold** | 1000 |
 
 #### Why It Matters
@@ -623,7 +622,6 @@ cause the same full scan. The detector emits an INFO-level heads-up for this cas
 |---|---|
 | **Issue code** | `large-in-list` |
 | **Severity** | WARNING (>100 values) / ERROR (>1000 values) |
-| **Confidence** | Confirmed (100%) |
 | **Default threshold** | 100 values |
 
 #### Why It Matters
@@ -673,7 +671,6 @@ query-audit:
 |---|---|
 | **Issue code** | `distinct-misuse` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -710,7 +707,6 @@ uniqueness (e.g., selecting a primary key), DISTINCT adds unnecessary overhead.
 |---|---|
 | **Issue code** | `having-misuse` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -738,7 +734,6 @@ GROUP BY department;
 |---|---|
 | **Issue code** | `unbounded-result-set` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -767,7 +762,6 @@ ORDER BY created_at DESC LIMIT 20 OFFSET 0;
 |---|---|
 | **Issue code** | `slow-query` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 Detects queries whose execution time exceeds the configured threshold. Configurable via:
 
@@ -786,7 +780,6 @@ query-audit:
 |---|---|
 | **Issue code** | `case-in-where` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -813,7 +806,6 @@ WHERE (status = 'active' AND priority > 5);
 |---|---|
 | **Issue code** | `correlated-subquery` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -847,7 +839,6 @@ similar to the N+1 problem.
 |---|---|
 | **Issue code** | `too-many-joins` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 Queries with excessive JOINs become exponentially harder for the optimizer and may indicate
 a design issue. Consider denormalization or materialized views for read-heavy workloads.
@@ -860,7 +851,6 @@ a design issue. Consider denormalization or materialized views for read-heavy wo
 |---|---|
 | **Issue code** | `implicit-join` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -889,7 +879,6 @@ JOIN customers c ON o.customer_id = c.id;
 |---|---|
 | **Issue code** | `unused-join` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -917,7 +906,6 @@ FROM products p;
 |---|---|
 | **Issue code** | `for-update-non-unique` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -942,7 +930,6 @@ SELECT * FROM orders WHERE id = 12345 FOR UPDATE;
 |---|---|
 | **Issue code** | `range-lock-risk` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 Range predicates (`>`, `<`, `BETWEEN`) combined with `FOR UPDATE` on unindexed columns
 can cause extensive gap locking.
@@ -955,7 +942,6 @@ can cause extensive gap locking.
 |---|---|
 | **Issue code** | `for-update-no-timeout` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -986,7 +972,6 @@ FOR UPDATE SKIP LOCKED LIMIT 10;
 |---|---|
 | **Issue code** | `string-concat-where` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 String concatenation in WHERE prevents index usage, similar to function wrapping.
 
@@ -1006,7 +991,6 @@ SELECT * FROM users WHERE first_name = 'John' AND last_name = 'Doe';
 |---|---|
 | **Issue code** | `group-by-function` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 Function calls in GROUP BY prevent the use of indexes for grouping.
 
@@ -1030,9 +1014,9 @@ SELECT created_date, COUNT(*) FROM orders GROUP BY created_date;
 |---|---|
 | **Issue code** | `regexp-usage` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
-`REGEXP` and `RLIKE` always require a full table scan -- indexes cannot be used.
+A regular-expression predicate may require inspecting many candidate values. Other predicates
+can still use indexes to narrow those candidates; check the selected plan before replacing the expression.
 
 ```sql
 -- Bad: full table scan
@@ -1050,7 +1034,6 @@ SELECT * FROM products WHERE name LIKE 'phone%';
 |---|---|
 | **Issue code** | `find-in-set` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 `FIND_IN_SET` indicates comma-separated values stored in a single column, violating First Normal
 Form (1NF). This prevents indexing and efficient querying.
@@ -1079,7 +1062,6 @@ Best-practice suggestions. These won't fail your build by default.
 |---|---|
 | **Issue code** | `select-all` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -1119,7 +1101,6 @@ Best-practice suggestions. These won't fail your build by default.
 |---|---|
 | **Issue code** | `redundant-filter` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 Detects duplicate predicates in WHERE clause.
 
@@ -1139,7 +1120,6 @@ SELECT * FROM users WHERE status = 'active';
 |---|---|
 | **Issue code** | `count-instead-of-exists` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -1176,7 +1156,6 @@ SELECT * FROM users WHERE status = 'active';
 |---|---|
 | **Issue code** | `union-without-all` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 `UNION` forces a sort to deduplicate results. If duplicates are acceptable or impossible,
 use `UNION ALL`.
@@ -1197,10 +1176,10 @@ SELECT id FROM active_users UNION ALL SELECT id FROM premium_users;
 |---|---|
 | **Issue code** | `count-star-no-where` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
-`COUNT(*)` without WHERE scans the entire table. In InnoDB, this is always a full scan
-(unlike MyISAM which stores the count).
+An exact InnoDB `COUNT(*)` generally needs to count visible entries rather than read a stored
+table total. It can scan an index, so inspect the plan and frequency of the operation before
+replacing a required exact count with a cached or approximate value.
 
 ```sql
 -- Slow on large InnoDB tables
@@ -1218,7 +1197,6 @@ SELECT COUNT(*) FROM orders WHERE status = 'active';
 |---|---|
 | **Issue code** | `excessive-column-fetch` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 Flags queries that fetch too many columns. Consider using DTO projection to select only
 the columns you need.
@@ -1239,7 +1217,6 @@ SELECT display_name, avatar_url, bio FROM user_profiles WHERE user_id = ?;
 |---|---|
 | **Issue code** | `mergeable-queries` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 Detects multiple simple queries to the same table that could be merged into one.
 
@@ -1261,7 +1238,6 @@ List<User> users = userRepository.findAllById(List.of(1L, 2L, 3L));
 |---|---|
 | **Issue code** | `non-deterministic-pagination` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 `ORDER BY + LIMIT` on a non-unique column produces inconsistent pagination results.
 
@@ -1281,7 +1257,6 @@ SELECT * FROM products ORDER BY created_at, id LIMIT 20 OFFSET 40;
 |---|---|
 | **Issue code** | `force-index-hint` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 `FORCE INDEX`, `USE INDEX`, and `IGNORE INDEX` hints override the optimizer. These may become
 stale as the schema evolves and should be reviewed periodically.
@@ -1302,7 +1277,6 @@ SELECT * FROM orders WHERE status = 'pending';
 |---|---|
 | **Issue code** | `limit-without-order-by` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -1325,7 +1299,6 @@ SELECT * FROM users ORDER BY id LIMIT 10;
 |---|---|
 | **Issue code** | `window-no-partition` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 Window functions without `PARTITION BY` operate over the **entire result set**, which may
 indicate a missing partition clause.

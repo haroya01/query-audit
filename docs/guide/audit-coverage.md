@@ -1,13 +1,20 @@
 # Audit coverage
 
-A green build is useful only if the tests you rely on actually ran. A test filter, `@Disabled`,
-a setup failure, or a removed audit annotation can otherwise leave a run with fewer findings
-simply because it audited less code.
+Commit the JUnit IDs of the tests CI must audit in `.query-audit-tests`. QueryAudit loads that
+file automatically and makes the run `INCONCLUSIVE` when an expected test does not supply
+complete audit evidence.
 
-QueryAudit can check a version-controlled list of expected JUnit Jupiter test IDs against each
-test execution. Any expected test that fails to provide complete audit evidence makes the run
-`INCONCLUSIVE`. This check describes the tests in your manifest; it does not prove that every
-database path in the application is covered.
+| What changed | Result for the expected test |
+|---|---|
+| `@Disabled` was added | `SKIPPED` |
+| A test filter excluded the test, or the test was removed | `NOT_DISCOVERED` |
+| The test completed after its audit annotation was removed | `AUDIT_MISSING` |
+| The audited test exceeded its query budget | Complete audit with a policy `FAIL` |
+
+A missing audit does not prove that a finding was fixed. Use the committed manifest with
+[report comparison](reports.md#delta-verdict-compare-two-runs) so running fewer tests cannot make
+the affected findings look resolved. The manifest covers the declared tests, not every database
+path in the application.
 
 ## Create the expected-test manifest
 

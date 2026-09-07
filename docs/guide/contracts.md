@@ -1,24 +1,22 @@
 # Query Snapshot Contracts
 
-Snapshot testing for database behavior: record every test's query profile once, then fail any
-change — in either direction — until the contract is explicitly re-recorded.
+Record SELECT/INSERT/UPDATE/DELETE counts for audited tests in `.query-audit-contracts`.
+A later increase or decrease fails the test. Review an intentional update beside the code change.
+
+```diff
+-@junit | [engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:placeOrder()] | 2 | 1 | 1 | 0 | 4
++@junit | [engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:placeOrder()] | 2 | 3 | 1 | 0 | 6
+```
+
+This example adds two INSERTs to `placeOrder()`. Contracts compare **counts**, not SQL text,
+WHERE conditions, returned rows, or every possible database behavior. Keep ordinary result
+assertions, and use [inline budgets](annotations.md#expectqueries) when fewer queries should pass
+without updating a snapshot.
 
 !!! note "Version scope"
     Query snapshot contracts were introduced in 0.5. QueryAudit 0.6 records stable JUnit IDs,
     escapes IDs that contain policy-file delimiters, and includes audited tests that execute zero
     queries. QueryAudit 0.5 uses class and display-name identities and skips zero-query tests.
-
-What the [baseline](suppressing.md) does for *findings*, contracts do for *behavior*. A
-regression detector only catches increases; a contract catches **every deviation**, which is
-what makes it reviewable: after a legitimate change you re-record, and the contracts file's
-diff *is* the behavior change, sitting in the PR next to the code that caused it.
-
-This matters most when code is written or modified by automation: a generated change that
-turns one UPDATE into N, or quietly adds writes to a read path, is invisible in a code diff
-and green in ordinary tests. With contracts, any DB-behavior change must surface as an
-explicit contract update.
-
----
 
 ## Recording
 
@@ -54,21 +52,26 @@ line breaks. In an `@junit` identity value, QueryAudit writes `\|` for a pipe, `
 identity value; the five count fields and legacy rows remain unescaped. Unknown or incomplete
 stable-ID escapes make the policy file invalid and the diagnostic identifies the affected line.
 
-Commit the file. Pair with [`mode: all`](configuration.md#audit-coverage-mode) to freeze the
-whole suite's behavior in one run.
+Commit the file. Pair with [`mode: all`](configuration.md#audit-coverage-mode) to record counts
+across the audited suite. Use an [expected-test manifest](audit-coverage.md) to require the tests
+you rely on; a contract entry alone does not fail when its test is skipped.
 
 ## Enforcement
 
 On every subsequent run, each test with a recorded entry is compared against its contract.
-Any deviation fails with the full delta, the offending SQL, and its call site:
+A count deviation fails with the delta. Increases also list captured statements of that type and
+their first captured stack frame when available. Illustrative diagnostic (SQL list excerpt):
 
 ```
 QueryAudit: placeOrder() deviates from its recorded query contract (.query-audit-contracts).
   INSERT: contract 1, executed 3 (+2)
     insert into order_items (order_id, sku) values (?, ?)
-      at com.example.OrderService.placeOrder(OrderService.java:87)
+      at com.example.OrderService.placeOrder:87
 If the change is intended, re-record the contracts with -DqueryAudit.contracts.record=true and review the file diff.
 ```
+
+The frame can identify a JDBC proxy; inspect `reports[].queries[].stackTrace` in the
+[JSON report](reports.md#read-a-policy-failure) for available application callers.
 
 The final line names the underlying test-JVM property. Gradle projects using the bridge rerun with
 `-PqueryAuditContractsRecord=true`; Maven projects use the `-D` form shown in the diagnostic.
@@ -76,12 +79,12 @@ The final line names the underlying test-JVM property. Gradle projects using the
 Failures from `@ExpectMaxQueryCount`, `@ExpectQueries`, and snapshot contracts are test assertions
 rather than findings. Rule profiles, `disabled-rules`, `suppress-patterns`, severity overrides, and
 the issue baseline do not change their result. Update the declared budget or re-record the contract
-when the database behavior change is intentional.
+when the count change is intentional.
 
 Rules of enforcement:
 
 - **Both directions fail.** Fewer queries than the contract also fails — snapshot semantics.
-  An improvement is still a behavior change that belongs in the contract diff.
+  A reduction belongs in the contract diff too.
 - **Tests without an entry are not enforced.** New tests never fail retroactively;
   re-recording picks them up.
 - **`@ExpectQueries` wins.** A method carrying an inline budget is exempt from the file
@@ -152,5 +155,5 @@ test-JVM property with `-D`, for example `-DqueryAudit.contractsPath=config/quer
 |---|---|---|---|
 | **Contracts** | every recorded test | any count deviation, both directions | re-record, review file diff |
 | [`@ExpectQueries`](annotations.md#expectqueries) | one method | budget exceeded | edit the annotation |
-| Count baseline (`queryAudit.updateBaseline`) | every test | count **regression** (increase) | update baseline |
+| Count baseline (`queryAudit.updateBaseline`) | tests with a recorded baseline | threshold-based regression finding, subject to finding policy | update baseline |
 | [Issue baseline](suppressing.md) | findings | new findings | acknowledge |

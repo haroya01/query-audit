@@ -1,8 +1,9 @@
 # Annotations Guide
 
-QueryAudit provides six annotations for different use cases. The five auditing annotations register
-the `QueryAuditExtension` automatically. `@QueryAuditExclude` is the opt-out marker when
-auto-detected full-suite coverage is already active.
+Auditing annotations register `QueryAuditExtension` automatically. `@QueryAuditExclude` is the
+opt-out marker; it does not activate auditing on its own. Start with the
+[workflow recipes](choose-your-workflow.md) to choose a write budget, count contract, failure
+diagnostic, or CI comparison. This reference documents the published `0.6.0` annotation API.
 
 ---
 
@@ -10,7 +11,7 @@ auto-detected full-suite coverage is already active.
 
 | Annotation | Target | Purpose | Test Failure |
 |---|---|---|---|
-| `@QueryAudit` | Class / Method | Full analysis with all 67 detection rules | Yes (configurable) |
+| `@QueryAudit` | Class / Method | Run the configured detection profile | Yes (configurable) |
 | `@EnableQueryInspector` | Class | Report findings without enforcing them | No finding failure; separate budget annotations still assert |
 | `@DetectNPlusOne` | Class / Method | N+1 detection only | Yes (on N+1 only) |
 | `@ExpectMaxQueryCount` | Method | Assert max query count | Yes (on count exceeded) |
@@ -38,15 +39,16 @@ auto-detected full-suite coverage is already active.
 !!! info "Why `BooleanOverride` instead of `boolean`?"
     Java annotation attributes cannot distinguish between "explicitly set to default" and
     "not specified" with a `boolean` type. `BooleanOverride` is a tri-state enum
-    (`INHERIT`/`TRUE`/`FALSE`) that lets a method-level annotation cleanly fall back to the
-    class-level or `application.yml` value when left as `INHERIT`. Pass `BooleanOverride.TRUE`
-    or `BooleanOverride.FALSE` to explicitly override.
+    (`INHERIT`/`TRUE`/`FALSE`). An unspecified value on the selected method-level or class-level
+    annotation falls back to `application.yml` or built-in defaults. A method-level annotation
+    replaces the class declaration, as described below. Use `BooleanOverride.TRUE` or
+    `BooleanOverride.FALSE` to explicitly override.
 
 ---
 
 ## @QueryAudit
 
-The primary annotation. Enables full query analysis with all 67 detection rules across
+The primary annotation. Enables query analysis using the configured profile across
 SELECT, INSERT, UPDATE, and DELETE statements.
 
 ```java
@@ -56,7 +58,7 @@ class OrderServiceTest {
 
     @Test
     void findOrders() {
-        // All queries (SELECT, INSERT, UPDATE, DELETE) are captured and analyzed.
+        // Analyze SELECT/INSERT/UPDATE/DELETE captured through the audited DataSource.
         // Test fails if any confirmed issue (ERROR or WARNING) is detected.
     }
 }
@@ -92,7 +94,7 @@ class OrderServiceTest {
     @QueryAudit(failOnDetection = BooleanOverride.FALSE)
     @SpringBootTest
     class OrderServiceTest {
-        // Reports issues but never fails
+        // Findings are advisory; explicit budgets and contracts still apply.
     }
     ```
 
@@ -178,15 +180,16 @@ class OrderServiceTest {
 
     @Test
     void findOrders() {
-        // Reports all detected issues to console
-        // Never fails the test
+        // Reports detected findings without making those findings fatal.
+        // Explicit budgets and contracts still apply.
     }
 }
 ```
 
 !!! tip "Use this for gradual adoption"
-    Start with `@EnableQueryInspector` to see what QueryAudit finds without breaking
-    your builds. Once you've reviewed the issues, switch to `@QueryAudit` to enforce them.
+    Start with `@EnableQueryInspector` to review findings before making them fatal.
+    Explicit budgets, contracts, and capture or reporting failures can still fail the run.
+    Switch to `@QueryAudit` when reviewed findings should fail the test too.
 
 ---
 
@@ -287,7 +290,8 @@ QueryAudit detects N+1 at **two levels**:
     - `@OneToMany` / `@ManyToMany` lazy collection loading
     - `@ManyToOne` / `@OneToOne` proxy resolution
 
-   Hibernate-level detection is **authoritative** (ERROR severity, zero false positives).
+   Hibernate event findings use ERROR severity. Review them with actual SQL counts and fetch
+   settings; they do not establish the cost of the operation or exclude false positives.
 
 ```
 Test Code
@@ -373,7 +377,7 @@ class OrderServiceTest {
     @ExpectQueries(insert = 0, update = 0, delete = 0)
     void findOrderById() {
         orderService.findById(1L);
-        // A read-only contract: any write query fails the test
+        // A captured INSERT, UPDATE, or DELETE fails this budget.
     }
 }
 ```
@@ -389,7 +393,9 @@ class OrderServiceTest {
 
 ### Failure Message
 
-When a budget is exceeded, every query of the violated type is listed with its call site:
+When a budget is exceeded, the diagnostic lists captured statements of the violated type and
+available source information. The console's first frame can be a JDBC proxy; inspect the JSON
+`stackTrace` for application frames. Example excerpt:
 
 ```
 QueryAudit: createOrder() exceeded its query budget.

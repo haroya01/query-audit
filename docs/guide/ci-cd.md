@@ -1,7 +1,17 @@
 # CI/CD Integration
 
-QueryAudit runs inside the JUnit test process, so the existing test job remains the build gate. CI
-adds two responsibilities: select a machine-readable report and retain it even when the tests fail.
+Use the existing JUnit job to enforce read/write budgets and recorded count contracts. Keep its
+JSON report and test log so reviewers can see the policy result and the SQL behind a failure.
+
+| CI check | Require |
+|---|---|
+| Read/write policy | The test command succeeds and the fresh report has `outcome: PASS`. [First CI check](first-ci-check.md) |
+| Required audits | A committed expected-test manifest has no missing evidence. [Coverage setup](audit-coverage.md) |
+| Findings across runs | The comparator exits `0` for compatible, complete reports without new confirmed findings. [Compare command](reports.md#delta-verdict-compare-two-runs) |
+| Intentional count changes | A reviewed `.query-audit-contracts` diff in the PR. [Record and update](contracts.md) |
+
+The comparator reports total count changes for context; budgets and contracts enforce count
+limits. Start with the [first CI check](first-ci-check.md) for a copyable single-test gate.
 
 !!! note "Version scope"
     The `outcome` checks, selectable suite format, configurable output directory, and fail-on-write
@@ -16,12 +26,15 @@ For Spring Boot, keep the CI settings in `src/test/resources/application-ci.yml`
 ```yaml
 query-audit:
   enabled: true
-  fail-on-detection: true
+  fail-on-detection: false
   auto-open-report: false
   report:
     format: json
     output-dir: build/reports/query-audit
 ```
+
+This keeps findings advisory while explicit budgets and contracts still fail tests. Enable
+`fail-on-detection` after reviewing the finding rules you want to enforce.
 
 Activate the profile with `SPRING_PROFILES_ACTIVE=ci`. QueryAudit writes one aggregate file to
 `build/reports/query-audit/report.json` after the participating test classes finish.
@@ -137,7 +150,9 @@ jobs:
       - name: Run tests
         id: tests
         continue-on-error: true
-        run: ./gradlew test
+        run: |
+          rm -f build/reports/query-audit/report.json
+          ./gradlew test --rerun-tasks --no-build-cache
         env:
           SPRING_PROFILES_ACTIVE: ci
           SPRING_DATASOURCE_URL: jdbc:mysql://localhost:3306/testdb
@@ -226,7 +241,7 @@ artifacts under `target`.
 
 Use the same sequence in GitLab CI, Jenkins, Buildkite, or another runner:
 
-1. Run the tests without preventing the artifact and verification steps from executing.
+1. Remove the previous report, then run the tests without preventing artifact and verification steps from executing.
 2. Upload `report.json` even when the test command fails, and treat a missing file as an error.
 3. Parse the 0.6 suite `outcome` and require `PASS`.
 4. Restore the original test command result so unrelated test failures still fail the job.
@@ -236,20 +251,29 @@ failure can happen before the suite finalizer writes the file, so absence is an 
 
 ## Gradual adoption
 
-Start with a contract the team can explain:
+Expand the checks as tests become useful:
 
-- Set `fail-on-detection: false` or use `@EnableQueryInspector` while reviewing existing findings.
-- Use the `recommended` profile to omit context-dependent style rules from the first pass.
-- Add `@ExpectQueries` or `@ExpectMaxQueryCount` to established paths before widening coverage.
-- Move to `@QueryAudit`, `fail-on-detection: true`, or `mode: all` as the accepted surface grows.
+- Add `@ExpectQueries` to important reads and writes; use explicit zeros for forbidden write types.
+- Record [contracts](contracts.md) for established tests whose exact counts should be reviewed.
+- Commit an [expected-test manifest](audit-coverage.md) before relying on suite-wide results.
+- Compare reports under the same reviewed settings. Retain SQL and call sites when the gate fails.
+- Review additional findings with `@EnableQueryInspector` or `fail-on-detection: false`; enable
+  finding failures with `@QueryAudit` or `fail-on-detection: true` when ready. `mode: all` extends
+  audit activation across the suite.
 
 Finding acknowledgement and query-count baselines solve different problems:
 
 | File | Purpose | Update path |
 |---|---|---|
 | `.query-audit-baseline` | Acknowledge specific known findings | Review entries as suppressions; see [Suppressing issues](suppressing.md) |
-| `.query-audit-counts` | Detect count increases for tests without a stronger inline budget | Record intentionally, review the count diff, then rerun normally |
+| `.query-audit-counts` | Emit threshold-based count-regression findings | Record intentionally, review the count diff, then rerun normally |
 | `.query-audit-contracts` | Enforce exact SELECT, INSERT, UPDATE, and DELETE counts for selected tests | Use the explicit contract recording workflow |
+
+A count baseline emits findings rather than direct assertions. It reports a total-count increase
+of at least 50% and five statements, or a SELECT increase of at least 100% and five statements.
+These findings follow the configured rule and failure policy; with `@EnableQueryInspector` they
+remain advisory in the test run. A new confirmed regression finding can fail the comparator.
+Use budgets or contracts when a smaller count change must fail directly.
 
 With the Gradle bridge above, record a query-count baseline locally with:
 
