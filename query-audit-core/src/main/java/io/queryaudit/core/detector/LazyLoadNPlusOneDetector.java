@@ -28,8 +28,9 @@ import java.util.stream.Collectors;
  *       confirmed @ManyToOne/@OneToOne N+1.
  * </ul>
  *
- * <p>Unlike SQL-level heuristics, this approach has zero false positives because it only tracks
- * actual Hibernate lazy loading events, not explicit queries.
+ * <p>This approach tracks Hibernate lazy-loading events. Review the captured SQL counts and
+ * batching behavior when interpreting a finding; an initialization event is not itself a JDBC
+ * roundtrip.
  *
  * @author haroya
  * @since 0.2.0

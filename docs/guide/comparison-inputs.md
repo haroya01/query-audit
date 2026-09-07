@@ -1,15 +1,38 @@
 # Comparison inputs
 
-A finding disappearing from a report does not always mean the query was fixed. The candidate
-could have disabled a rule, raised a threshold, added a suppression, or lost access to index
-metadata. QueryAudit checks the effective inputs of both runs before it reports a resolved finding.
+Compare two reports under the same audit settings. If the candidate disables a rule, raises a
+threshold, adds a suppression, or loses index metadata, the comparison must not call the missing
+finding a fix.
+
+```bash
+java -cp query-audit-core-<version>.jar \
+    io.queryaudit.core.reporter.ReportComparator before.json after.json verdict.json
+```
+
+| Change between runs | Comparison result |
+|---|---|
+| Same effective inputs, complete audits, no new confirmed findings, passing candidate | `PASS` (exit `0`) |
+| Changed profile, rule settings, thresholds, or loaded query policies | `INCONCLUSIVE` with `INCOMPATIBLE_AUDIT_INPUTS`; `resolved` stays empty |
+| Missing input metadata or unidentified custom inputs | `INCONCLUSIVE` with `COMPARISON_INPUTS_UNAVAILABLE` |
+| Missing expected audit evidence | `INCONCLUSIVE`; inspect [coverage](audit-coverage.md) |
+
+Inspect the changed fields:
+
+```bash
+jq '{outcome, incompleteReasons, inputDifferences}' verdict.json
+```
+
+After an intentional settings change, review it and generate both reports using that same
+configuration. Keep the test exit check and standalone report gate from the
+[CI guide](first-ci-check.md). The comparator reports count deltas; [budgets](annotations.md#expectqueries)
+and [contracts](contracts.md) enforce query counts.
+
+## What is recorded
 
 Schema 1.6 adds `comparisonInputs` to the suite envelope. It is an object keyed by stable test ID,
 because different test classes can use different audit settings. The JUnit extension captures the
 inputs used by each audit automatically. This metadata is retained even when raw query evidence
 is compacted from a large suite report.
-
-## What is recorded
 
 | Field | Meaning |
 |---|---|

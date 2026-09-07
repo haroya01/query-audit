@@ -1,10 +1,14 @@
 # N+1 Query Detection
 
+When a read test exceeds its query budget, inspect the repeated SQL and exercise the associations
+the application reads. `@EnableQueryInspector` keeps findings advisory while you review the
+captured statements and available Hibernate events. Use a budget or a reviewed N+1 finding
+policy to keep the corrected access pattern in a test. See [the workflow guide](../guide/choose-your-workflow.md).
+
 | | |
 |---|---|
 | **Issue code** | `n-plus-one` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 | **Default threshold** | 3 repetitions |
 
 ## What Is the N+1 Problem?
@@ -42,10 +46,13 @@ scales linearly and is one of the most common causes of slow application perform
 
 ## How QueryAudit Detects It
 
-The detection algorithm is purely **pattern-based** and does not rely on `EXPLAIN`, making it
-100% reliable regardless of test data size.
+QueryAudit combines two kinds of evidence. SQL repetition produces `n-plus-one-suspect` findings;
+Hibernate lazy-load events support `n-plus-one` findings when that integration is active.
+Neither requires `EXPLAIN`. Review the actual statement count and fetch strategy together:
+batch loading and the tested associations affect how the signal should be interpreted. See
+[known constraints](../guide/limitations.md) before enforcing the finding.
 
-### Step-by-Step
+### SQL repetition analysis
 
 1. **Normalize SQL** -- Replace all literal values with `?` placeholders
 
@@ -57,18 +64,19 @@ The detection algorithm is purely **pattern-based** and does not rely on `EXPLAI
 
 2. **Group by normalized pattern** -- Identical normalized queries are grouped together
 
-3. **Count** -- If the same pattern appears **>= threshold** times (default: 3), it is flagged
-   as N+1
+3. **Count** -- If the same SELECT pattern appears **>= threshold** times (default: 3), it
+   produces an INFO `n-plus-one-suspect` finding.
 
 ```java title="NPlusOneDetector.java (simplified)"
 Map<String, List<QueryRecord>> grouped = new LinkedHashMap<>();
 for (QueryRecord query : queries) {
+    if (query.normalizedSql() == null || !SqlParser.isSelectQuery(query.sql())) continue;
     grouped.computeIfAbsent(query.normalizedSql(), k -> new ArrayList<>()).add(query);
 }
 
 for (var entry : grouped.entrySet()) {
     if (entry.getValue().size() >= threshold) {
-        // --> N+1 detected
+        // --> INFO: n-plus-one-suspect
     }
 }
 ```
@@ -99,9 +107,10 @@ Look for code that:
 - Calls a repository method inside a loop
 
 !!! tip "Stack trace"
-    QueryAudit captures the stack trace at query execution time. Check the report output
-    for the originating line of code -- it typically points to the getter that triggers the
-    lazy load.
+    QueryAudit captures a stack trace at query execution time. If the console's selected source
+    frame points to a proxy, inspect the query's retained `stackTrace` in the JSON report and find
+    your application's package. Hibernate event findings may lack a source location; correlate
+    them with the captured statements from the same test.
 
 ### Step 3: Check the Entity Mapping
 
@@ -324,7 +333,8 @@ Jackson calls `getMember()` on each `Order` during serialization, triggering laz
 
 !!! danger "This is hard to spot"
     The N+1 does not appear in your controller code. It happens inside the JSON serializer.
-    QueryAudit catches it because it monitors all queries regardless of where they originate.
+    Exercise serialization inside the audited test window, using the instrumented DataSource,
+    so QueryAudit can capture those lazy-load queries too.
 
 **Fix:** Use a DTO projection or `@EntityGraph` in the repository method:
 
@@ -386,7 +396,7 @@ for (Order order : orders) {
 
 !!! warning "Cache is not a fix for N+1"
     Cache can mask N+1 problems. The issue returns after cache eviction, restart, or when
-    the data changes. Always fix the underlying N+1 with a proper fetch strategy.
+    the data changes. Review the captured access pattern and choose a fetch strategy for the operation.
 
 ---
 
@@ -619,7 +629,7 @@ queries), suppress it:
 
 ## Related Rules
 
-- [`duplicate-query`](overview.md#disabled-rules-1-entry) -- Detects identical queries (currently disabled)
+- [`duplicate-query`](overview.md#disabled-rules) -- Detects identical queries (currently disabled)
 - [`repeated-single-insert`](dml-anti-patterns.md#repeated-single-row-insert) -- Similar pattern for INSERT statements
 - [`repeated-single-update`](dml-anti-patterns.md#repeated-single-row-update) -- Similar pattern for UPDATEs scoped by a unique key
 - [`mergeable-queries`](overview.md) -- Multiple queries to same table that could be combined

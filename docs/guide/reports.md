@@ -1,8 +1,60 @@
 # Reports
 
+Read the failed policy, inspect its SQL and captured call site, then keep a JSON artifact for CI.
+
+## Read a policy failure
+
+The [runnable read-path test](../getting-started/quickstart.md) permits one SELECT and no writes.
+Adding `-PextraWrite=true` produces this budget failure (excerpt):
+
+```text
+QueryAudit: readsOnce() exceeded its query budget.
+UPDATE: executed 1, expected at most 0.
+  UPDATE orders SET status = 'NEW' WHERE id = 1
+```
+
+The console lists captured SQL for the violated type. Its first stack frame can be a JDBC proxy.
+Use the JSON evidence to find the application caller; this is the same write in the example's
+`reports[].queries` (excerpt; line numbers can change):
+
+```json
+{
+  "sql": "UPDATE orders SET status = ? WHERE id = ?",
+  "stackTrace": "example.audit.FirstAuditTest.writeOnReadPath:43\nexample.audit.FirstAuditTest.readsOnce:26"
+}
+```
+
+JSON redacts literal values and filters stack frames. Application frames appear when capture
+retains them. [Snapshot contract failures](contracts.md#enforcement) also show recorded and
+executed counts; increases list statements of that type. Fix the extra access and rerun the same
+test, or review an intentional [budget](annotations.md#expectqueries) or [contract](contracts.md#updating)
+change with the code.
+
+## Keep the result in CI
+
+Select JSON for the audit run, then inspect its outcome and any missing evidence:
+
+```bash
+jq '{outcome, incompleteReasons, coverage}' build/reports/query-audit/report.json
+```
+
+| Result | Use in CI |
+|---|---|
+| `PASS` | Accept only with a successful test command and a fresh report |
+| `FAIL` | Inspect the failed budget, contract, or enabled finding policy in the test log |
+| `INCONCLUSIVE` | Restore missing capture, required tests, or inputs before accepting the run |
+
+Use the [first CI check](first-ci-check.md) for the full gate and artifact setup. Add an
+[expected-test manifest](audit-coverage.md) to require specific audits. To compare runs, use the
+[compare command](#delta-verdict-compare-two-runs); incompatible settings or missing audit evidence
+cannot establish a successful fix. Total count changes are reported for context; budgets and
+contracts enforce query counts.
+
+## Report formats
+
 !!! note "Version scope"
-    This page documents the 0.6 report contract implemented on `main`. QueryAudit 0.5 writes both
-    HTML and schema 1.0 JSON after a session with at least one completed audited result; the
+    This page documents QueryAudit 0.6 and JSON schema 1.6. QueryAudit 0.5 writes both HTML
+    and schema 1.0 JSON after a session with at least one completed audited result; the
     differences are called out below.
 
 After each audited test method, QueryAudit prints its findings and adds the result to the suite
@@ -35,19 +87,10 @@ after each test method.
 
 ### Example Output
 
-```
-────────────────────────────────────────────────────────────────────────
-  QUERY GUARD REPORT
-  Test: findRecentOrders_shouldUseIndex
-────────────────────────────────────────────────────────────────────────
+A finding includes its SQL, source location when captured, and a suggested investigation. Example
+excerpt from the console report:
 
---- TOP ISSUES BY IMPACT ---
-
-  #1 [ERROR] N+1 Query detected order_items  165 pts
-      Fix: Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)
-
---- CONFIRMED (100% reliable, sorted by priority) ---
-
+```text
   [ERROR] N+1 Query detected
     Query:  select id, order_id, sku from order_items where order_id = ?
     Source: com.example.OrderService.findOrders:42
@@ -55,31 +98,14 @@ after each test method.
     Detail: Query repeated 3 times (threshold: 3)
     Fix:    Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)
 
-
---- INFO (may vary with data volume) ---
-
-  [INFO] SELECT * usage
-    Query:  select * from orders where user_id = ?
-    Source: com.example.OrderService.findOrders:41
-    Target: orders
-    Detail: SELECT * usage detected on table 'orders'
-    Fix:    Replace SELECT * with an explicit column list to reduce network I/O and enable covering index optimization.
-
-
-[OK] 2 queries passed
-
 --- Query Patterns ---
   [  3x] select id, order_id, sku from order_items where order_id = ?
   [  1x] select * from orders where user_id = ?
-
---- Table Access Frequency ---
-  order_items  3 queries
-  orders       1 queries
-────────────────────────────────────────────────────────────────────────
-  2 unique patterns | 4 total queries | 342 ms total
-  1 error | 1 info | 2 passed
-────────────────────────────────────────────────────────────────────────
 ```
+
+A finding diagnostic helps investigate the access path. The final test result and suite outcome
+determine whether the configured policy passed; a per-test console `[OK]` line can appear before
+a later budget assertion fails.
 
 ### Configuration
 
@@ -370,15 +396,14 @@ can read its name and actual runtime version through `EnhancedSqlParser.parserNa
 metadata, including when dependency management selects another version.
 
 Unsupported SQL and statements above 10,000 characters still use the regex fallback. This is a
-per-statement behavior, not a separate classpath-selected parser mode. Schema 1.2 does not yet
-include parser identity or audit-configuration fingerprints; use the same dependency versions and
-audit settings for both runs when comparing reports.
+per-statement behavior, not a separate classpath-selected parser mode. Schema 1.6 records parser
+identity in `comparisonInputs`; use the same dependency versions and audit settings for both runs.
+See [input compatibility](comparison-inputs.md).
 
 ## Delta Verdict (compare two runs)
 
-Every fix loop ends with the same question: *did my change resolve the finding without
-introducing new ones?* The compare command answers it from two `report.json` files alone —
-no re-analysis, no database access:
+Run the comparator on reports from the baseline and candidate. It checks for new confirmed
+findings, missing audit evidence, and compatible inputs before reporting resolution:
 
 ```bash
 java -cp query-audit-core-<version>.jar \
@@ -390,12 +415,19 @@ java -cp query-audit-core-<version>.jar \
   RESOLVED n-plus-one (table: order_items) in OrderServiceTest.findOrders
 ```
 
+This is an example with compatible, complete reports and one resolved finding. The displayed
+`queries 11 -> 7` is context, not a count assertion: an increase alone does not fail this command.
+Use [read/write budgets](annotations.md#expectqueries) or [snapshot contracts](contracts.md) for
+count policy. Missing tests or changed audit settings make the comparison `INCONCLUSIVE`, even
+when the candidate reports fewer findings. An existing confirmed finding may persist in a passing
+comparison; inspect `persisting` when reviewing a particular fix.
+
 - **Exit contract**: `0` for `PASS`, `1` for `FAIL`, and `2` for `INCONCLUSIVE` or a usage/parse
   error. A candidate run that already has outcome `FAIL` cannot become a successful comparison
   merely because it introduced no new finding.
 - **`verdict.json`**: `{outcome, incompleteReasons, newFindings, resolved, persisting, complete,
-  missingTests, unexpectedTests, inputDifferences, queryCountDelta, executionTimeMsDelta}` — the termination condition
-  for automated fix loops.
+  missingTests, unexpectedTests, inputDifferences, queryCountDelta, executionTimeMsDelta}`.
+  Use the final `outcome` or process exit code as the gate.
 
 !!! warning "Java API compatibility in 0.6"
     `ReportComparator.Finding` and `ReportComparator.TestRef` now prepend `testId` to their record
@@ -426,7 +458,8 @@ java -cp query-audit-core-<version>.jar \
   to multiple stable IDs. Re-record archived baselines with QueryAudit 0.6 when a suite contains
   duplicate legacy identities. A display name changed before the first schema 1.2 run has no safe
   fallback and is reported as a missing old test plus a new test.
-- Only **confirmed** findings participate; INFO advisories don't gate fix loops.
+- Only **confirmed** findings participate. INFO and acknowledged findings are not part of the
+  comparison's new-finding gate.
 - Schema 1.1+ inputs must carry a valid outcome and a consistent reason list. A valid
   `INCONCLUSIVE` input keeps its partial delta but forces comparison exit code `2`. Legacy schema
   1.0 input is also inconclusive; unsupported major versions produce
@@ -525,20 +558,19 @@ Shows the name of the test method that was analyzed.
 
 ### CONFIRMED findings
 
-```
---- CONFIRMED (100% reliable, sorted by priority) ---
-```
-
 Issues in this section are eligible to fail the test when `failOnDetection` is `true`. They come
 from structural SQL checks, database metadata, configured thresholds, or Hibernate events. Review
 the evidence against the application semantics before changing a query or schema.
 
 Confirmed issues have either **ERROR** or **WARNING** severity:
 
-- **ERROR** -- high-confidence performance problems (N+1, missing WHERE/JOIN index,
-  function on indexed column)
-- **WARNING** -- likely problems that may be intentional in some cases (excessive OR clauses,
-  large OFFSET pagination, missing ORDER BY/GROUP BY index)
+- **ERROR** -- rules assigned error severity, including N+1, missing WHERE/JOIN indexes, and
+  functions on indexed columns.
+- **WARNING** -- rules assigned warning severity, including excessive OR clauses, large OFFSET
+  pagination, and missing ORDER BY/GROUP BY indexes.
+
+The category and severity describe policy behavior; they do not guarantee that a finding is a
+production performance problem.
 
 ### INFO (may vary with data volume)
 
@@ -556,7 +588,8 @@ state, while others need application context before a change is justified.
     Set `report.show-info: false` in `application.yml` to hide this section if
     your tests use small datasets where these findings are not actionable.
 
-    The setting applies to console, HTML, and JSON output, including aggregate summary counts.
+    In QueryAudit 0.6, the setting applies to console, HTML, and JSON output, including aggregate
+    summary counts. Keep it identical between comparison runs.
     It does not disable INFO detectors or change test failure behavior. Confirmed and acknowledged
     findings, captured queries, query totals, timings, and index metadata remain available.
 
@@ -590,22 +623,21 @@ The summary footer provides:
 
 ## How to Read the Report Effectively
 
-1. **Start with the summary line.** `0 errors | 0 warnings` means there are no confirmed findings
-   at the default severities; INFO advisories may still deserve review.
+1. **Check the final test and audit outcomes.** `0 errors | 0 warnings` only describes findings;
+   a budget, contract, or incomplete audit can still fail the run.
 
-2. **Focus on CONFIRMED errors first.** These are the configured actionable findings, such as a
-   repeated access pattern or a WHERE column with no matching index in the captured metadata.
+2. **Read the failed count policy.** Compare allowed or recorded counts with executed counts.
+   Follow the listed SQL and captured call site to the extra access.
 
-3. **Review warnings.** Rules such as large-offset pagination or excessive OR clauses can be
-   intentional. Suppress a reviewed case with its rule code or record it in the baseline with a
-   reason.
+3. **Review an intended count change.** Update the annotation or re-record the contract, inspect
+   its diff, and rerun. Keep the change beside the application code in the PR.
 
-4. **Glance at INFO.** `SELECT *` and other contextual suggestions are INFO by default. EXPLAIN
-   advisories such as a full table scan may be normal on a small test dataset and more useful when
-   the test has realistic volume and statistics.
+4. **Investigate relevant findings.** Review repeated access and index evidence with application
+   context. INFO suggestions and execution plans may depend on fixtures and database statistics;
+   check a proposed fetch or index change before applying it.
 
-5. **Look at the Fix suggestion.** QueryAudit provides actionable suggestions like
-   `CREATE INDEX` DDL or recommendations to use JOIN FETCH.
+5. **Verify the comparison.** Use the final comparator outcome. Missing tests or changed audit
+   settings leave resolution unverified even when there are fewer findings.
 
 ---
 

@@ -77,6 +77,39 @@ Integration tests require Docker (Testcontainers spins up real database containe
 
 ---
 
+## Keep the first-run documentation executable
+
+Run these commands from the repository root with Python 3.12 and Java 17+:
+
+```bash
+python3 -m venv .venv-docs
+.venv-docs/bin/python -m pip install -r docs/requirements.txt
+.venv-docs/bin/mkdocs build --strict
+.venv-docs/bin/mkdocs serve
+```
+
+Open the local address printed by `mkdocs serve`; stop it with Ctrl+C. The Documentation
+workflow builds relevant pull requests and publishes only from `main`. Keep the pinned direct
+dependencies in `docs/requirements.txt` aligned with the locally verified toolchain.
+
+The [first-run tutorial](../getting-started/quickstart.md) includes its Java source directly from
+`examples/first-audit`. Missing snippet files fail the docs build. Verify the example separately:
+
+```bash
+python3 .github/scripts/verify_first_audit.py
+```
+
+The verifier checks a passing read, a failing extra SELECT, and a failing unexpected UPDATE.
+Each run must produce fresh JUnit XML and JSON evidence matching the intended result. A
+compilation, dependency-resolution, or test-startup failure cannot satisfy a budget-failure check.
+
+The example consumes a pinned Maven Central release, independently of the source build. After a
+new artifact is published, update its `build.gradle`, `PUBLISHED_VERSION` in the verifier, and the
+[version guide](../getting-started/versions.md) together, then rerun both checks. Keep the first-run
+example on a published dependency during release preparation.
+
+---
+
 ## Project Structure
 
 ```

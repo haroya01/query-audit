@@ -1,11 +1,13 @@
 # DML Anti-Pattern Detection
 
-QueryAudit detects performance and safety issues in **INSERT, UPDATE, DELETE** statements.
-These rules analyze SQL structure and repetition patterns, not `EXPLAIN` output, making them
-100% reliable.
+To keep a read path free of writes, use explicit
+`@ExpectQueries(insert = 0, update = 0, delete = 0)` budgets and flush pending JPA changes inside
+the audited transaction. The [workflow guide](../guide/choose-your-workflow.md) shows the setup.
 
-This page covers all 11 DML-related issue types organized by severity, including
-Hibernate/ORM-specific patterns.
+When writes are intended, use the findings below as supporting evidence about captured INSERT,
+UPDATE, and DELETE patterns. Begin with advisory inspection, review the SQL and available call
+site, and enforce the rules that fit the operation. These checks do not establish affected-row
+counts, production lock behavior, or the absence of other write paths.
 
 ---
 
@@ -19,7 +21,6 @@ Hibernate/ORM-specific patterns.
 |---|---|
 | **Issue code** | `update-without-where` |
 | **Severity** | ERROR |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -31,7 +32,8 @@ blocking all concurrent writes until the statement completes.
 
 !!! danger "Data safety"
     MySQL provides `sql_safe_updates` as a built-in safety mechanism for exactly this reason.
-    QueryAudit catches it at test time before it reaches production.
+    QueryAudit can report this pattern when the test executes and captures the statement.
+    Keep affected-row assertions where the number of modified rows matters.
 
 #### Detection
 
@@ -106,7 +108,6 @@ No threshold. Suppress if intentional:
 |---|---|
 | **Issue code** | `dml-without-index` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -189,7 +190,6 @@ match the leading column of any index, the issue is flagged.
 |---|---|
 | **Issue code** | `repeated-single-insert` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 | **Default threshold** | 3 identical INSERT patterns |
 
 #### Why It Matters
@@ -436,7 +436,6 @@ or replace the list with project-specific staging tables.
 |---|---|
 | **Issue code** | `insert-select-all` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -473,7 +472,6 @@ tables. This creates two problems:
 |---|---|
 | **Issue code** | `insert-on-duplicate-key` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -539,7 +537,6 @@ QueryAudit detects both `INSERT ... ON DUPLICATE KEY UPDATE` and `REPLACE INTO` 
 |---|---|
 | **Issue code** | `subquery-in-dml` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -603,7 +600,6 @@ statements. This is a documented MySQL limitation.
 |---|---|
 | **Issue code** | `implicit-columns-insert` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -654,7 +650,6 @@ or reordering columns in the table silently breaks the INSERT statement.
 |---|---|
 | **Issue code** | `insert-select-locks-source` |
 | **Severity** | INFO |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -711,7 +706,6 @@ These rules detect Hibernate-specific DML patterns that indicate inefficient ent
 |---|---|
 | **Issue code** | `collection-delete-reinsert` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
@@ -803,7 +797,6 @@ test execution.
 |---|---|
 | **Issue code** | `derived-delete-loads-entities` |
 | **Severity** | WARNING |
-| **Confidence** | Confirmed (100%) |
 
 #### Why It Matters
 
