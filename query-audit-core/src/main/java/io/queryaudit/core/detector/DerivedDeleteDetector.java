@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * Detects the Spring Data derived delete anti-pattern where entities are first loaded via SELECT,
@@ -32,15 +31,6 @@ public class DerivedDeleteDetector implements DetectionRule {
 
   private static final int DEFAULT_THRESHOLD = 3;
 
-  /**
-   * Pattern to detect a simple PK-style WHERE clause: WHERE column = ? Matches patterns like: WHERE
-   * id = ? or WHERE id = 1
-   */
-  private static final Pattern PK_DELETE_PATTERN =
-      Pattern.compile(
-          "^\\s*DELETE\\s+FROM\\s+\\S+\\s+WHERE\\s+\\w+\\s*=\\s*\\S+\\s*$",
-          Pattern.CASE_INSENSITIVE);
-
   private final int threshold;
 
   public DerivedDeleteDetector() {
@@ -53,6 +43,11 @@ public class DerivedDeleteDetector implements DetectionRule {
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
+    // Read-only captures cannot contain a derived delete. Avoid scanning every SELECT suffix.
+    if (threshold > 0
+        && queries.stream().noneMatch(query -> SqlParser.isDeleteQuery(query.sql()))) {
+      return List.of();
+    }
     List<Issue> issues = new ArrayList<>();
     Set<String> flaggedTables = new HashSet<>();
 

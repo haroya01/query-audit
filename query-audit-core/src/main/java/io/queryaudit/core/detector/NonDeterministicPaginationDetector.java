@@ -9,6 +9,7 @@ import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
 import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
+import io.queryaudit.core.parser.SqlTableReferences;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -70,7 +71,7 @@ public class NonDeterministicPaginationDetector implements DetectionRule {
         continue;
       }
 
-      Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
+      Map<String, String> aliasToTable = SqlTableReferences.resolveAliases(sql);
 
       // Check if any ORDER BY column has a unique index
       boolean hasUniqueTiebreaker = false;

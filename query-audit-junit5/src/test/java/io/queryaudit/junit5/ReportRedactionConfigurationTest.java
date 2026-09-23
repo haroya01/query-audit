@@ -50,7 +50,7 @@ class ReportRedactionConfigurationTest {
               new QueryAuditExtension(),
               output,
               ReportFormat.JSON,
-              new QueryAuditExtension.AuditRunState(),
+              runStateWithReports(),
               config.getReportRedaction())
           .close();
       assertThat(Files.readString(output.resolve("report.json")))
@@ -58,7 +58,8 @@ class ReportRedactionConfigurationTest {
 
       System.clearProperty("queryAudit.reportRedaction");
       assertThat(resolvedConfig().getReportRedaction()).isEqualTo(ReportRedaction.REDACTED);
-      new QueryAuditExtension.ReportFinalizer(new QueryAuditExtension(), output, ReportFormat.JSON)
+      new QueryAuditExtension.ReportFinalizer(
+              new QueryAuditExtension(), output, ReportFormat.JSON, runStateWithReports())
           .close();
       assertThat(Files.readString(output.resolve("report.json")))
           .contains("\"redaction\": \"REDACTED\"")
@@ -89,5 +90,14 @@ class ReportRedactionConfigurationTest {
         QueryAuditExtension.class.getDeclaredMethod("buildConfig", ExtensionContext.class);
     buildConfig.setAccessible(true);
     return (QueryAuditConfig) buildConfig.invoke(new QueryAuditExtension(), context);
+  }
+
+  private static QueryAuditExtension.AuditRunState runStateWithReports() {
+    var state = new QueryAuditExtension.AuditRunState();
+    HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
+    aggregator
+        .getReports()
+        .forEach(report -> state.retainReport(report, aggregator.getMaxInMemoryReports()));
+    return state;
   }
 }

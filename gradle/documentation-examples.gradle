@@ -1,0 +1,58 @@
+// Compile the copyable Java examples against declared project dependencies, not a cache-wide classpath.
+def documentationSources = layout.buildDirectory.dir('documentation-examples/sources')
+def documentationClasses = layout.buildDirectory.dir('documentation-examples/classes')
+
+def extractExamples = tasks.register('extractExtensionDocumentation') {
+    inputs.file('docs/guide/extensions.md')
+    outputs.dir(documentationSources)
+    doLast {
+        def directory = documentationSources.get().asFile
+        delete(directory)
+        def blocks = file('docs/guide/extensions.md').getText('UTF-8') =~ /(?ms)^```java\s*\n(.*?)^```\s*$/
+        def paths = new HashSet<String>()
+        blocks.each { match ->
+            def source = match[1]
+            def packageName = source =~ /(?m)^package\s+([\w.]+);/
+            def typeName = source =~ /(?m)^(?:public\s+)?(?:final\s+)?(?:class|interface|record|enum)\s+(\w+)/
+            if (!packageName.find() || !typeName.find()) {
+                throw new GradleException('Every Java fence in extensions.md must be a complete, copyable compilation unit')
+            }
+            def relative = packageName.group(1).replace('.', '/') + '/' + typeName.group(1) + '.java'
+            if (!paths.add(relative)) throw new GradleException("Duplicate documentation example: ${relative}")
+            def destination = new File(directory, relative)
+            destination.parentFile.mkdirs()
+            destination.setText(source, 'UTF-8')
+        }
+        if (paths.empty) throw new GradleException('No Java documentation examples found')
+        logger.lifecycle("Extracted ${paths.size()} complete Java documentation examples")
+    }
+}
+
+def compileExamples = tasks.register('compileExtensionDocumentation', JavaCompile) {
+    group = 'verification'
+    description = 'Compiles every Java example in the public extension guide with Java 17 API compatibility.'
+    dependsOn extractExamples, ':query-audit-junit5:classes', ':query-audit-mysql:classes'
+    source documentationSources
+    destinationDirectory = documentationClasses
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
+gradle.projectsEvaluated {
+    def junitProject = project(':query-audit-junit5')
+    def exampleClasspath = files(junitProject.sourceSets.main.output,
+            junitProject.configurations.testCompileClasspath,
+            junitProject.configurations.testRuntimeClasspath,
+            project(':query-audit-mysql').sourceSets.main.output)
+    compileExamples.configure { classpath = exampleClasspath }
+    def exerciseExamples = tasks.register('verifyExtensionDocumentation', JavaExec) {
+        group = 'verification'
+        description = 'Compiles the public guide and runs its core-only budget quickstart.'
+        dependsOn compileExamples
+        classpath = files(documentationClasses, exampleClasspath)
+        mainClass = 'example.audit.BudgetQuickstart'
+    }
+    junitProject.tasks.named('check').configure { dependsOn exerciseExamples }
+}

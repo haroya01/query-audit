@@ -201,16 +201,37 @@ Do not automatically regenerate it to make CI pass. See [contracts](contracts.md
 
 ## Parallel Capture Is Incomplete
 
-Published `0.6.0` rejects concurrent audited methods. Keep audited tests on the same thread;
-add this to `src/test/resources/junit-platform.properties`:
+2. **Test ordering:** Tests run in a different order in CI, causing different
+   query patterns.
 
-```properties
-junit.jupiter.execution.parallel.enabled=false
-```
+3. **Baseline drift:** The `.query-audit-counts` baseline file is out of date. Regenerate it
+   locally and review the diff. With the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), use
+   `./gradlew test -PqueryAuditUpdateBaseline=true`; with Maven, use
+   `mvn test -DqueryAudit.updateBaseline=true`.
 
-Remove explicit `@Execution(CONCURRENT)` from audited classes and methods, or replace it with
-`@Execution(SAME_THREAD)`. Keep audited SQL on the test execution path: this release does not
-provide a supported asynchronous attribution API.
+4. **Schema differences:** The CI database may have different indexes or table
+   definitions than your local environment.
+
+5. **Different Spring profiles:** CI may activate a different Spring profile
+   with different QueryAudit settings.
+
+---
+
+## Parallel Capture Is Incomplete
+
+Current development source supports concurrent audited classes and methods. Older artifacts may
+still reject concurrent execution; check the installed version against this guide's source scope.
+
+`UNATTRIBUTED_QUERY` means JDBC work ran without an invocation binding while capture was active.
+Wrap executor tasks with `QueryCaptureSession.wrap` on the test thread and join them before the
+test returns. `QUERY_STILL_RUNNING`, `ASYNC_WORK_STILL_RUNNING` or `WORK_AFTER_CAPTURE` mean work
+outlived its capture boundary. They are incomplete evidence, not a clean audit. See
+[Parallel capture](extensions.md#parallel-capture) for a complete example and lifecycle boundaries.
+
+Use a separate EntityManager/transaction per test and keep custom extensions thread-safe. Avoid
+`@DirtiesContext` or application shutdown in one class while another uses that shared context.
+Normal rollback/connection release after analysis is supported. `@TestFactory` dynamic-child
+capture remains a separate unsupported lifecycle, not a parallel scheduling restriction.
 
 `@TestFactory` dynamic children also lack a per-child audit boundary. Use ordinary `@Test` or
 `@ParameterizedTest` methods for audited cases, or exclude the factory. See

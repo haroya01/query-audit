@@ -10,6 +10,7 @@ import io.queryaudit.core.parser.ColumnReference;
 import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.JoinColumnPair;
 import io.queryaudit.core.parser.SqlParser;
+import io.queryaudit.core.parser.SqlTableReferences;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -54,7 +55,7 @@ public class CompositeIndexDetector implements DetectionRule {
       }
 
       String stackTrace = query.stackTrace();
-      Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
+      Map<String, String> aliasToTable = SqlTableReferences.resolveAliases(sql);
 
       List<ColumnReference> whereColumns = EnhancedSqlParser.extractWhereColumns(sql);
 

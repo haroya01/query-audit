@@ -7,14 +7,9 @@ import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.provenance.AuditCapability;
-import io.queryaudit.core.provenance.AuditRuntimeIdentity;
-import java.lang.reflect.Array;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 /**
@@ -33,13 +28,7 @@ class HibernateIntegration {
 
   private static final String INIT_COLLECTION_LISTENER_CLASS =
       "org.hibernate.event.spi.InitializeCollectionEventListener";
-  private static final String POST_LOAD_LISTENER_CLASS =
-      "org.hibernate.event.spi.PostLoadEventListener";
-
-  // Retain the adapter instance so partial registration and normal cleanup remove the same
-  // listener.
-  private final Map<LazyLoadTracker, HibernateLazyLoadListener> registeredListeners =
-      new ConcurrentHashMap<>();
+  private final HibernateListenerLeases listeners = new HibernateListenerLeases();
 
   record Registration(LazyLoadTracker tracker, AuditCapability capability, String failure) {}
 
@@ -62,10 +51,7 @@ class HibernateIntegration {
 
   /** Removes the tracker from the Hibernate event listener registry (issue #101). */
   void unregisterTracker(ExtensionContext context, LazyLoadTracker tracker) {
-    if (tracker == null) return;
-    Object emf = resolveEntityManagerFactory(context);
-    if (emf == null) return;
-    unregisterTrackerForEmf(emf, tracker);
+    unregisterTrackerForEmf(null, tracker);
   }
 
   LazyLoadTracker registerTrackerForEmf(Object emf) {
@@ -73,7 +59,6 @@ class HibernateIntegration {
   }
 
   Registration registerWithCapabilitiesForEmf(Object emf) {
-    LazyLoadTracker tracker = null;
     try {
       Class.forName(INIT_COLLECTION_LISTENER_CLASS);
 
@@ -82,138 +67,21 @@ class HibernateIntegration {
         throw new IllegalStateException("Hibernate event listener registry is unavailable");
       }
 
-      tracker = new LazyLoadTracker();
-      HibernateLazyLoadListener listener = new HibernateLazyLoadListener(tracker);
-      registeredListeners.put(tracker, listener);
-
-      Class<?> eventTypeClass = Class.forName("org.hibernate.event.spi.EventType");
-      Class<?> registryClass =
-          Class.forName("org.hibernate.event.service.spi.EventListenerRegistry");
-      Method appendListenersMethod =
-          registryClass.getMethod("appendListeners", eventTypeClass, Object[].class);
-
-      appendListener(
-          eventListenerRegistry,
-          eventTypeClass,
-          "INIT_COLLECTION",
-          Class.forName(INIT_COLLECTION_LISTENER_CLASS),
-          appendListenersMethod,
-          listener);
-      appendListener(
-          eventListenerRegistry,
-          eventTypeClass,
-          "POST_LOAD",
-          Class.forName(POST_LOAD_LISTENER_CLASS),
-          appendListenersMethod,
-          listener);
-
-      String version =
-          (String)
-              Class.forName("org.hibernate.Version").getMethod("getVersionString").invoke(null);
-      if (version == null || version.isBlank() || version.equalsIgnoreCase("unknown")) {
-        throw new IllegalStateException("Hibernate did not identify its runtime version");
-      }
-      return new Registration(
-          tracker,
-          AuditCapability.available(
-              "hibernate:"
-                  + version
-                  + ";"
-                  + AuditRuntimeIdentity.implementation(listener.getClass())),
-          null);
+      return listeners.acquire(eventListenerRegistry);
     } catch (ClassNotFoundException failure) {
-      if (tracker == null && INIT_COLLECTION_LISTENER_CLASS.equals(failure.getMessage())) {
+      if (INIT_COLLECTION_LISTENER_CLASS.equals(failure.getMessage())) {
         return new Registration(null, AuditCapability.absent(), null);
       }
-      unregisterTrackerForEmf(emf, tracker);
       return new Registration(
           null, AuditCapability.failed("hibernate-events"), failure.getClass().getSimpleName());
     } catch (Exception | LinkageError failure) {
-      unregisterTrackerForEmf(emf, tracker);
       return new Registration(
           null, AuditCapability.failed("hibernate-events"), failure.getClass().getSimpleName());
     }
   }
 
   void unregisterTrackerForEmf(Object emf, LazyLoadTracker tracker) {
-    if (tracker == null) return;
-    HibernateLazyLoadListener listener = registeredListeners.remove(tracker);
-    if (listener == null) return;
-    try {
-      Class.forName(INIT_COLLECTION_LISTENER_CLASS);
-
-      Object eventListenerRegistry = resolveEventListenerRegistry(emf);
-      if (eventListenerRegistry == null) return;
-
-      Class<?> eventTypeClass = Class.forName("org.hibernate.event.spi.EventType");
-      removeListener(
-          eventListenerRegistry,
-          eventTypeClass,
-          "INIT_COLLECTION",
-          Class.forName(INIT_COLLECTION_LISTENER_CLASS),
-          listener);
-      removeListener(
-          eventListenerRegistry,
-          eventTypeClass,
-          "POST_LOAD",
-          Class.forName(POST_LOAD_LISTENER_CLASS),
-          listener);
-    } catch (ClassNotFoundException ignored) {
-      // Hibernate not on classpath, nothing to do
-    } catch (Exception e) {
-      System.err.println(
-          "[QueryAudit] Failed to unregister Hibernate LazyLoadTracker: " + e.getMessage());
-    }
-  }
-
-  private static void appendListener(
-      Object eventListenerRegistry,
-      Class<?> eventTypeClass,
-      String eventTypeFieldName,
-      Class<?> listenerInterface,
-      Method appendListenersMethod,
-      HibernateLazyLoadListener listener)
-      throws Exception {
-    Object eventType = eventTypeClass.getField(eventTypeFieldName).get(null);
-    Object listenersArray = Array.newInstance(listenerInterface, 1);
-    Array.set(listenersArray, 0, listener);
-    appendListenersMethod.invoke(eventListenerRegistry, eventType, listenersArray);
-  }
-
-  private static void removeListener(
-      Object eventListenerRegistry,
-      Class<?> eventTypeClass,
-      String eventTypeFieldName,
-      Class<?> listenerInterface,
-      HibernateLazyLoadListener listener)
-      throws Exception {
-    Object eventType = eventTypeClass.getField(eventTypeFieldName).get(null);
-
-    // Resolve via public SPI interfaces; internal impls block reflective access on JPMS.
-    Class<?> registryClass = Class.forName("org.hibernate.event.service.spi.EventListenerRegistry");
-    Class<?> groupClass = Class.forName("org.hibernate.event.service.spi.EventListenerGroup");
-
-    Method getGroupMethod = registryClass.getMethod("getEventListenerGroup", eventTypeClass);
-    Object group = getGroupMethod.invoke(eventListenerRegistry, eventType);
-    if (group == null) return;
-
-    Iterable<?> currentListeners = (Iterable<?>) groupClass.getMethod("listeners").invoke(group);
-
-    List<Object> retained = new ArrayList<>();
-    for (Object registered : currentListeners) {
-      if (registered != listener) {
-        retained.add(registered);
-      }
-    }
-
-    Object retainedArray = Array.newInstance(listenerInterface, retained.size());
-    for (int i = 0; i < retained.size(); i++) {
-      Array.set(retainedArray, i, retained.get(i));
-    }
-
-    Method setListenersMethod =
-        registryClass.getMethod("setListeners", eventTypeClass, Object[].class);
-    setListenersMethod.invoke(eventListenerRegistry, eventType, retainedArray);
+    listeners.release(tracker);
   }
 
   /** Resolves the Hibernate {@code EventListenerRegistry} from the given EMF, or null. */

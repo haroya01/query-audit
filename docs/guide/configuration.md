@@ -53,7 +53,7 @@ All properties are optional. The table below lists every supported key under the
 | `max-queries` | `int` | `10000` | Maximum number of queries retained per test. If additional queries are dropped, the audit fails as incomplete. |
 | `report.format` | `String` | `"console"` | Suite artifact: `console` writes no file, `json` writes `report.json`, and `html` writes the browser report. Per-test console diagnostics remain available for every selection. |
 | `report.output-dir` | `String` | `"build/reports/query-audit"` | Directory used by the selected JSON or HTML report. |
-| `report.show-info` | `boolean` | `true` | Whether unacknowledged INFO findings appear in console, HTML, and JSON output. Visible summary counts follow this setting; analysis and query statistics are unchanged. Keep the setting identical in comparison runs. |
+| `report.show-info` | `boolean` | `true` | Whether unacknowledged INFO findings appear in console, HTML, and GitHub Actions display. Canonical run JSON and sink summaries retain them for trustworthy comparisons; analysis and query statistics are unchanged. |
 | `disabled-rules` | `List<String>` | `[]` | Rule codes to completely disable. |
 | `severity-overrides` | `Map<String,String>` | `{}` | Override severity per rule code (e.g., `select-all: WARNING`). |
 | `large-in-list.threshold` | `int` | `100` | Number of values in IN clause before flagging. |

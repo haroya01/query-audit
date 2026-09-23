@@ -10,15 +10,17 @@ import io.queryaudit.core.parser.ColumnReference;
 import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.JoinColumnPair;
 import io.queryaudit.core.parser.SqlParser;
+import io.queryaudit.core.parser.SqlTableReferences;
 import io.queryaudit.core.parser.WhereColumnReference;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -30,26 +32,6 @@ import java.util.regex.Pattern;
  */
 public class MissingIndexDetector implements DetectionRule {
 
-  // A single identifier segment: bare \w+, backtick-quoted, or double-quoted.
-  // Hibernate emits backtick- or double-quoted identifiers under
-  // hibernate.globally_quoted_identifiers=true or for reserved-word table names.
-  private static final String IDENT_SEGMENT = "(?:\\w+|`[^`]+`|\"[^\"]+\")";
-
-  // Matches "FROM <table>" with optional schema/database prefixes (e.g. "myschema.users",
-  // "db.schema.users", "`messages`", "\"users\"") and an optional bare alias.
-  private static final Pattern FROM_ALIAS =
-      Pattern.compile(
-          "\\bFROM\\s+((?:" + IDENT_SEGMENT + "\\.){0,2}" + IDENT_SEGMENT + ")(?:\\s+(?:AS\\s+)?(\\w+))?",
-          Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern JOIN_ALIAS =
-      Pattern.compile(
-          "\\bJOIN\\s+((?:" + IDENT_SEGMENT + "\\.){0,2}" + IDENT_SEGMENT + ")(?:\\s+(?:AS\\s+)?(\\w+))?",
-          Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern QUOTED_IDENT = Pattern.compile("`([^`]+)`|\"([^\"]+)\"");
-
-  // ── Improvement 1: Low cardinality column name patterns ──────────
   private static final Set<String> LOW_CARDINALITY_EXACT_NAMES =
       Set.of(
           "type",
@@ -75,7 +57,6 @@ public class MissingIndexDetector implements DetectionRule {
   private static final Pattern LOW_CARDINALITY_SUFFIX_PATTERN =
       Pattern.compile("^.+(_type|_status)$", Pattern.CASE_INSENSITIVE);
 
-  // ── Improvement 2: Soft-delete column patterns ───────────────────
   private static final Set<String> SOFT_DELETE_COLUMN_NAMES =
       Set.of(
           "deleted_at",
@@ -89,246 +70,312 @@ public class MissingIndexDetector implements DetectionRule {
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
-
     if (indexMetadata == null || indexMetadata.isEmpty()) {
       MetadataSkipLog.warnEmptyMetadataOnce("MissingIndexDetector");
       return issues;
     }
 
     Set<String> seen = new LinkedHashSet<>();
-
     for (QueryRecord query : queries) {
-      String normalized = query.normalizedSql();
-      if (normalized == null || seen.contains(normalized)) {
-        continue;
-      }
-      seen.add(normalized);
+      if (query.normalizedSql() == null || !seen.add(query.normalizedSql())) continue;
+      if (!SqlParser.isSelectQuery(query.sql())) continue;
 
-      String sql = query.sql();
-      if (!SqlParser.isSelectQuery(sql)) {
-        continue;
-      }
-
-      Map<String, String> aliasToTable = resolveAliases(sql);
-
-      String stackTrace = query.stackTrace();
-
-      // (a) WHERE columns (with operator info for soft-delete / low-cardinality detection)
-      List<WhereColumnReference> whereColumnsWithOp =
-          EnhancedSqlParser.extractWhereColumnsWithOperators(sql);
-      List<ColumnReference> whereColumns =
-          whereColumnsWithOp.stream().map(WhereColumnReference::toColumnReference).toList();
-
-      // First pass: determine which WHERE columns already have indexes per table,
-      // and whether any of them have a unique/primary key index with equality.
-      Map<String, Boolean> tableHasUniqueIndexedWhereCol = new HashMap<>();
-      Map<String, Boolean> tableHasAnyIndexedWhereCol = new HashMap<>();
-
-      // Track indexed column names per table for composite suggestion (Improvement 4)
-      Map<String, List<String>> indexedWhereColsByTable = new HashMap<>();
-      // Track unindexed column names per table for composite suggestion
-      Map<String, List<String>> unindexedWhereColsByTable = new HashMap<>();
-
-      // Track total WHERE column count per table (for soft-delete sole-column check)
-      Map<String, Integer> whereColumnCountByTable = new HashMap<>();
-
-      for (int i = 0; i < whereColumns.size(); i++) {
-        ColumnReference col = whereColumns.get(i);
-        WhereColumnReference colWithOp = whereColumnsWithOp.get(i);
-        String table = resolveTable(col.tableOrAlias(), aliasToTable);
-        if (table != null) {
-          whereColumnCountByTable.merge(table, 1, Integer::sum);
-        }
-        if (table != null
-            && indexMetadata.hasTable(table)
-            && indexMetadata.hasIndexOn(table, col.columnName())) {
-          tableHasAnyIndexedWhereCol.put(table, true);
-          indexedWhereColsByTable
-              .computeIfAbsent(table, k -> new ArrayList<>())
-              .add(col.columnName());
-          if (hasUniqueOrPrimaryIndex(indexMetadata, table, col.columnName())
-              && colWithOp.isEquality()) {
-            tableHasUniqueIndexedWhereCol.put(table, true);
-          }
-        }
-      }
-
-      for (int i = 0; i < whereColumns.size(); i++) {
-        ColumnReference col = whereColumns.get(i);
-        WhereColumnReference colWithOp = whereColumnsWithOp.get(i);
-        String table = resolveTable(col.tableOrAlias(), aliasToTable);
-        if (table != null
-            && indexMetadata.hasTable(table)
-            && !indexMetadata.hasIndexOn(table, col.columnName())) {
-          // Skip if the column is part of a composite index --
-          // let CompositeIndexDetector handle it
-          if (isInAnyCompositeIndex(indexMetadata, table, col.columnName())) {
-            continue;
-          }
-
-          // If another WHERE column on the same table has a unique/PK index,
-          // the result set is already tiny -- skip this column entirely.
-          if (tableHasUniqueIndexedWhereCol.getOrDefault(table, false)) {
-            continue;
-          }
-
-          // Leading-wildcard LIKE is handled by LikeWildcardDetector (#92).
-          if (isLikeOperator(colWithOp.operator())
-              && isLeadingWildcardLike(sql, col.columnName())) {
-            continue;
-          }
-
-          // Skip IS NULL / IS NOT NULL checks for non-soft-delete columns:
-          // NULL checks have poor selectivity and rarely benefit from B-tree indexes.
-          // Soft-delete columns (e.g., deleted_at IS NULL) have their own handling below.
-          if (isNullCheckOperator(colWithOp.operator()) && !isSoftDeleteColumn(col.columnName())) {
-            continue;
-          }
-
-          boolean hasOtherIndexedCol = tableHasAnyIndexedWhereCol.getOrDefault(table, false);
-
-          // ── Improvement 2: Soft-delete pattern ──────────────
-          if (isSoftDeleteColumn(col.columnName()) && isSoftDeleteOperator(colWithOp.operator())) {
-            int totalWhereColsOnTable = whereColumnCountByTable.getOrDefault(table, 0);
-            if (totalWhereColsOnTable > 1) {
-              // Other filter columns exist on the same table; the soft-delete
-              // condition adds no selectivity value -- suppress entirely
-              continue;
-            }
-            // Literally the ONLY filter column in WHERE -- downgrade to INFO
-            issues.add(
-                new Issue(
-                    IssueType.MISSING_WHERE_INDEX,
-                    Severity.INFO,
-                    normalized,
-                    table,
-                    col.columnName(),
-                    "Soft-delete column '"
-                        + col.columnName()
-                        + "' with IS NULL/= false. "
-                        + "When 99%+ rows match this condition, a standalone index provides no selectivity.",
-                    "Consider a partial index or composite index with a more selective leading column.",
-                    stackTrace));
-            continue;
-          }
-
-          // ── Improvement 1: Low cardinality column ───────────
-          if (isLowCardinalityColumn(col.columnName(), indexMetadata, table)) {
-            if (hasOtherIndexedCol) {
-              // Another indexed column already narrows the scan; skip entirely
-              continue;
-            }
-            // Sole column in WHERE -- downgrade to INFO
-            issues.add(
-                new Issue(
-                    IssueType.MISSING_WHERE_INDEX,
-                    Severity.INFO,
-                    normalized,
-                    table,
-                    col.columnName(),
-                    "Low cardinality column '"
-                        + col.columnName()
-                        + "'. "
-                        + "A B-tree index on a low-cardinality column has poor selectivity; "
-                        + "MySQL may prefer a full table scan over an index scan.",
-                    "Consider a composite index with a more selective leading column.",
-                    stackTrace));
-            continue;
-          }
-
-          // Track unindexed columns for composite suggestion
-          unindexedWhereColsByTable
-              .computeIfAbsent(table, k -> new ArrayList<>())
-              .add(col.columnName());
-
-          // If another WHERE column on the same table has a regular index,
-          // downgrade severity from ERROR to WARNING.
-          Severity severity = hasOtherIndexedCol ? Severity.WARNING : Severity.ERROR;
-
-          // ── Improvement 4: Improved suggestion text ──────────
-          String suggestion =
-              buildWhereSuggestion(
-                  table, col.columnName(), indexedWhereColsByTable.getOrDefault(table, List.of()));
-
-          issues.add(
-              new Issue(
-                  IssueType.MISSING_WHERE_INDEX,
-                  severity,
-                  normalized,
-                  table,
-                  col.columnName(),
-                  "SHOW INDEX FROM "
-                      + table
-                      + " \u2192 "
-                      + col.columnName()
-                      + " column has no index. Without an index, MySQL performs a full table scan for every query filtering on this column.",
-                  suggestion,
-                  stackTrace));
-        }
-      }
-
-      // (b) JOIN columns — use enhanced parser for better accuracy on complex SQL
-      List<JoinColumnPair> joinPairs = EnhancedSqlParser.extractJoinColumns(sql);
-      for (JoinColumnPair pair : joinPairs) {
-        checkJoinColumn(pair.left(), aliasToTable, indexMetadata, normalized, stackTrace, issues);
-        checkJoinColumn(pair.right(), aliasToTable, indexMetadata, normalized, stackTrace, issues);
-      }
-
-      // (c) ORDER BY columns
-      List<ColumnReference> orderByColumns = EnhancedSqlParser.extractOrderByColumns(sql);
-      for (ColumnReference col : orderByColumns) {
-        String table = resolveTable(col.tableOrAlias(), aliasToTable);
-        if (table != null
-            && indexMetadata.hasTable(table)
-            && !indexMetadata.hasIndexOn(table, col.columnName())) {
-
-          // ── Improvement 3: Skip ORDER BY when result set is already tiny ──
-          if (tableHasUniqueIndexedWhereCol.getOrDefault(table, false)) {
-            // PK/unique equality in WHERE => at most 1 row, filesort is free
-            continue;
-          }
-
-          // If any WHERE column has a regular index, downgrade ORDER BY to INFO
-          Severity orderBySeverity =
-              tableHasAnyIndexedWhereCol.getOrDefault(table, false)
-                  ? Severity.INFO
-                  : Severity.WARNING;
-
-          // ── Improvement 4: Suggest composite (where_col, order_col) ──
-          String orderBySuggestion =
-              buildOrderBySuggestion(
-                  table,
-                  col.columnName(),
-                  indexedWhereColsByTable.getOrDefault(table, List.of()),
-                  unindexedWhereColsByTable.getOrDefault(table, List.of()));
-
-          issues.add(
-              new Issue(
-                  IssueType.MISSING_ORDER_BY_INDEX,
-                  orderBySeverity,
-                  normalized,
-                  table,
-                  col.columnName(),
-                  "SHOW INDEX FROM "
-                      + table
-                      + " \u2192 "
-                      + col.columnName()
-                      + " column has no index. MySQL uses filesort when ORDER BY column has no index.",
-                  orderBySuggestion,
-                  stackTrace));
-        }
-      }
-
-      // (d) GROUP BY columns
-      List<ColumnReference> groupByColumns = EnhancedSqlParser.extractGroupByColumns(sql);
-      checkGroupByColumns(
-          groupByColumns, aliasToTable, indexMetadata, normalized, stackTrace, issues);
+      QueryFacts facts = queryFacts(query, indexMetadata);
+      WhereAnalysis where = checkWhereColumns(facts);
+      issues.addAll(where.issues());
+      checkJoinColumns(facts, issues);
+      checkOrderByColumns(facts, where, issues);
+      checkGroupByColumns(facts, issues);
     }
-
     return issues;
   }
 
-  // ── Low cardinality detection ────────────────────────────────────
+  private QueryFacts queryFacts(QueryRecord query, IndexMetadata metadata) {
+    Map<String, String> aliases = resolveAliases(query.sql());
+    List<WhereColumnReference> where =
+        EnhancedSqlParser.extractWhereColumnsWithOperators(query.sql());
+    Map<String, TableFilterFacts> filters = tableFilters(where, aliases, metadata);
+    boolean hasIndexedFilter =
+        filters.values().stream().anyMatch(TableFilterFacts::hasIndexedColumn);
+    Set<String> singleRowTables =
+        hasIndexedFilter ? UniqueIndexEquality.singleRowTables(query.sql(), metadata) : Set.of();
+    return new QueryFacts(
+        query,
+        metadata,
+        Collections.unmodifiableMap(new LinkedHashMap<>(aliases)),
+        List.copyOf(where),
+        filters,
+        singleRowTables);
+  }
+
+  private static Map<String, TableFilterFacts> tableFilters(
+      List<WhereColumnReference> columns, Map<String, String> aliases, IndexMetadata metadata) {
+    Map<String, Integer> counts = new HashMap<>();
+    Map<String, List<String>> indexed = new HashMap<>();
+    for (WhereColumnReference column : columns) {
+      String table = resolveTable(column.tableOrAlias(), aliases);
+      if (table == null) continue;
+      counts.merge(table, 1, Integer::sum);
+      if (metadata.hasTable(table) && metadata.hasIndexOn(table, column.columnName())) {
+        indexed.computeIfAbsent(table, ignored -> new ArrayList<>()).add(column.columnName());
+      }
+    }
+    Map<String, TableFilterFacts> result = new HashMap<>();
+    counts.forEach(
+        (table, count) ->
+            result.put(table, new TableFilterFacts(count, indexed.getOrDefault(table, List.of()))));
+    return Map.copyOf(result);
+  }
+
+  private WhereAnalysis checkWhereColumns(QueryFacts facts) {
+    List<Issue> issues = new ArrayList<>();
+    Map<String, List<String>> suggestedColumns = new HashMap<>();
+    for (WhereColumnReference column : facts.whereColumns()) {
+      String table = facts.table(column.tableOrAlias());
+      if (!facts.missingIndex(table, column.columnName()) || skipWhereIndex(facts, table, column))
+        continue;
+
+      TableFilterFacts filters = facts.filters(table);
+      if (isSoftDeleteColumn(column.columnName()) && isSoftDeleteOperator(column.operator())) {
+        if (filters.columnCount() <= 1) {
+          issues.add(
+              facts.issue(
+                  IssueType.MISSING_WHERE_INDEX,
+                  Severity.INFO,
+                  table,
+                  column.columnName(),
+                  "Soft-delete column '"
+                      + column.columnName()
+                      + "' with IS NULL/= false. When 99%+ rows match this condition, a"
+                      + " standalone index provides no selectivity.",
+                  "Consider a partial index or composite index with a more selective leading"
+                      + " column."));
+        }
+        continue;
+      }
+      if (isLowCardinalityColumn(column.columnName(), facts.metadata(), table)) {
+        if (!filters.hasIndexedColumn()) {
+          issues.add(
+              facts.issue(
+                  IssueType.MISSING_WHERE_INDEX,
+                  Severity.INFO,
+                  table,
+                  column.columnName(),
+                  "Low cardinality column '"
+                      + column.columnName()
+                      + "'. "
+                      + "A B-tree index on a low-cardinality column has poor selectivity; "
+                      + "MySQL may prefer a full table scan over an index scan.",
+                  "Consider a composite index with a more selective leading column."));
+        }
+        continue;
+      }
+
+      suggestedColumns
+          .computeIfAbsent(table, ignored -> new ArrayList<>())
+          .add(column.columnName());
+      issues.add(
+          facts.issue(
+              IssueType.MISSING_WHERE_INDEX,
+              filters.hasIndexedColumn() ? Severity.WARNING : Severity.ERROR,
+              table,
+              column.columnName(),
+              "SHOW INDEX FROM "
+                  + table
+                  + " \u2192 "
+                  + column.columnName()
+                  + " column has no index. Without an index, MySQL performs a full table scan"
+                  + " for every query filtering on this column.",
+              buildWhereSuggestion(table, column.columnName(), filters.indexedColumns())));
+    }
+    return new WhereAnalysis(issues, suggestedColumns);
+  }
+
+  private boolean skipWhereIndex(QueryFacts facts, String table, WhereColumnReference column) {
+    // Composite-index ordering and leading-wildcard LIKE have dedicated detectors.
+    if (isInAnyCompositeIndex(facts.metadata(), table, column.columnName())
+        || facts.singleRowTables().contains(table)) return true;
+    if (isLikeOperator(column.operator())
+        && isLeadingWildcardLike(facts.query().sql(), column.columnName())) return true;
+    // Soft-delete NULL checks retain their separate, sole-filter advisory policy.
+    return isNullCheckOperator(column.operator()) && !isSoftDeleteColumn(column.columnName());
+  }
+
+  private void checkJoinColumns(QueryFacts facts, List<Issue> issues) {
+    for (JoinColumnPair pair : EnhancedSqlParser.extractJoinColumns(facts.query().sql())) {
+      checkJoinColumn(pair.left(), facts, issues);
+      checkJoinColumn(pair.right(), facts, issues);
+    }
+  }
+
+  private void checkJoinColumn(ColumnReference column, QueryFacts facts, List<Issue> issues) {
+    String table = facts.table(column.tableOrAlias());
+    if (!facts.missingIndex(table, column.columnName())) return;
+    issues.add(
+        facts.issue(
+            IssueType.MISSING_JOIN_INDEX,
+            Severity.ERROR,
+            table,
+            column.columnName(),
+            "SHOW INDEX FROM "
+                + table
+                + " \u2192 "
+                + column.columnName()
+                + " column has no index. Every JOIN without an index causes a full scan of the"
+                + " joined table.",
+            "Run: ALTER TABLE "
+                + table
+                + " ADD INDEX idx_"
+                + column.columnName()
+                + " ("
+                + column.columnName()
+                + ");\n"
+                + "         This is typically a foreign key \u2014 consider adding a FK constraint"
+                + " too."));
+  }
+
+  private void checkOrderByColumns(QueryFacts facts, WhereAnalysis where, List<Issue> issues) {
+    for (ColumnReference column : EnhancedSqlParser.extractOrderByColumns(facts.query().sql())) {
+      String table = facts.table(column.tableOrAlias());
+      if (!facts.missingIndex(table, column.columnName())
+          || facts.singleRowTables().contains(table)) continue;
+
+      TableFilterFacts filters = facts.filters(table);
+      issues.add(
+          facts.issue(
+              IssueType.MISSING_ORDER_BY_INDEX,
+              filters.hasIndexedColumn() ? Severity.INFO : Severity.WARNING,
+              table,
+              column.columnName(),
+              "SHOW INDEX FROM "
+                  + table
+                  + " \u2192 "
+                  + column.columnName()
+                  + " column has no index. MySQL uses filesort when ORDER BY column has no index.",
+              buildOrderBySuggestion(
+                  table,
+                  column.columnName(),
+                  filters.indexedColumns(),
+                  where.suggestedColumns(table))));
+    }
+  }
+
+  private void checkGroupByColumns(QueryFacts facts, List<Issue> issues) {
+    List<ColumnReference> groupByColumns =
+        EnhancedSqlParser.extractGroupByColumns(facts.query().sql());
+    Map<String, Set<String>> groupedColumns = new HashMap<>();
+    for (ColumnReference column : groupByColumns) {
+      String table = facts.table(column.tableOrAlias());
+      if (table != null) {
+        groupedColumns
+            .computeIfAbsent(table, ignored -> new HashSet<>())
+            .add(column.columnName().toLowerCase());
+      }
+    }
+
+    // Preserve GROUP BY's existing normalized-SQL filter policy. The shared collector makes this
+    // source distinction explicit instead of implementing a second index-lookup algorithm.
+    Map<String, TableFilterFacts> groupingFilters =
+        tableFilters(
+            EnhancedSqlParser.extractWhereColumnsWithOperators(facts.query().normalizedSql()),
+            facts.aliases(),
+            facts.metadata());
+    for (ColumnReference column : groupByColumns) {
+      String table = facts.table(column.tableOrAlias());
+      if (!facts.missingIndex(table, column.columnName())) continue;
+      if (allPrimaryKeyColumnsPresent(
+              facts.metadata(), table, groupedColumns.getOrDefault(table, Set.of()))
+          || groupingFilters.getOrDefault(table, TableFilterFacts.EMPTY).hasIndexedColumn())
+        continue;
+
+      issues.add(
+          facts.issue(
+              IssueType.MISSING_GROUP_BY_INDEX,
+              Severity.WARNING,
+              table,
+              column.columnName(),
+              "SHOW INDEX FROM "
+                  + table
+                  + " \u2192 "
+                  + column.columnName()
+                  + " column has no index. MySQL creates a temporary table for GROUP BY without"
+                  + " index.",
+              "Run: ALTER TABLE "
+                  + table
+                  + " ADD INDEX idx_"
+                  + column.columnName()
+                  + " ("
+                  + column.columnName()
+                  + ");"));
+    }
+  }
+
+  /** Resolved filter facts are shared by clause policies; detector decisions do not mutate them. */
+  private record TableFilterFacts(int columnCount, List<String> indexedColumns) {
+    private static final TableFilterFacts EMPTY = new TableFilterFacts(0, List.of());
+
+    TableFilterFacts {
+      indexedColumns = List.copyOf(indexedColumns);
+    }
+
+    boolean hasIndexedColumn() {
+      return !indexedColumns.isEmpty();
+    }
+  }
+
+  /**
+   * Only ordinary missing-WHERE decisions contribute columns to later composite ORDER BY advice.
+   */
+  private record WhereAnalysis(List<Issue> issues, Map<String, List<String>> suggestedColumns) {
+    WhereAnalysis {
+      issues = List.copyOf(issues);
+      Map<String, List<String>> snapshot = new HashMap<>();
+      suggestedColumns.forEach((table, columns) -> snapshot.put(table, List.copyOf(columns)));
+      suggestedColumns = Map.copyOf(snapshot);
+    }
+
+    List<String> suggestedColumns(String table) {
+      return suggestedColumns.getOrDefault(table, List.of());
+    }
+  }
+
+  private record QueryFacts(
+      QueryRecord query,
+      IndexMetadata metadata,
+      Map<String, String> aliases,
+      List<WhereColumnReference> whereColumns,
+      Map<String, TableFilterFacts> filters,
+      Set<String> singleRowTables) {
+    String table(String tableOrAlias) {
+      return resolveTable(tableOrAlias, aliases);
+    }
+
+    TableFilterFacts filters(String table) {
+      return filters.getOrDefault(table, TableFilterFacts.EMPTY);
+    }
+
+    boolean missingIndex(String table, String column) {
+      return table != null && metadata.hasTable(table) && !metadata.hasIndexOn(table, column);
+    }
+
+    Issue issue(
+        IssueType type,
+        Severity severity,
+        String table,
+        String column,
+        String detail,
+        String suggestion) {
+      return new Issue(
+          type,
+          severity,
+          query.normalizedSql(),
+          table,
+          column,
+          detail,
+          suggestion,
+          query.stackTrace());
+    }
+  }
 
   /**
    * Determine if a column is likely low cardinality based on naming patterns and/or index metadata
@@ -337,17 +384,14 @@ public class MissingIndexDetector implements DetectionRule {
   private boolean isLowCardinalityColumn(String columnName, IndexMetadata metadata, String table) {
     String lower = columnName.toLowerCase();
 
-    // Check exact name match
     if (LOW_CARDINALITY_EXACT_NAMES.contains(lower)) {
       return true;
     }
 
-    // Check prefix patterns (is_*, has_*, flag*)
     if (LOW_CARDINALITY_PREFIX_PATTERN.matcher(lower).matches()) {
       return true;
     }
 
-    // Check suffix patterns (*_type, *_status)
     if (LOW_CARDINALITY_SUFFIX_PATTERN.matcher(lower).matches()) {
       return true;
     }
@@ -366,8 +410,6 @@ public class MissingIndexDetector implements DetectionRule {
 
     return false;
   }
-
-  // ── Soft-delete detection ────────────────────────────────────────
 
   /** Check if a column name matches common soft-delete patterns. */
   private boolean isSoftDeleteColumn(String columnName) {
@@ -411,8 +453,6 @@ public class MissingIndexDetector implements DetectionRule {
     return "IS".equals(op);
   }
 
-  // ── Improvement 4: Smart suggestion builders ─────────────────────
-
   /**
    * Build a suggestion for a missing WHERE index. If there is already an indexed column in WHERE on
    * the same table, suggest extending it into a composite index.
@@ -442,7 +482,8 @@ public class MissingIndexDetector implements DetectionRule {
         + " ("
         + unindexedCol
         + ");\n"
-        + "         If this column is often queried with other columns, consider a composite index.";
+        + "         If this column is often queried with other columns, consider a composite"
+        + " index.";
   }
 
   /**
@@ -467,7 +508,8 @@ public class MissingIndexDetector implements DetectionRule {
           + ", "
           + orderCol
           + ");\n"
-          + "         A composite index (where_col, order_col) eliminates both the scan and the filesort.";
+          + "         A composite index (where_col, order_col) eliminates both the scan and the"
+          + " filesort.";
     }
     // If there's an unindexed WHERE column, still suggest composite
     if (!unindexedWhereCols.isEmpty()) {
@@ -482,7 +524,8 @@ public class MissingIndexDetector implements DetectionRule {
           + ", "
           + orderCol
           + ");\n"
-          + "         A composite index (where_col, order_col) eliminates both the scan and the filesort.";
+          + "         A composite index (where_col, order_col) eliminates both the scan and the"
+          + " filesort.";
     }
     return "Run: ALTER TABLE "
         + table
@@ -491,126 +534,8 @@ public class MissingIndexDetector implements DetectionRule {
         + " ("
         + orderCol
         + ");\n"
-        + "         Tip: If used with WHERE, create a composite index (where_col, order_col) for best performance.";
-  }
-
-  /**
-   * Check GROUP BY columns for missing indexes. Skips when:
-   *
-   * <ul>
-   *   <li>All primary key columns are present in GROUP BY (functional dependency)
-   *   <li>A WHERE column on the same table has an index (narrow result set makes GROUP BY indexing
-   *       pointless — based on pgMustard approach)
-   * </ul>
-   */
-  private void checkGroupByColumns(
-      List<ColumnReference> groupByColumns,
-      Map<String, String> aliasToTable,
-      IndexMetadata indexMetadata,
-      String normalized,
-      String stackTrace,
-      List<Issue> issues) {
-    // Collect GROUP BY column names per resolved table
-    Map<String, Set<String>> groupByColumnsByTable = new HashMap<>();
-    for (ColumnReference col : groupByColumns) {
-      String table = resolveTable(col.tableOrAlias(), aliasToTable);
-      if (table != null) {
-        groupByColumnsByTable
-            .computeIfAbsent(table, k -> new HashSet<>())
-            .add(col.columnName().toLowerCase());
-      }
-    }
-
-    // Determine which tables have an indexed WHERE column (narrow result set)
-    Map<String, Boolean> tableHasIndexedWhereCol = new HashMap<>();
-    List<WhereColumnReference> whereColsWithOp =
-        EnhancedSqlParser.extractWhereColumnsWithOperators(normalized != null ? normalized : "");
-    // Also try extracting from the original SQL (normalized may lose structure)
-    // We use the aliasToTable map we already have
-    for (WhereColumnReference wcol : whereColsWithOp) {
-      String table = resolveTable(wcol.tableOrAlias(), aliasToTable);
-      if (table != null
-          && indexMetadata.hasTable(table)
-          && indexMetadata.hasIndexOn(table, wcol.columnName())) {
-        tableHasIndexedWhereCol.put(table, true);
-      }
-    }
-
-    for (ColumnReference col : groupByColumns) {
-      String table = resolveTable(col.tableOrAlias(), aliasToTable);
-      if (table != null
-          && indexMetadata.hasTable(table)
-          && !indexMetadata.hasIndexOn(table, col.columnName())) {
-        // If all PK columns are present in the GROUP BY for this table,
-        // skip non-indexed columns (they are functionally dependent on PK)
-        Set<String> groupByCols = groupByColumnsByTable.getOrDefault(table, Set.of());
-        if (allPrimaryKeyColumnsPresent(indexMetadata, table, groupByCols)) {
-          continue;
-        }
-
-        // Improvement 2: If a WHERE column on the same table already has an index,
-        // the result set is already narrow — GROUP BY indexing is pointless.
-        if (tableHasIndexedWhereCol.getOrDefault(table, false)) {
-          continue;
-        }
-
-        issues.add(
-            new Issue(
-                IssueType.MISSING_GROUP_BY_INDEX,
-                Severity.WARNING,
-                normalized,
-                table,
-                col.columnName(),
-                "SHOW INDEX FROM "
-                    + table
-                    + " \u2192 "
-                    + col.columnName()
-                    + " column has no index. MySQL creates a temporary table for GROUP BY without index.",
-                "Run: ALTER TABLE "
-                    + table
-                    + " ADD INDEX idx_"
-                    + col.columnName()
-                    + " ("
-                    + col.columnName()
-                    + ");",
-                stackTrace));
-      }
-    }
-  }
-
-  private void checkJoinColumn(
-      ColumnReference col,
-      Map<String, String> aliasToTable,
-      IndexMetadata indexMetadata,
-      String normalized,
-      String stackTrace,
-      List<Issue> issues) {
-    String table = resolveTable(col.tableOrAlias(), aliasToTable);
-    if (table != null
-        && indexMetadata.hasTable(table)
-        && !indexMetadata.hasIndexOn(table, col.columnName())) {
-      issues.add(
-          new Issue(
-              IssueType.MISSING_JOIN_INDEX,
-              Severity.ERROR,
-              normalized,
-              table,
-              col.columnName(),
-              "SHOW INDEX FROM "
-                  + table
-                  + " \u2192 "
-                  + col.columnName()
-                  + " column has no index. Every JOIN without an index causes a full scan of the joined table.",
-              "Run: ALTER TABLE "
-                  + table
-                  + " ADD INDEX idx_"
-                  + col.columnName()
-                  + " ("
-                  + col.columnName()
-                  + ");\n"
-                  + "         This is typically a foreign key \u2014 consider adding a FK constraint too.",
-              stackTrace));
-    }
+        + "         Tip: If used with WHERE, create a composite index (where_col, order_col) for"
+        + " best performance.";
   }
 
   /** Check if a column appears in any composite index for the given table. */
@@ -621,19 +546,6 @@ public class MissingIndexDetector implements DetectionRule {
         if (info.columnName() != null && info.columnName().equalsIgnoreCase(column)) {
           return true;
         }
-      }
-    }
-    return false;
-  }
-
-  /** Check if a column has a unique or primary key index. */
-  private boolean hasUniqueOrPrimaryIndex(IndexMetadata metadata, String table, String column) {
-    List<IndexInfo> indexes = metadata.getIndexesForTable(table);
-    for (IndexInfo idx : indexes) {
-      if (idx.columnName() != null
-          && idx.columnName().equalsIgnoreCase(column)
-          && !idx.nonUnique()) {
-        return true;
       }
     }
     return false;
@@ -657,74 +569,15 @@ public class MissingIndexDetector implements DetectionRule {
         .allMatch(pk -> pk.columnName() != null && columns.contains(pk.columnName().toLowerCase()));
   }
 
-  /**
-   * Build a mapping from alias (or table name) to actual table name. For example: "FROM orders o
-   * JOIN users u ON ..." produces {o -> orders, u -> users, orders -> orders, users -> users}.
-   */
   static Map<String, String> resolveAliases(String sql) {
-    Map<String, String> aliasToTable = new HashMap<>();
-
-    Matcher fromMatcher = FROM_ALIAS.matcher(sql);
-    while (fromMatcher.find()) {
-      registerAlias(aliasToTable, fromMatcher.group(1), fromMatcher.group(2));
-    }
-
-    Matcher joinMatcher = JOIN_ALIAS.matcher(sql);
-    while (joinMatcher.find()) {
-      registerAlias(aliasToTable, joinMatcher.group(1), joinMatcher.group(2));
-    }
-
-    return aliasToTable;
-  }
-
-  private static void registerAlias(
-      Map<String, String> aliasToTable, String tableToken, String aliasToken) {
-    if (tableToken == null) {
-      return;
-    }
-    // Strip backticks / double-quotes from each segment so the canonical key matches the
-    // bare names produced by the WHERE-column extractor (JSqlParser already unquotes).
-    String normalized = unquoteSegments(tableToken).toLowerCase();
-    // The token may be schema-qualified ("myschema.users", "db.schema.users"). Drop the prefix so
-    // detectors look up metadata under the canonical bare name; preserve the qualified form too so
-    // `WHERE myschema.users.col` resolves through the same map.
-    String unqualified = stripSchemaPrefix(normalized);
-    if (isKeyword(unqualified)) {
-      return;
-    }
-    aliasToTable.put(unqualified, unqualified);
-    if (!normalized.equals(unqualified)) {
-      aliasToTable.put(normalized, unqualified);
-    }
-    if (aliasToken != null && !isKeyword(aliasToken)) {
-      aliasToTable.put(aliasToken.toLowerCase(), unqualified);
-    }
-  }
-
-  private static String stripSchemaPrefix(String token) {
-    int lastDot = token.lastIndexOf('.');
-    return lastDot < 0 ? token : token.substring(lastDot + 1);
-  }
-
-  private static String unquoteSegments(String token) {
-    if (token == null || token.indexOf('`') < 0 && token.indexOf('"') < 0) {
-      return token;
-    }
-    Matcher m = QUOTED_IDENT.matcher(token);
-    StringBuilder out = new StringBuilder();
-    while (m.find()) {
-      String inner = m.group(1) != null ? m.group(1) : m.group(2);
-      m.appendReplacement(out, Matcher.quoteReplacement(inner));
-    }
-    m.appendTail(out);
-    return out.toString();
+    return SqlTableReferences.resolveAliases(sql);
   }
 
   /**
    * Resolve an alias/table reference to the actual table name. If tableOrAlias is null, try to
    * infer from the first table in the alias map.
    */
-  private String resolveTable(String tableOrAlias, Map<String, String> aliasToTable) {
+  private static String resolveTable(String tableOrAlias, Map<String, String> aliasToTable) {
     if (tableOrAlias != null) {
       String resolved = aliasToTable.get(tableOrAlias.toLowerCase());
       if (resolved != null) return resolved;
@@ -739,62 +592,5 @@ public class MissingIndexDetector implements DetectionRule {
     }
     // Ambiguous without qualifier - skip
     return null;
-  }
-
-  private static final Set<String> SQL_KEYWORDS =
-      Set.of(
-          "select",
-          "from",
-          "where",
-          "and",
-          "or",
-          "not",
-          "in",
-          "is",
-          "null",
-          "between",
-          "like",
-          "join",
-          "inner",
-          "left",
-          "right",
-          "outer",
-          "on",
-          "order",
-          "by",
-          "group",
-          "having",
-          "limit",
-          "offset",
-          "as",
-          "asc",
-          "desc",
-          "insert",
-          "update",
-          "delete",
-          "set",
-          "into",
-          "values",
-          "create",
-          "drop",
-          "alter",
-          "table",
-          "index",
-          "exists",
-          "case",
-          "when",
-          "then",
-          "else",
-          "end",
-          "union",
-          "all",
-          "distinct",
-          "cross",
-          "natural",
-          "full",
-          "using");
-
-  private static boolean isKeyword(String word) {
-    return word != null && SQL_KEYWORDS.contains(word.toLowerCase());
   }
 }

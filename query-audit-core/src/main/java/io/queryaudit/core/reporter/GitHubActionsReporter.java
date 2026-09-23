@@ -1,13 +1,15 @@
 package io.queryaudit.core.reporter;
 
 import io.queryaudit.core.config.ReportRedaction;
-import io.queryaudit.core.model.Issue;
+import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.QueryAuditReport;
+import io.queryaudit.core.model.Severity;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -59,35 +61,40 @@ public class GitHubActionsReporter implements Reporter {
   }
 
   private void emitAnnotations(QueryAuditReport report) {
-    List<Issue> errors = report.getErrors();
-    if (errors != null) {
-      for (Issue i : errors) {
-        emit("error", i, report);
-      }
+    var findings = report.getFindings();
+    for (Finding finding :
+        findings.confirmed().stream().sorted(Comparator.comparing(Finding::severity)).toList()) {
+      String level =
+          switch (finding.severity()) {
+            case ERROR -> "error";
+            case WARNING -> "warning";
+            case INFO -> "notice";
+          };
+      emit(level, finding, report);
     }
-    List<Issue> warnings = report.getWarnings();
-    if (warnings != null) {
-      for (Issue i : warnings) {
-        emit("warning", i, report);
-      }
-    }
-    List<Issue> infos = report.getInfoIssues();
-    if (infos != null) {
-      for (Issue i : infos) {
-        emit("notice", i, report);
-      }
+    for (Finding finding : findings.informational()) {
+      emit("notice", finding, report);
     }
   }
 
-  private void emit(String level, Issue issue, QueryAuditReport report) {
-    issue = redactor.issue(issue);
+  private void emit(String level, Finding original, QueryAuditReport report) {
+    // Occurrence identity belongs to the original evidence, never to its redacted projection.
+    String id = FindingId.of(report.getTestId(), original);
+    Finding finding = redactor.finding(original);
+    String title =
+        (report.getTestClass() == null ? "" : report.getTestClass() + " — ")
+            + finding.kindId().value();
+    emitCommand(level, title, finding.sourceLocation(), messageFor(finding, id));
+  }
+
+  private void emitCommand(String level, String title, String sourceLocation, String message) {
     StringBuilder props = new StringBuilder();
-    Location loc = parseLocation(issue.sourceLocation());
+    Location loc = parseLocation(sourceLocation);
     if (loc != null) {
       append(props, "file=" + escapeProp(loc.file));
       append(props, "line=" + loc.line);
     }
-    append(props, "title=" + escapeProp(titleFor(issue, report)));
+    append(props, "title=" + escapeProp(title));
 
     StringBuilder sb = new StringBuilder("::");
     sb.append(level);
@@ -95,7 +102,7 @@ public class GitHubActionsReporter implements Reporter {
       sb.append(' ').append(props);
     }
     sb.append("::");
-    sb.append(escapeBody(messageFor(issue)));
+    sb.append(escapeBody(message));
 
     out.println(sb);
   }
@@ -107,19 +114,14 @@ public class GitHubActionsReporter implements Reporter {
     props.append(kv);
   }
 
-  private static String titleFor(Issue issue, QueryAuditReport report) {
-    String type = issue.type() != null ? issue.type().getCode() : "query-audit";
-    String testClass = report.getTestClass();
-    return testClass != null ? testClass + " — " + type : type;
-  }
-
-  private static String messageFor(Issue issue) {
+  private static String messageFor(Finding issue, String id) {
     StringBuilder body = new StringBuilder();
     if (issue.detail() != null) {
       body.append(issue.detail());
     } else {
-      body.append(issue.type() != null ? issue.type().getDescription() : "issue");
+      body.append(LegacyFindingPresentation.description(issue));
     }
+    body.append("\nFinding ID: ").append(id);
     if (issue.suggestion() != null && !issue.suggestion().isEmpty()) {
       body.append("\n\nSuggestion: ").append(issue.suggestion());
     }
@@ -130,13 +132,14 @@ public class GitHubActionsReporter implements Reporter {
   }
 
   private void appendSummary(QueryAuditReport report) {
-    int errorCount = safeSize(report.getErrors());
-    int warningCount = safeSize(report.getWarnings());
-    int infoCount = safeSize(report.getInfoIssues());
+    var findings = report.getFindings();
+    long errorCount = findings.errors().size();
+    long warningCount = findings.warnings().size();
+    int infoCount = findings.informational().size();
 
     StringBuilder md = new StringBuilder();
     md.append("### query-audit — ")
-        .append(report.getTestClass() != null ? report.getTestClass() : "report")
+        .append(markdownText(report.getTestClass() != null ? report.getTestClass() : "report"))
         .append("\n\n");
     md.append("| Severity | Count |\n");
     md.append("| --- | ---: |\n");
@@ -144,12 +147,23 @@ public class GitHubActionsReporter implements Reporter {
     md.append("| WARNING | ").append(warningCount).append(" |\n");
     md.append("| INFO | ").append(infoCount).append(" |\n\n");
 
-    if (errorCount + warningCount + infoCount > 0) {
+    if (findings.hasConfirmed() || infoCount > 0) {
       md.append("<details><summary>Top issues</summary>\n\n");
-      appendTopIssues(md, "ERROR", report.getErrors());
-      appendTopIssues(md, "WARNING", report.getWarnings());
-      appendTopIssues(md, "INFO", report.getInfoIssues());
+      appendFindingSummary(md, "ERROR", findings.errors(), report);
+      appendFindingSummary(md, "WARNING", findings.warnings(), report);
+      appendFindingSummary(md, "INFO", findings.informational(), report);
+      appendFindingSummary(
+          md,
+          "CONFIRMED INFO",
+          findings.confirmed().stream()
+              .filter(finding -> finding.severity() == Severity.INFO)
+              .toList(),
+          report);
       md.append("\n</details>\n");
+    }
+    if (!findings.acknowledged().isEmpty()) {
+      md.append("\nAcknowledged findings: ").append(findings.acknowledged().size()).append("\n");
+      appendFindingSummary(md, "ACKNOWLEDGED", findings.acknowledged(), report);
     }
 
     try {
@@ -160,23 +174,25 @@ public class GitHubActionsReporter implements Reporter {
     }
   }
 
-  private void appendTopIssues(StringBuilder md, String level, List<Issue> issues) {
-    if (issues == null || issues.isEmpty()) {
+  private void appendFindingSummary(
+      StringBuilder md, String level, List<Finding> issues, QueryAuditReport report) {
+    if (issues.isEmpty()) {
       return;
     }
     md.append("\n**").append(level).append("**\n\n");
     int limit = Math.min(issues.size(), 5);
     for (int i = 0; i < limit; i++) {
-      Issue issue = redactor.issue(issues.get(i));
-      md.append("- `")
-          .append(issue.type() != null ? issue.type().getCode() : "query-audit")
-          .append("`");
+      Finding original = issues.get(i);
+      String id = FindingId.of(report.getTestId(), original);
+      Finding issue = redactor.finding(original);
+      md.append("- ").append(markdownCode(issue.kindId().value()));
       if (issue.table() != null) {
-        md.append(" on `").append(issue.table()).append("`");
+        md.append(" on ").append(markdownCode(issue.table()));
       }
       if (issue.detail() != null) {
-        md.append(" — ").append(firstLine(issue.detail()));
+        md.append(" — ").append(markdownText(firstLine(issue.detail())));
       }
+      md.append(" — Finding ID: ").append(markdownCode(id));
       md.append("\n");
     }
     if (issues.size() > limit) {
@@ -185,12 +201,64 @@ public class GitHubActionsReporter implements Reporter {
   }
 
   private static String firstLine(String s) {
-    int nl = s.indexOf('\n');
-    return nl < 0 ? s : s.substring(0, nl);
+    for (int index = 0; index < s.length(); index++) {
+      if (isLineBreak(s.charAt(index))) return s.substring(0, index);
+    }
+    return s;
   }
 
-  private static int safeSize(List<?> list) {
-    return list == null ? 0 : list.size();
+  private static String markdownText(String value) {
+    StringBuilder escaped = new StringBuilder();
+    for (char character : singleLine(value).toCharArray()) {
+      switch (character) {
+        case '&' -> escaped.append("&amp;");
+        case '<' -> escaped.append("&lt;");
+        case '>' -> escaped.append("&gt;");
+        case '\\', '`', '*', '_', '[', ']', '|', '~' -> escaped.append('\\').append(character);
+        default -> escaped.append(character);
+      }
+    }
+    return escaped.toString();
+  }
+
+  private static String markdownCode(String value) {
+    String text = singleLine(value);
+    if (text.isEmpty()) return "<code></code>";
+    int longest = 0;
+    int current = 0;
+    for (char character : text.toCharArray()) {
+      current = character == '`' ? current + 1 : 0;
+      longest = Math.max(longest, current);
+    }
+    // Markdown does not honor backslash/entity escaping inside code spans. Use a delimiter that
+    // cannot occur in the value, and padding when an edge could join or trim the delimiter.
+    String delimiter = "`".repeat(longest + 1);
+    boolean padded =
+        text.startsWith("`")
+            || text.endsWith("`")
+            || (text.startsWith(" ") && text.endsWith(" ") && !text.isBlank());
+    return delimiter + (padded ? " " : "") + text + (padded ? " " : "") + delimiter;
+  }
+
+  private static String singleLine(String value) {
+    StringBuilder result = new StringBuilder(value.length());
+    for (int index = 0; index < value.length(); index++) {
+      char character = value.charAt(index);
+      result.append(isLineBreak(character) ? ' ' : character);
+      if (character == '\r' && index + 1 < value.length() && value.charAt(index + 1) == '\n')
+        index++;
+    }
+    return result.toString();
+  }
+
+  private static boolean isLineBreak(char value) {
+    return value == '\r'
+        || value == '\n'
+        || value == '\u000b'
+        || value == '\f'
+        || value == '\u0085'
+        || value == '\u2028'
+        || value == '\u2029';
   }
 
   // ── Location parsing ──────────────────────────────────────────────────

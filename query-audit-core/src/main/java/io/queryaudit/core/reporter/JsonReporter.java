@@ -4,9 +4,9 @@ import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.model.AuditIncompleteReason;
 import io.queryaudit.core.model.AuditRunResult;
+import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
-import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.TestSelector;
@@ -36,7 +36,7 @@ public class JsonReporter implements Reporter {
    *
    * @since 0.5.0
    */
-  public static final String SCHEMA_VERSION = "1.6.0";
+  public static final String SCHEMA_VERSION = "1.7.0";
 
   private static final String LEGACY_SCHEMA_VERSION = "1.0.0";
 
@@ -193,10 +193,10 @@ public class JsonReporter implements Reporter {
 
     // summary
     sb.append("  \"summary\": {\n");
-    int confirmedCount =
-        report.getConfirmedIssues() != null ? report.getConfirmedIssues().size() : 0;
-    int infoCount = report.getInfoIssues() != null ? report.getInfoIssues().size() : 0;
-    int acknowledgedCount = report.getAcknowledgedCount();
+    var findings = report.getFindings();
+    int confirmedCount = findings.confirmed().size();
+    int infoCount = findings.informational().size();
+    int acknowledgedCount = findings.acknowledged().size();
     long executionTimeMs = report.getTotalExecutionTimeNanos() / 1_000_000L;
 
     sb.append("    \"confirmedIssues\": ").append(confirmedCount).append(",\n");
@@ -215,19 +215,22 @@ public class JsonReporter implements Reporter {
       sb.append("  },\n");
     }
 
+    String testId = includeIdentity ? report.getTestId() : null;
+    Set<String> findingIds = new TreeSet<>();
+
     // confirmedIssues
     sb.append("  \"confirmedIssues\": ");
-    appendIssueArray(sb, report.getConfirmedIssues(), "  ", redactor);
+    appendIssueArray(sb, findings.confirmed(), "  ", redactor, testId, findingIds);
     sb.append(",\n");
 
     // infoIssues
     sb.append("  \"infoIssues\": ");
-    appendIssueArray(sb, report.getInfoIssues(), "  ", redactor);
+    appendIssueArray(sb, findings.informational(), "  ", redactor, testId, findingIds);
     sb.append(",\n");
 
     // acknowledgedIssues
     sb.append("  \"acknowledgedIssues\": ");
-    appendIssueArray(sb, report.getAcknowledgedIssues(), "  ", redactor);
+    appendIssueArray(sb, findings.acknowledged(), "  ", redactor, testId, findingIds);
     sb.append(",\n");
 
     // indexMetadata — only tables referenced by findings, so a consumer acting on the report
@@ -249,61 +252,110 @@ public class JsonReporter implements Reporter {
   // Array helpers
   // ---------------------------------------------------------------------------
 
-  private static void appendIssueArray(
-      StringBuilder sb, List<Issue> issues, String indent, ReportRedactor redactor) {
+  private record ReportedFinding(String id, List<Finding> occurrences) {
+    Finding representative() {
+      return occurrences.stream().min(Comparator.comparing(Finding::severity)).orElseThrow();
+    }
+  }
+
+  private static List<ReportedFinding> identifyIssues(
+      List<Finding> issues, String testId, Set<String> findingIds) {
     if (issues == null || issues.isEmpty()) {
+      return List.of();
+    }
+    if (testId == null) {
+      return issues.stream().map(issue -> new ReportedFinding(null, List.of(issue))).toList();
+    }
+    Map<String, List<Finding>> grouped = new LinkedHashMap<>();
+    for (Finding issue : issues) {
+      String id = FindingId.of(testId, issue);
+      grouped.computeIfAbsent(id, ignored -> new ArrayList<>()).add(issue);
+    }
+    List<ReportedFinding> findings = new ArrayList<>(grouped.size());
+    grouped.forEach(
+        (id, occurrences) -> {
+          if (!findingIds.add(id)) {
+            throw new IllegalArgumentException(
+                "The same finding appears in more than one issue category: " + id);
+          }
+          findings.add(new ReportedFinding(id, List.copyOf(occurrences)));
+        });
+    return findings;
+  }
+
+  private static void appendIssueArray(
+      StringBuilder sb,
+      List<Finding> issues,
+      String indent,
+      ReportRedactor redactor,
+      String testId,
+      Set<String> findingIds) {
+    List<ReportedFinding> findings = identifyIssues(issues, testId, findingIds);
+    if (findings.isEmpty()) {
       sb.append("[]");
       return;
     }
     sb.append("[\n");
-    for (int i = 0; i < issues.size(); i++) {
-      Issue issue = redactor.issue(issues.get(i));
-      String inner = indent + "  ";
-      String innerField = inner + "  ";
+    String inner = indent + "  ";
+    String innerField = inner + "  ";
+    for (int i = 0; i < findings.size(); i++) {
+      ReportedFinding finding = findings.get(i);
       sb.append(inner).append("{\n");
-      appendJsonString(sb, innerField, "type", issue.type().getCode());
-      sb.append(",\n");
-      appendJsonString(sb, innerField, "severity", issue.severity().name());
-      sb.append(",\n");
-      appendJsonString(sb, innerField, "query", issue.query());
-      sb.append(",\n");
-      appendJsonString(sb, innerField, "table", issue.table());
-      sb.append(",\n");
-      appendJsonString(sb, innerField, "column", issue.column());
-      sb.append(",\n");
-      appendJsonString(sb, innerField, "detail", issue.detail());
-      sb.append(",\n");
-      appendJsonString(sb, innerField, "suggestion", issue.suggestion());
-      sb.append(",\n");
-      appendJsonString(sb, innerField, "sourceLocation", issue.sourceLocation());
-      RemediationHints.Remediation remediation = RemediationHints.forIssue(issue);
-      if (remediation != null) {
+      if (finding.id() != null) {
+        appendJsonString(sb, innerField, "findingId", finding.id());
         sb.append(",\n");
-        sb.append(innerField).append("\"remediation\": {");
-        sb.append("\"kind\": \"").append(escapeJson(remediation.kind())).append("\"");
-        if (remediation.table() != null) {
-          sb.append(", \"table\": \"").append(escapeJson(remediation.table())).append("\"");
-        }
-        if (!remediation.columns().isEmpty()) {
-          sb.append(", \"columns\": [");
-          for (int c = 0; c < remediation.columns().size(); c++) {
-            if (c > 0) {
-              sb.append(", ");
-            }
-            sb.append("\"").append(escapeJson(remediation.columns().get(c))).append("\"");
-          }
-          sb.append("]");
-        }
-        sb.append("}");
       }
-      sb.append("\n");
-      sb.append(inner).append("}");
-      if (i < issues.size() - 1) {
+      appendIssueFields(sb, redactor.finding(finding.representative()), innerField);
+      if (finding.occurrences().size() > 1) {
+        sb.append(",\n").append(innerField).append("\"occurrences\": ");
+        appendIssueArray(sb, finding.occurrences(), innerField, redactor, null, Set.of());
+      }
+      sb.append("\n").append(inner).append("}");
+      if (i < findings.size() - 1) {
         sb.append(",");
       }
       sb.append("\n");
     }
     sb.append(indent).append("]");
+  }
+
+  private static void appendIssueFields(StringBuilder sb, Finding issue, String innerField) {
+    appendJsonString(sb, innerField, "type", issue.kindId().value());
+    sb.append(",\n");
+    appendJsonString(sb, innerField, "severity", issue.severity().name());
+    sb.append(",\n");
+    appendJsonString(sb, innerField, "query", issue.query());
+    sb.append(",\n");
+    appendJsonString(sb, innerField, "table", issue.table());
+    sb.append(",\n");
+    appendJsonString(sb, innerField, "column", issue.column());
+    sb.append(",\n");
+    appendJsonString(sb, innerField, "detail", issue.detail());
+    sb.append(",\n");
+    appendJsonString(sb, innerField, "suggestion", issue.suggestion());
+    sb.append(",\n");
+    appendJsonString(sb, innerField, "sourceLocation", issue.sourceLocation());
+    RemediationHints.Remediation remediation =
+        issue.toIssue().map(RemediationHints::forIssue).orElse(null);
+    if (remediation != null) {
+      sb.append(",\n");
+      sb.append(innerField).append("\"remediation\": {");
+      sb.append("\"kind\": \"").append(escapeJson(remediation.kind())).append("\"");
+      if (remediation.table() != null) {
+        sb.append(", \"table\": \"").append(escapeJson(remediation.table())).append("\"");
+      }
+      if (!remediation.columns().isEmpty()) {
+        sb.append(", \"columns\": [");
+        for (int c = 0; c < remediation.columns().size(); c++) {
+          if (c > 0) {
+            sb.append(", ");
+          }
+          sb.append("\"").append(escapeJson(remediation.columns().get(c))).append("\"");
+        }
+        sb.append("]");
+      }
+      sb.append("}");
+    }
   }
 
   private static void appendQueryArray(
@@ -364,9 +416,7 @@ public class JsonReporter implements Reporter {
     }
 
     Set<String> tables = new TreeSet<>();
-    collectIssueTables(tables, report.getConfirmedIssues());
-    collectIssueTables(tables, report.getInfoIssues());
-    collectIssueTables(tables, report.getAcknowledgedIssues());
+    collectIssueTables(tables, report.getFindings().all());
 
     StringBuilder body = new StringBuilder();
     boolean firstTable = true;
@@ -419,11 +469,11 @@ public class JsonReporter implements Reporter {
     sb.append("{\n").append(body).append("\n").append(indent).append("}");
   }
 
-  private static void collectIssueTables(Set<String> tables, List<Issue> issues) {
+  private static void collectIssueTables(Set<String> tables, List<Finding> issues) {
     if (issues == null) {
       return;
     }
-    for (Issue issue : issues) {
+    for (Finding issue : issues) {
       if (issue.table() != null && !issue.table().isBlank()) {
         tables.add(issue.table());
       }

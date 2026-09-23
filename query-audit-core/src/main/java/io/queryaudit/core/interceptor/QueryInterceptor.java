@@ -74,7 +74,23 @@ public class QueryInterceptor implements QueryExecutionListener {
   private final Map<String, String> stackTracePool = new ConcurrentHashMap<>();
 
   // Connection lifecycle tracking for the connection-held-idle rule (issue #168).
-  private final ConnectionUsageTracker connectionTracker = new ConnectionUsageTracker();
+  private final ConnectionUsageTracker connectionTracker;
+  private final boolean captureLeaf;
+  private final String captureKey = QueryCaptureSession.newRouterKey();
+
+  public QueryInterceptor() {
+    this(false);
+  }
+
+  QueryInterceptor(boolean captureLeaf) {
+    this.captureLeaf = captureLeaf;
+    connectionTracker =
+        captureLeaf ? new ConnectionUsageTracker() : new ConnectionUsageTracker(this);
+  }
+
+  String captureKey() {
+    return captureKey;
+  }
 
   /** Returns the connection lifecycle tracker registered alongside this interceptor. */
   public ConnectionUsageTracker getConnectionTracker() {
@@ -83,11 +99,16 @@ public class QueryInterceptor implements QueryExecutionListener {
 
   @Override
   public void beforeQuery(ExecutionInfo execInfo, List<QueryInfo> queryInfoList) {
-    // no-op
+    if (!captureLeaf) QueryCaptureSession.beforeQuery(this, execInfo);
   }
 
   @Override
   public void afterQuery(ExecutionInfo execInfo, List<QueryInfo> queryInfoList) {
+    if (!captureLeaf && QueryCaptureSession.afterQuery(this, execInfo, queryInfoList)) return;
+    recordQuery(execInfo, queryInfoList, currentPhase);
+  }
+
+  void recordQuery(ExecutionInfo execInfo, List<QueryInfo> queryInfoList, LifecyclePhase phase) {
     if (!active) {
       return;
     }
@@ -129,7 +150,7 @@ public class QueryInterceptor implements QueryExecutionListener {
                 System.currentTimeMillis(),
                 stackTrace,
                 stackHash,
-                currentPhase));
+                phase));
       }
     }
   }

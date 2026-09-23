@@ -1,25 +1,41 @@
 package io.queryaudit.junit5;
 
 import io.queryaudit.core.interceptor.QueryInterceptor;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.sql.DataSource;
 
 /**
- * Thread-local holder for the proxied DataSource and its associated {@link QueryInterceptor}. Used
- * by the extension to manage the interceptor lifecycle within a test execution.
+ * Legacy thread-local view of an installed DataSource and its router. Invocation routing is owned
+ * by {@link io.queryaudit.core.interceptor.QueryCaptureSession}, not by this compatibility holder.
  *
  * @author haroya
  * @since 0.2.0
  */
 public class QueryAuditDataSourceStore {
 
-  private static final ThreadLocal<QueryInterceptorHolder> HOLDER = new ThreadLocal<>();
+  private static final ThreadLocal<AtomicReference<QueryInterceptorHolder>> HOLDER =
+      new ThreadLocal<>();
 
   public static void set(DataSource original, DataSource proxied, QueryInterceptor interceptor) {
-    HOLDER.set(new QueryInterceptorHolder(original, proxied, interceptor));
+    HOLDER.set(new AtomicReference<>(new QueryInterceptorHolder(original, proxied, interceptor)));
   }
 
   public static QueryInterceptorHolder get() {
-    return HOLDER.get();
+    AtomicReference<QueryInterceptorHolder> slot = HOLDER.get();
+    if (slot == null) return null;
+    QueryInterceptorHolder holder = slot.get();
+    if (holder == null) HOLDER.remove();
+    return holder;
+  }
+
+  static Runnable install(DataSource original, DataSource proxied, QueryInterceptor interceptor) {
+    set(original, proxied, interceptor);
+    AtomicReference<QueryInterceptorHolder> slot = HOLDER.get();
+    return () -> {
+      // JUnit may close a class on another worker: release the original worker's references too.
+      slot.set(null);
+      if (HOLDER.get() == slot) HOLDER.remove();
+    };
   }
 
   public static void clear() {

@@ -3,6 +3,7 @@ package io.queryaudit.core.model;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -14,6 +15,9 @@ import java.util.stream.Collectors;
  * column is indexed, uniquely indexed, or part of a composite index. Serves as the central index
  * metadata store consumed by various issue detectors.
  *
+ * <p>The constructor snapshots the table map and its index lists. Lookup collections are
+ * unmodifiable, so providers and detectors cannot alter metadata already shared with other rules.
+ *
  * @author haroya
  * @since 0.2.0
  */
@@ -22,7 +26,22 @@ public class IndexMetadata {
   private final Map<String, List<IndexInfo>> indexesByTable;
 
   public IndexMetadata(Map<String, List<IndexInfo>> indexesByTable) {
-    this.indexesByTable = indexesByTable;
+    if (indexesByTable == null) {
+      this.indexesByTable = null;
+      return;
+    }
+    Map<String, List<IndexInfo>> snapshot = new LinkedHashMap<>();
+    indexesByTable.forEach(
+        (table, indexes) ->
+            snapshot.put(
+                table,
+                indexes == null ? null : Collections.unmodifiableList(new ArrayList<>(indexes))));
+    this.indexesByTable = Collections.unmodifiableMap(snapshot);
+  }
+
+  /** Returns an owned, base-class snapshot suitable for sharing with extension rules. */
+  public final IndexMetadata snapshot() {
+    return new IndexMetadata(indexesByTable == null ? Map.of() : indexesByTable);
   }
 
   public boolean hasIndexOn(String table, String column) {
@@ -58,9 +77,9 @@ public class IndexMetadata {
   }
 
   /**
-   * Returns the suffix of a schema-qualified identifier (e.g. {@code myschema.users} →
-   * {@code users}, {@code db.schema.users} → {@code users}). Returns the input unchanged when no
-   * dot is present.
+   * Returns the suffix of a schema-qualified identifier (e.g. {@code myschema.users} → {@code
+   * users}, {@code db.schema.users} → {@code users}). Returns the input unchanged when no dot is
+   * present.
    */
   private static String stripSchemaPrefix(String table) {
     if (table == null) {
@@ -169,7 +188,9 @@ public class IndexMetadata {
         .entrySet()
         .stream()
         .filter(entry -> entry.getValue().size() > 1)
-        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        .collect(
+            Collectors.toUnmodifiableMap(
+                Map.Entry::getKey, entry -> List.copyOf(entry.getValue())));
   }
 
   /**

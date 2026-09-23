@@ -1,0 +1,31 @@
+// The floor is versioned separately from implementation output; normal builds never rewrite it.
+tasks.register('testPublicApiCompatibilityChecker', Exec) {
+    inputs.files(rootProject.file('.github/scripts/check_public_api.py'),
+            rootProject.file('.github/scripts/tests/test_public_api.py'))
+    workingDir rootProject.projectDir
+    commandLine 'python3', '-m', 'unittest', 'discover', '-s', '.github/scripts/tests',
+            '-p', 'test_public_api.py', '-v'
+}
+
+tasks.register('checkPublicApiCompatibility', Exec) {
+    dependsOn ':query-audit-core:classes', ':query-audit-junit5:classes',
+            tasks.named('testPublicApiCompatibilityChecker')
+    def script = rootProject.file('.github/scripts/check_public_api.py')
+    def baseline = rootProject.file('config/public-api/3eec770.json')
+    def coreClasses = project(':query-audit-core').layout.buildDirectory.dir('classes/java/main')
+    def junitClasses = project(':query-audit-junit5').layout.buildDirectory.dir('classes/java/main')
+    inputs.files(script, baseline)
+    inputs.dir(coreClasses)
+    inputs.dir(junitClasses)
+    workingDir rootProject.projectDir
+    commandLine 'python3', script, 'check', '--baseline', baseline, '--classes',
+            coreClasses.get().asFile, junitClasses.get().asFile
+}
+
+// Both ordinary module builds and the root build exercise the compatibility floor.
+def coreProject = project(':query-audit-core')
+coreProject.plugins.withId('java-library') {
+    coreProject.tasks.named('check').configure {
+        dependsOn rootProject.tasks.named('checkPublicApiCompatibility')
+    }
+}

@@ -10,6 +10,7 @@ import io.queryaudit.core.provenance.AuditCapability;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -44,6 +45,40 @@ class IndexMetadataCapabilityTest {
     assertThat(result.capability().state()).isEqualTo(AuditCapability.State.FAILED);
     assertThat(result.dialect()).isNull();
     assertThat(result.failure()).doesNotContain("private connection details");
+  }
+
+  @Test
+  void ambiguousExplicitProvidersPreserveStructuredDiagnosticAndFailedCapability()
+      throws Exception {
+    Map<String, IndexMetadataProvider> providers = new LinkedHashMap<>();
+    providers.put("index-metadata:applicationIndexes", new EmptyProvider());
+    providers.put("index-metadata:duplicateIndexes", new EmptyProvider());
+
+    IndexMetadataCollector.Result result =
+        new IndexMetadataCollector(List.of()).collectWithCapabilities(dataSource(), providers);
+
+    assertThat(result.metadata()).isNull();
+    assertThat(result.capability().state()).isEqualTo(AuditCapability.State.FAILED);
+    assertThat(result.diagnostic().reason())
+        .isEqualTo(DatabaseProviders.FailureReason.AMBIGUOUS_EXPLICIT_PROVIDERS);
+    assertThat(result.diagnostic().registrationIds())
+        .containsExactly("index-metadata:applicationIndexes", "index-metadata:duplicateIndexes");
+  }
+
+  @Test
+  void anExecutionFailureIdentifiesTheSelectedRegistrationWithoutItsExceptionPayload()
+      throws Exception {
+    IndexMetadataCollector.Result result =
+        new IndexMetadataCollector(List.of())
+            .collectWithCapabilities(
+                dataSource(), Map.of("company:indexes", new FailingProvider()));
+
+    assertThat(result.capability().state()).isEqualTo(AuditCapability.State.FAILED);
+    assertThat(result.diagnostic().reason())
+        .isEqualTo(DatabaseProviders.FailureReason.PROVIDER_EXECUTION_FAILED);
+    assertThat(result.diagnostic().registrationIds()).containsExactly("company:indexes");
+    assertThat(result.diagnostic().description()).doesNotContain("cannot read catalog");
+    assertThat(result.failure()).isEqualTo("SQLException");
   }
 
   private static DataSource dataSource() throws Exception {

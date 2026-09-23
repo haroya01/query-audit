@@ -141,6 +141,7 @@ class QueryAuditExtensionRunOutcomeTest {
       assertThat(QueryAuditDataSourceStore.get()).isNull();
       assertThat(fixture.methodStore().get("interceptor")).isNull();
       assertThat(fixture.methodStore().get("dataSourceHookCleanup")).isNull();
+      assertThat(fixture.methodStore().get(AuditResources.class.getName())).isNull();
       assertIncomplete(fixture, IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED);
     } finally {
       PostHookFailureFixture.DATA_SOURCE = originalDataSource;
@@ -161,11 +162,30 @@ class QueryAuditExtensionRunOutcomeTest {
     QueryAuditExtension extension =
         new QueryAuditExtension(new DataSourceResolver(), collector, new HibernateIntegration());
     AuditContext fixture = contextFor(PostHookFailureFixture.class, "audited", null);
-    try {
+    try (fixture) {
       extension.beforeEach(fixture.methodContext());
       assertIncomplete(fixture, IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED);
     } finally {
       PostHookFailureFixture.DATA_SOURCE = dataSource;
+    }
+  }
+
+  @Test
+  void failingToPublishResourcesInTheStoreStillRestoresTheDataSource() throws Exception {
+    JdbcDataSource original = new JdbcDataSource();
+    original.setURL("jdbc:h2:mem:store-publication-failure");
+    PostHookFailureFixture.DATA_SOURCE = original;
+    AuditContext fixture = contextFor(PostHookFailureFixture.class, "audited", null);
+    fixture.methodStore().failResourcePublication = true;
+    try {
+      assertThatThrownBy(() -> new QueryAuditExtension().beforeEach(fixture.methodContext()))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("synthetic Store publication failure");
+      assertThat(PostHookFailureFixture.DATA_SOURCE).isSameAs(original);
+      assertThat(QueryAuditDataSourceStore.get()).isNull();
+    } finally {
+      PostHookFailureFixture.DATA_SOURCE = original;
+      QueryAuditDataSourceStore.clear();
     }
   }
 
@@ -176,7 +196,7 @@ class QueryAuditExtensionRunOutcomeTest {
     PostHookFailureFixture.DATA_SOURCE = dataSource;
     QueryAuditExtension extension = new QueryAuditExtension();
     AuditContext fixture = contextFor(PostHookFailureFixture.class, "audited", null);
-    try {
+    try (fixture) {
       extension.beforeEach(fixture.methodContext());
       extension.afterEach(fixture.methodContext());
       var result = runState(fixture).result(HtmlReportAggregator.getInstance().getReports());
@@ -202,7 +222,7 @@ class QueryAuditExtensionRunOutcomeTest {
       FailureSelectionFixture.DATA_SOURCE = dataSource;
       AuditContext fixture = contextFor(FailureSelectionFixture.class, method, null);
       QueryAuditExtension extension = new QueryAuditExtension();
-      try {
+      try (fixture) {
         extension.beforeEach(fixture.methodContext());
         extension.afterEach(fixture.methodContext());
         fingerprints.put(
@@ -245,15 +265,19 @@ class QueryAuditExtensionRunOutcomeTest {
   }
 
   @Test
-  void concurrentExecutionMakesTheRootRunInconclusive() throws Exception {
+  void concurrentExecutionStillRequiresADataSource() throws Exception {
     AuditContext fixture = contextFor(MissingDataSourceFixture.class, "audited", null);
     when(fixture.methodContext().getExecutionMode()).thenReturn(ExecutionMode.CONCURRENT);
+    when(fixture
+            .methodContext()
+            .getConfigurationParameter("junit.jupiter.execution.parallel.enabled"))
+        .thenReturn(Optional.of("true"));
 
     assertThatThrownBy(() -> new QueryAuditExtension().beforeEach(fixture.methodContext()))
         .isInstanceOf(ExtensionConfigurationException.class)
-        .hasMessageContaining("concurrent execution");
+        .hasMessageContaining("DataSource unavailable");
 
-    assertIncomplete(fixture, IncompleteReasonCode.AUDIT_INITIALIZATION_FAILED);
+    assertIncomplete(fixture, IncompleteReasonCode.DATASOURCE_UNAVAILABLE);
   }
 
   @Test
@@ -459,10 +483,21 @@ class QueryAuditExtensionRunOutcomeTest {
       ExtensionContext methodContext,
       MapStore rootStore,
       MapStore classStore,
-      MapStore methodStore) {}
+      MapStore methodStore)
+      implements AutoCloseable {
+    @Override
+    public void close() {
+      // These mocked Stores do not run JUnit's automatic CloseableResource lifecycle.
+      AuditResources resources = AuditScope.of(methodContext).captureResources();
+      Throwable failure = resources.close(null);
+      if (failure instanceof RuntimeException runtime) throw runtime;
+      if (failure instanceof Error error) throw error;
+    }
+  }
 
   private static final class MapStore implements ExtensionContext.Store {
     private final Map<Object, Object> values = new ConcurrentHashMap<>();
+    private boolean failResourcePublication;
 
     @Override
     public Object get(Object key) {
@@ -490,6 +525,9 @@ class QueryAuditExtensionRunOutcomeTest {
 
     @Override
     public void put(Object key, Object value) {
+      if (failResourcePublication && key.equals(AuditResources.class.getName())) {
+        throw new IllegalStateException("synthetic Store publication failure");
+      }
       values.put(key, value);
     }
 

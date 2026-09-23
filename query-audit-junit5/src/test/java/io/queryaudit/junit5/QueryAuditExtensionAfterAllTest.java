@@ -259,7 +259,10 @@ class QueryAuditExtensionAfterAllTest {
       Path outputDirectory = tempDir.resolve("console-reports");
       QueryAuditExtension.ReportFinalizer finalizer =
           new QueryAuditExtension.ReportFinalizer(
-              new QueryAuditExtension(), outputDirectory, ReportFormat.CONSOLE);
+              new QueryAuditExtension(),
+              outputDirectory,
+              ReportFormat.CONSOLE,
+              runStateWithReports());
 
       finalizer.close();
 
@@ -274,7 +277,7 @@ class QueryAuditExtensionAfterAllTest {
       Path outputDirectory = tempDir.resolve("json-reports");
       QueryAuditExtension.ReportFinalizer finalizer =
           new QueryAuditExtension.ReportFinalizer(
-              new QueryAuditExtension(), outputDirectory, ReportFormat.JSON);
+              new QueryAuditExtension(), outputDirectory, ReportFormat.JSON, runStateWithReports());
 
       finalizer.close();
 
@@ -293,7 +296,7 @@ class QueryAuditExtensionAfterAllTest {
       Path outputDirectory = tempDir.resolve("html-reports");
       QueryAuditExtension.ReportFinalizer finalizer =
           new QueryAuditExtension.ReportFinalizer(
-              new QueryAuditExtension(), outputDirectory, ReportFormat.HTML);
+              new QueryAuditExtension(), outputDirectory, ReportFormat.HTML, runStateWithReports());
 
       finalizer.close();
 
@@ -307,7 +310,7 @@ class QueryAuditExtensionAfterAllTest {
     void jsonWriteFailureInvalidatesRun(@TempDir Path tempDir) throws IOException {
       addReports();
       Path outputDirectory = blockDirectory(tempDir);
-      QueryAuditExtension.AuditRunState runState = new QueryAuditExtension.AuditRunState();
+      QueryAuditExtension.AuditRunState runState = runStateWithReports();
       QueryAuditExtension.ReportFinalizer finalizer =
           new QueryAuditExtension.ReportFinalizer(
               new QueryAuditExtension(), outputDirectory, ReportFormat.JSON, runState);
@@ -342,7 +345,7 @@ class QueryAuditExtensionAfterAllTest {
       Path outputDirectory = Files.createDirectory(tempDir.resolve("reports"));
       Path reportPath = outputDirectory.resolve("report.json");
       Files.writeString(reportPath, "{\"schemaVersion\":\"1.1.0\",\"outcome\":\"PASS\"}");
-      QueryAuditExtension.AuditRunState runState = new QueryAuditExtension.AuditRunState();
+      QueryAuditExtension.AuditRunState runState = runStateWithReports();
       QueryAuditExtension extension =
           new QueryAuditExtension() {
             @Override
@@ -375,7 +378,7 @@ class QueryAuditExtensionAfterAllTest {
     void htmlWriteFailureInvalidatesRun(@TempDir Path tempDir) throws IOException {
       addReports();
       Path outputDirectory = blockDirectory(tempDir);
-      QueryAuditExtension.AuditRunState runState = new QueryAuditExtension.AuditRunState();
+      QueryAuditExtension.AuditRunState runState = runStateWithReports();
       QueryAuditExtension.ReportFinalizer finalizer =
           new QueryAuditExtension.ReportFinalizer(
               new QueryAuditExtension(), outputDirectory, ReportFormat.HTML, runState);
@@ -438,6 +441,15 @@ class QueryAuditExtensionAfterAllTest {
       aggregator.addReport(dummyReport("ClassA", "test1"));
       aggregator.addReport(dummyReport("ClassB", "test2"));
       aggregator.addReport(dummyReport("ClassC", "test3"));
+    }
+
+    private QueryAuditExtension.AuditRunState runStateWithReports() {
+      var state = new QueryAuditExtension.AuditRunState();
+      HtmlReportAggregator aggregator = HtmlReportAggregator.getInstance();
+      aggregator
+          .getReports()
+          .forEach(report -> state.retainReport(report, aggregator.getMaxInMemoryReports()));
+      return state;
     }
 
     private Path blockDirectory(Path tempDir) throws IOException {

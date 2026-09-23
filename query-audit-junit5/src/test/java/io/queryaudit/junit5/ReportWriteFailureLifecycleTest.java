@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -112,23 +113,10 @@ class ReportWriteFailureLifecycleTest {
   static class ReportFixture {
 
     @Test
-    void passesBeforeSuiteFinalization() {
-      QueryAuditReport report =
-          new QueryAuditReport(
-              ReportFixture.class.getName(),
-              "passesBeforeSuiteFinalization",
-              List.of(),
-              List.of(),
-              List.of(),
-              List.of(),
-              0,
-              0,
-              0);
-      HtmlReportAggregator.getInstance().addReport(report);
-    }
+    void passesBeforeSuiteFinalization() {}
   }
 
-  static class RegisterFailingFinalizer implements BeforeAllCallback {
+  static class RegisterFailingFinalizer implements BeforeAllCallback, AfterEachCallback {
 
     @Override
     public void beforeAll(ExtensionContext context) {
@@ -139,6 +127,26 @@ class ReportWriteFailureLifecycleTest {
               .reportOutputDir(outputDirectory.toString())
               .build();
       new QueryAuditExtension().registerReportFinalizer(context, config);
+    }
+
+    @Override
+    public void afterEach(ExtensionContext context) {
+      QueryAuditReport report =
+          new QueryAuditReport(
+                  ReportFixture.class.getName(),
+                  "passesBeforeSuiteFinalization",
+                  List.of(),
+                  List.of(),
+                  List.of(),
+                  List.of(),
+                  0,
+                  0,
+                  0)
+              .withTestIdentity(context.getUniqueId(), null);
+      QueryAuditExtension.AuditRunState runState = AuditScope.of(context).runState();
+      runState.recordReport(report);
+      runState.retainReport(report, HtmlReportAggregator.DEFAULT_MAX_IN_MEMORY_REPORTS);
+      HtmlReportAggregator.getInstance().addReport(report);
     }
   }
 }

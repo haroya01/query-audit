@@ -64,12 +64,26 @@ public class LazyLoadTracker {
   private final CopyOnWriteArrayList<ExplicitLoadRecord> explicitLoads =
       new CopyOnWriteArrayList<>();
   private volatile boolean active = false;
+  private final boolean captureLeaf;
+
+  public LazyLoadTracker() {
+    this(false);
+  }
+
+  LazyLoadTracker(boolean captureLeaf) {
+    this.captureLeaf = captureLeaf;
+  }
 
   // ── Collection initialization (recorded via HibernateLazyLoadListener) ────
 
   /** Records a lazy collection initialization event (e.g., a {@code @OneToMany} access). */
   public void recordCollectionInitialized(
       String collectionRole, String ownerEntity, Object ownerId) {
+    if (!captureLeaf
+        && QueryCaptureSession.routeLazy(
+            this,
+            tracker -> tracker.recordCollectionInitialized(collectionRole, ownerEntity, ownerId)))
+      return;
     if (!active) return;
 
     records.add(
@@ -84,6 +98,9 @@ public class LazyLoadTracker {
 
   /** Records a lazy proxy resolution (e.g., accessing a {@code @ManyToOne} association). */
   public void recordProxyResolved(String entityName, Object id) {
+    if (!captureLeaf
+        && QueryCaptureSession.routeLazy(
+            this, tracker -> tracker.recordProxyResolved(entityName, id))) return;
     if (!active) return;
 
     String deproxied = deproxyClassName(entityName);
@@ -99,6 +116,9 @@ public class LazyLoadTracker {
    * Records an explicit entity load via {@code findById()}, for findById-for-association analysis.
    */
   public void recordExplicitLoad(String entityName, Object id, String stackTrace) {
+    if (!captureLeaf
+        && QueryCaptureSession.routeLazy(
+            this, tracker -> tracker.recordExplicitLoad(entityName, id, stackTrace))) return;
     if (!active) return;
 
     explicitLoads.add(
@@ -225,6 +245,6 @@ public class LazyLoadTracker {
   }
 
   public boolean isActive() {
-    return active;
+    return active || (!captureLeaf && QueryCaptureSession.lazyRouterActive(this));
   }
 }

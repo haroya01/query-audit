@@ -1,6 +1,7 @@
 package io.queryaudit.core.detector;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.RuleProfile;
@@ -57,7 +58,27 @@ class DetectionRuleRegistryTest {
   }
 
   @Test
-  void filtersRegisteredRulesBeforeAppendingAdditionalRules() {
+  void rejectsTheSameActiveImplementationRegisteredThroughDiscoveryAndExplicitPaths() {
+    DetectionRule explicit = new TestServiceLoaderDetectionRule();
+
+    assertThatThrownBy(
+            () ->
+                new DetectionRuleRegistry(QueryAuditConfig.defaults())
+                    .createRules(List.of(explicit)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(TestServiceLoaderDetectionRule.class.getName())
+        .hasMessageContaining("registered through both ServiceLoader and explicit")
+        .hasMessageContaining("choose one registration path");
+
+    QueryAuditConfig disabled =
+        QueryAuditConfig.builder().addDisabledRule("service-loader-detection-rule").build();
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(disabled, List.of(), List.of(explicit));
+    assertThat(analyzer.getRules()).noneMatch(TestServiceLoaderDetectionRule.class::isInstance);
+    assertThat(analyzer.hasCompleteRuleInputs()).isTrue();
+  }
+
+  @Test
+  void appliesTheSameDisabledRulePolicyToDiscoveredAndAdditionalRules() {
     QueryAuditConfig config =
         QueryAuditConfig.builder()
             .addDisabledRule("select-all")
@@ -70,7 +91,7 @@ class DetectionRuleRegistryTest {
 
     assertThat(rules).noneMatch(SelectAllDetector.class::isInstance);
     assertThat(rules).noneMatch(TestServiceLoaderDetectionRule.class::isInstance);
-    assertThat(rules.get(rules.size() - 1)).isSameAs(additionalRule);
+    assertThat(rules).doesNotContain(additionalRule);
 
     QueryAuditAnalyzer analyzer =
         new QueryAuditAnalyzer(config, List.of(), List.of(additionalRule));
@@ -81,6 +102,8 @@ class DetectionRuleRegistryTest {
     assertThat(report.getConfirmedIssues())
         .noneMatch(issue -> issue.type() == IssueType.SELECT_ALL);
     assertThat(report.getInfoIssues()).noneMatch(issue -> issue.type() == IssueType.SELECT_ALL);
+    assertThat(additionalRule.evaluations).isZero();
+    assertThat(analyzer.hasCompleteRuleInputs()).isTrue();
   }
 
   @Test
@@ -155,9 +178,11 @@ class DetectionRuleRegistryTest {
   }
 
   private static final class DisabledSelectAllRule implements DetectionRule {
+    private int evaluations;
 
     @Override
     public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
+      evaluations++;
       return List.of(
           new Issue(
               IssueType.SELECT_ALL,

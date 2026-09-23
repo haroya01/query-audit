@@ -78,11 +78,13 @@ public class ConnectionUsageTracker implements MethodExecutionListener {
   private static final class OpenSession {
     volatile long acquiredNanos;
     final String acquireCallSite;
+    final Thread ownerThread;
     final AtomicLong dbWorkMillis = new AtomicLong();
 
     OpenSession(long acquiredNanos, String acquireCallSite) {
       this.acquiredNanos = acquiredNanos;
       this.acquireCallSite = acquireCallSite;
+      this.ownerThread = Thread.currentThread();
     }
 
     /** Re-anchors a connection acquired before the window so only in-window time is measured. */
@@ -93,6 +95,7 @@ public class ConnectionUsageTracker implements MethodExecutionListener {
   }
 
   private final LongSupplier nanoClock;
+  private final QueryInterceptor queryRouter;
   private final Map<String, OpenSession> openSessions = new ConcurrentHashMap<>();
   private final List<ConnectionSession> completedSessions =
       Collections.synchronizedList(new ArrayList<>());
@@ -105,6 +108,23 @@ public class ConnectionUsageTracker implements MethodExecutionListener {
   /** Clock-injectable constructor for deterministic tests. */
   public ConnectionUsageTracker(LongSupplier nanoClock) {
     this.nanoClock = nanoClock;
+    this.queryRouter = null;
+  }
+
+  ConnectionUsageTracker(QueryInterceptor queryRouter) {
+    this.nanoClock = System::nanoTime;
+    this.queryRouter = queryRouter;
+  }
+
+  void copyOpenConnectionsTo(ConnectionUsageTracker target) {
+    Thread owner = Thread.currentThread();
+    long now = target.nanoClock.getAsLong();
+    openSessions.forEach(
+        (id, open) -> {
+          if (open.ownerThread == owner) {
+            target.openSessions.put(id, new OpenSession(now, open.acquireCallSite));
+          }
+        });
   }
 
   /**
@@ -147,11 +167,21 @@ public class ConnectionUsageTracker implements MethodExecutionListener {
 
   @Override
   public void beforeMethod(MethodExecutionContext context) {
-    // all bookkeeping happens after the call, when elapsed time and results exist
+    if (queryRouter != null) QueryCaptureSession.beforeConnection(queryRouter, context);
   }
 
   @Override
   public void afterMethod(MethodExecutionContext context) {
+    boolean routed =
+        queryRouter != null && QueryCaptureSession.afterConnection(queryRouter, context);
+    recordAfterMethod(context, !routed);
+  }
+
+  void recordAfterMethod(MethodExecutionContext context) {
+    recordAfterMethod(context, true);
+  }
+
+  private void recordAfterMethod(MethodExecutionContext context, boolean retainCompleted) {
     if (context.getThrown() != null) {
       return;
     }
@@ -176,7 +206,7 @@ public class ConnectionUsageTracker implements MethodExecutionListener {
     }
     if ("close".equals(methodName) && context.getTarget() instanceof java.sql.Connection) {
       OpenSession open = openSessions.remove(connectionId);
-      if (open != null && active) {
+      if (open != null && active && retainCompleted) {
         completedSessions.add(
             new ConnectionSession(
                 connectionId,

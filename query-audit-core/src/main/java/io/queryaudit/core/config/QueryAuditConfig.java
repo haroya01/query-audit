@@ -192,11 +192,6 @@ public class QueryAuditConfig {
   }
 
   /**
-   * Returns true if the given rule code is disabled via configuration.
-   *
-   * @param ruleCode the issue type code (e.g., "select-all", "n-plus-one")
-   */
-  /**
    * Returns whether the rule should not run, combining the profile with explicit overrides.
    * Precedence: {@code disabled-rules} wins over {@code enabled-rules}, which wins over the profile
    * tier.
@@ -710,8 +705,8 @@ public class QueryAuditConfig {
      * @since 0.5.0
      */
     /**
-     * Sets the rule profile tier. {@code null} leaves the current value unchanged.
-     * The initial value is {@link RuleProfile#RECOMMENDED}.
+     * Sets the rule profile tier. {@code null} leaves the current value unchanged. The initial
+     * value is {@link RuleProfile#RECOMMENDED}.
      *
      * @since 0.5.0
      */

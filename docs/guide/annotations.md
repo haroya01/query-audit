@@ -26,6 +26,7 @@ diagnostic, or CI comparison. This reference documents the published `0.6.0` ann
 | `nPlusOneThreshold` | `@QueryAudit` | `int` | `-1` (use yml/default: 3) | Override N+1 threshold |
 | `suppress` | `@QueryAudit` | `String[]` | `{}` | Issue codes to suppress |
 | `failOn` | `@QueryAudit` | `IssueType[]` | `{}` (all confirmed) | Only fail on specific issue types |
+| `failOnKinds` | `@QueryAudit` | `String[]` | `{}` | Select built-in/custom kind codes; union with `failOn` |
 | `baselinePath` | `@QueryAudit` | `String` | `""` (default path) | Path to baseline file |
 | `autoOpenReport` | `@QueryAudit` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests |
 | `includeSetupQueries` | `@QueryAudit` | `boolean` | `false` | Include `@BeforeEach`/`@AfterEach` queries in analysis |
@@ -72,6 +73,7 @@ class OrderServiceTest {
 | `nPlusOneThreshold` | `int` | `-1` (use yml/default: 3) | Override N+1 threshold |
 | `suppress` | `String[]` | `{}` | Issue codes to suppress |
 | `failOn` | `IssueType[]` | `{}` (all confirmed) | Only fail on specific issue types |
+| `failOnKinds` | `String[]` | `{}` | Select namespaced custom or built-in kinds; both selection arrays empty means all confirmed findings |
 | `baselinePath` | `String` | `""` (default path) | Path to baseline file |
 | `autoOpenReport` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests |
 | `includeSetupQueries` | `boolean` | `false` | Include queries from `@BeforeEach`/`@AfterEach` lifecycle methods in analysis. Default analyzes only `@Test` body queries. |

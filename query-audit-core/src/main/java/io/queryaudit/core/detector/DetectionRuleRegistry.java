@@ -1,16 +1,25 @@
 package io.queryaudit.core.detector;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.extension.AuditRuleException;
+import io.queryaudit.core.extension.internal.RuleRegistrationIds;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.ServiceLoader;
+import java.util.Set;
 
 /** Builds the ordered set of detection rules used by an analyzer. */
 final class DetectionRuleRegistry {
 
-  record RuleSet(List<DetectionRule> rules, boolean inputsComplete) {
+  record RuleSet(List<DetectionRuleRegistration> registrations, boolean inputsComplete) {
     RuleSet {
-      rules = List.copyOf(rules);
+      registrations = List.copyOf(registrations);
+    }
+
+    List<DetectionRule> rules() {
+      return registrations.stream().map(DetectionRuleRegistration::rule).toList();
     }
   }
 
@@ -29,19 +38,69 @@ final class DetectionRuleRegistry {
   }
 
   RuleSet createRuleSet(List<DetectionRule> additionalRules) {
+    List<DetectionRuleRegistration> explicit =
+        additionalRules == null
+            ? List.of()
+            : additionalRules.stream()
+                .map(rule -> new DetectionRuleRegistration(rule, null))
+                .toList();
+    return assemble(explicit);
+  }
+
+  RuleSet createRegisteredRuleSet(Map<String, DetectionRule> additionalRules) {
+    List<DetectionRuleRegistration> explicit = new ArrayList<>();
+    additionalRules.forEach(
+        (id, rule) ->
+            explicit.add(
+                new DetectionRuleRegistration(
+                    rule, RuleRegistrationIds.safe(id, explicit.size() + 1))));
+    return assemble(explicit);
+  }
+
+  private RuleSet assemble(List<DetectionRuleRegistration> additionalRules) {
     List<DetectionRule> rules = createBuiltInRules();
     rules.removeIf(this::isRuleDisabled);
     List<DetectionRule> discovered = new ArrayList<>();
     ServiceLoader.load(DetectionRule.class).forEach(discovered::add);
+    // Apply the same selection policy regardless of how the host registered an external rule.
     discovered.removeIf(this::isRuleDisabled);
+    List<DetectionRuleRegistration> explicit =
+        additionalRules.stream()
+            .filter(registration -> !isRegistrationDisabled(registration))
+            .toList();
+    rejectCrossPathDuplicates(
+        discovered, explicit.stream().map(DetectionRuleRegistration::rule).toList());
     rules.addAll(discovered);
+    List<DetectionRuleRegistration> registrations = new ArrayList<>();
+    rules.forEach(rule -> registrations.add(new DetectionRuleRegistration(rule, null)));
+    registrations.addAll(explicit);
 
-    boolean inputsComplete = discovered.isEmpty();
-    if (additionalRules != null && !additionalRules.isEmpty()) {
-      rules.addAll(additionalRules);
-      inputsComplete = false;
+    // A registration ID identifies a rule, not all of its configuration or dependencies.
+    return new RuleSet(registrations, discovered.isEmpty() && explicit.isEmpty());
+  }
+
+  private boolean isRegistrationDisabled(DetectionRuleRegistration registration) {
+    if (registration.registrationId() == null) return isRuleDisabled(registration.rule());
+    try {
+      return isRuleDisabled(registration.rule());
+    } catch (RuntimeException | LinkageError failure) {
+      throw registration.failure(AuditRuleException.Reason.DECLARATION_FAILED);
     }
-    return new RuleSet(rules, inputsComplete);
+  }
+
+  private static void rejectCrossPathDuplicates(
+      List<DetectionRule> discovered, List<DetectionRule> explicit) {
+    Set<Class<?>> discoveredTypes = new HashSet<>();
+    discovered.forEach(rule -> discoveredTypes.add(rule.getClass()));
+    for (DetectionRule rule : explicit) {
+      if (discoveredTypes.contains(rule.getClass())) {
+        throw new IllegalArgumentException(
+            "Detection rule "
+                + rule.getClass().getName()
+                + " is registered through both ServiceLoader and explicit extensions; "
+                + "choose one registration path");
+      }
+    }
   }
 
   private List<DetectionRule> createBuiltInRules() {

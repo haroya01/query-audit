@@ -142,7 +142,7 @@ class ReportRedactionTest {
 
     var schema =
         JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V7)
-            .getSchema(getClass().getResourceAsStream("/report-1.6.schema.json"));
+            .getSchema(getClass().getResourceAsStream("/report-1.7.schema.json"));
     var mapper = new ObjectMapper();
     assertThat(schema.validate(mapper.readTree(redacted))).isEmpty();
     assertThat(schema.validate(mapper.readTree(redacted.replace("REDACTED", "unknown"))))
@@ -267,6 +267,18 @@ class ReportRedactionTest {
     return (Map<?, ?>) MiniJsonParser.parse(json);
   }
 
+  private static Issue onColumn(Issue issue, String column, Severity severity) {
+    return new Issue(
+        issue.type(),
+        severity,
+        issue.query(),
+        issue.table(),
+        column,
+        issue.detail(),
+        issue.suggestion(),
+        issue.sourceLocation());
+  }
+
   private static QueryAuditReport report() {
     String sql =
         "SELECT * FROM accounts WHERE account_id = 884455 AND token = 'fixture-secret' /*"
@@ -289,8 +301,8 @@ class ReportRedactionTest {
         "AccountTest",
         "loadsAccount",
         List.of(issue),
-        List.of(issue),
-        List.of(issue),
+        List.of(onColumn(issue, "owner_id", Severity.INFO)),
+        List.of(onColumn(issue, "tenant_id", Severity.WARNING)),
         List.of(query),
         1,
         1,

@@ -103,6 +103,7 @@ nav:
     - Annotations: guide/annotations.md
     - Configuration: guide/configuration.md
     - Comparison Inputs: guide/comparison-inputs.md
+    - Custom Extensions: guide/extensions.md
     - Investigate Findings:
       - Overview: detections/overview.md
       - "N+1 Query": detections/n-plus-one.md
@@ -112,5 +113,7 @@ nav:
     - Background Reading: references.md
   - Extend and Contribute:
     - Architecture: architecture/overview.md
+    - Extensible Runtime: architecture/extensible-runtime.md
+    - Maintaining the Codebase: architecture/maintaining.md
     - Adding Database Support: architecture/new-database.md
     - Contributing: architecture/contributing.md

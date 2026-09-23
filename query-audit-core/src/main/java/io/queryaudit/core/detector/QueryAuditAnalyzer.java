@@ -3,17 +3,23 @@ package io.queryaudit.core.detector;
 import io.queryaudit.core.baseline.Baseline;
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.extension.AuditExtensions;
+import io.queryaudit.core.extension.AuditRule;
+import io.queryaudit.core.extension.RuleContext;
+import io.queryaudit.core.extension.RuleDescriptor;
+import io.queryaudit.core.extension.internal.AuditRuleRuntime;
+import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
-import io.queryaudit.core.model.Severity;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -27,9 +33,12 @@ import java.util.Set;
 public class QueryAuditAnalyzer {
 
   private final List<DetectionRule> rules;
+  private final List<DetectionRuleRegistration> ruleRegistrations;
   private final boolean ruleInputsComplete;
   private final QueryAuditConfig config;
   private final List<BaselineEntry> baseline;
+  private final AuditRuleRuntime auditRuleRuntime;
+  private final FindingPolicy findingPolicy;
 
   public QueryAuditAnalyzer(QueryAuditConfig config) {
     this(config, (Path) null);
@@ -43,18 +52,7 @@ public class QueryAuditAnalyzer {
    *     .query-audit-baseline} in the working directory)
    */
   public QueryAuditAnalyzer(QueryAuditConfig config, Path baselinePath) {
-    this.config = config;
-    DetectionRuleRegistry.RuleSet registered =
-        new DetectionRuleRegistry(config).createRuleSet(null);
-    this.rules = registered.rules();
-    this.ruleInputsComplete = registered.inputsComplete();
-
-    // Load baseline
-    if (baselinePath != null) {
-      this.baseline = Baseline.load(baselinePath);
-    } else {
-      this.baseline = Baseline.load(Paths.get(Baseline.DEFAULT_FILE_NAME));
-    }
+    this(config, loadBaseline(baselinePath), List.of(), List.of());
   }
 
   /**
@@ -64,12 +62,7 @@ public class QueryAuditAnalyzer {
    * @param baseline pre-loaded baseline entries
    */
   public QueryAuditAnalyzer(QueryAuditConfig config, List<BaselineEntry> baseline) {
-    this.config = config;
-    DetectionRuleRegistry.RuleSet registered =
-        new DetectionRuleRegistry(config).createRuleSet(null);
-    this.rules = registered.rules();
-    this.ruleInputsComplete = registered.inputsComplete();
-    this.baseline = baseline != null ? baseline : List.of();
+    this(config, baseline, List.of(), List.of());
   }
 
   /**
@@ -82,17 +75,7 @@ public class QueryAuditAnalyzer {
    */
   public QueryAuditAnalyzer(
       QueryAuditConfig config, Path baselinePath, List<DetectionRule> additionalRules) {
-    this.config = config;
-    DetectionRuleRegistry.RuleSet registered =
-        new DetectionRuleRegistry(config).createRuleSet(additionalRules);
-    this.rules = registered.rules();
-    this.ruleInputsComplete = registered.inputsComplete();
-
-    if (baselinePath != null) {
-      this.baseline = Baseline.load(baselinePath);
-    } else {
-      this.baseline = Baseline.load(Paths.get(Baseline.DEFAULT_FILE_NAME));
-    }
+    this(config, loadBaseline(baselinePath), additionalRules, List.of());
   }
 
   /**
@@ -105,12 +88,54 @@ public class QueryAuditAnalyzer {
    */
   public QueryAuditAnalyzer(
       QueryAuditConfig config, List<BaselineEntry> baseline, List<DetectionRule> additionalRules) {
-    this.config = config;
+    this(config, baseline, additionalRules, List.of());
+  }
+
+  private QueryAuditAnalyzer(
+      QueryAuditConfig config,
+      List<BaselineEntry> baseline,
+      List<DetectionRule> additionalRules,
+      List<AuditRule> auditRules) {
+    this(config, baseline, additionalRules, auditRules, null);
+  }
+
+  private QueryAuditAnalyzer(
+      QueryAuditConfig config,
+      List<BaselineEntry> baseline,
+      List<DetectionRule> additionalRules,
+      List<AuditRule> auditRules,
+      AuditExtensions extensions) {
+    this.config = Objects.requireNonNull(config, "config");
+    DetectionRuleRegistry registry = new DetectionRuleRegistry(config);
     DetectionRuleRegistry.RuleSet registered =
-        new DetectionRuleRegistry(config).createRuleSet(additionalRules);
+        extensions == null
+            ? registry.createRuleSet(additionalRules)
+            : registry.createRegisteredRuleSet(extensions.rulesById());
     this.rules = registered.rules();
-    this.ruleInputsComplete = registered.inputsComplete();
-    this.baseline = baseline != null ? baseline : List.of();
+    this.ruleRegistrations = registered.registrations();
+    this.auditRuleRuntime =
+        extensions == null
+            ? new AuditRuleRuntime(config, auditRules, rules)
+            : new AuditRuleRuntime(config, extensions.auditRulesById(), rules);
+    this.ruleInputsComplete = registered.inputsComplete() && auditRuleRuntime.rules().isEmpty();
+    this.baseline = baseline != null ? List.copyOf(baseline) : List.of();
+    this.findingPolicy = new FindingPolicy(config, this.baseline);
+  }
+
+  /**
+   * Assembles built-in, discovered, and explicit legacy/open rules under the same host policy.
+   * Active open rules remain unverified comparison inputs: descriptor declarations cannot attest to
+   * hidden implementation settings. This named factory avoids ambiguous constructor overloads.
+   */
+  public static QueryAuditAnalyzer withExtensions(
+      QueryAuditConfig config, Path baselinePath, AuditExtensions extensions) {
+    Objects.requireNonNull(extensions, "extensions");
+    return new QueryAuditAnalyzer(
+        config, loadBaseline(baselinePath), List.of(), List.of(), extensions);
+  }
+
+  private static List<BaselineEntry> loadBaseline(Path path) {
+    return Baseline.load(path != null ? path : Paths.get(Baseline.DEFAULT_FILE_NAME));
   }
 
   public QueryAuditAnalyzer() {
@@ -119,44 +144,34 @@ public class QueryAuditAnalyzer {
 
   public QueryAuditReport analyze(
       String testClass, String testName, List<QueryRecord> queries, IndexMetadata indexMetadata) {
-    if (!config.isEnabled() || queries == null || queries.isEmpty()) {
-      return new QueryAuditReport(
-          testClass,
-          testName,
-          List.of(),
-          List.of(),
-          List.of(),
-          queries != null ? queries : List.of(),
-          0,
-          0,
-          0L);
-    }
-
+    // Preserve virtual dispatch for integrations overriding the original three-argument method.
     QueryAuditReport report = analyze(testName, queries, indexMetadata);
     return new QueryAuditReport(
-        testClass,
-        report.getTestName(),
-        report.getConfirmedIssues(),
-        report.getInfoIssues(),
-        report.getAcknowledgedIssues(),
-        report.getAllQueries(),
-        report.getUniquePatternCount(),
-        report.getTotalQueryCount(),
-        report.getTotalExecutionTimeNanos());
+            testClass,
+            report.getTestName(),
+            report.getConfirmedIssues(),
+            report.getInfoIssues(),
+            report.getAcknowledgedIssues(),
+            report.getAllQueries(),
+            report.getUniquePatternCount(),
+            report.getTotalQueryCount(),
+            report.getTotalExecutionTimeNanos())
+        .withCustomFindings(
+            report.getCustomConfirmedFindings(),
+            report.getCustomInfoFindings(),
+            report.getCustomAcknowledgedFindings());
   }
 
   public QueryAuditReport analyze(
       String testName, List<QueryRecord> queries, IndexMetadata indexMetadata) {
-    if (!config.isEnabled() || queries == null || queries.isEmpty()) {
-      return new QueryAuditReport(
-          testName, List.of(), List.of(), queries != null ? queries : List.of(), 0, 0, 0L);
+    queries = queries != null ? queries : List.of();
+    if (!config.isEnabled()) {
+      return new QueryAuditReport(testName, List.of(), List.of(), queries, 0, 0, 0L);
     }
 
-    // Filter out suppressed queries (used for stats: total count, unique patterns, exec time)
     List<QueryRecord> filteredQueries =
         queries.stream().filter(q -> !config.isQuerySuppressed(q.sql())).toList();
 
-    // For detection, further filter by lifecycle phase.
     // By default only TEST-phase queries are analyzed; setup/teardown queries are excluded
     // to prevent false positives from test infrastructure (e.g., deleteAll, repeated save).
     List<QueryRecord> detectableQueries =
@@ -164,23 +179,47 @@ public class QueryAuditAnalyzer {
             ? filteredQueries
             : filteredQueries.stream().filter(q -> q.phase() == LifecyclePhase.TEST).toList();
 
-    // Collect all issues from all rules (only against detectable queries)
     List<Issue> allIssues = new ArrayList<>();
-    for (DetectionRule rule : rules) {
-      List<Issue> ruleIssues = rule.evaluate(detectableQueries, indexMetadata);
-      allIssues.addAll(ruleIssues);
+    // Legacy detectors keep their no-captured-query behavior. Open rules may enforce absence.
+    if (!queries.isEmpty()) {
+      for (DetectionRuleRegistration registration : ruleRegistrations) {
+        allIssues.addAll(registration.evaluate(detectableQueries, indexMetadata));
+      }
     }
 
-    // Single-pass classification of issues into confirmed/info/acknowledged
-    // buckets. Applies severity overrides from config before classification.
     List<Issue> confirmedIssues = new ArrayList<>();
     List<Issue> infoIssues = new ArrayList<>();
     List<Issue> acknowledgedIssues = new ArrayList<>();
 
     classifyIssues(allIssues, confirmedIssues, infoIssues, acknowledgedIssues);
 
-    // Single-pass calculation of unique patterns and total execution time.
-    // Replaces two separate stream passes over filteredQueries.
+    List<Finding> customConfirmed = new ArrayList<>();
+    List<Finding> customInfo = new ArrayList<>();
+    List<Finding> customAcknowledged = new ArrayList<>();
+    if (!auditRuleRuntime.rules().isEmpty()) {
+      List<Finding> openFindings =
+          auditRuleRuntime.evaluate(new RuleContext(detectableQueries, indexMetadata));
+      for (FindingPolicy.Classified classified :
+          OpenFindingClassifier.classify(openFindings, findingPolicy)) {
+        Finding finding = classified.finding();
+        if (finding.kindId().isBuiltin()) {
+          // Legacy adapters preserve the Issue API as well as the original policy code.
+          Issue issue = finding.toIssue().orElseThrow();
+          switch (classified.bucket()) {
+            case ACKNOWLEDGED -> acknowledgedIssues.add(issue);
+            case INFO -> infoIssues.add(issue);
+            case CONFIRMED -> confirmedIssues.add(issue);
+          }
+        } else {
+          switch (classified.bucket()) {
+            case ACKNOWLEDGED -> customAcknowledged.add(finding);
+            case INFO -> customInfo.add(finding);
+            case CONFIRMED -> customConfirmed.add(finding);
+          }
+        }
+      }
+    }
+
     Set<String> uniquePatterns = new HashSet<>();
     long totalExecutionTimeNanos = 0L;
     for (QueryRecord q : filteredQueries) {
@@ -192,15 +231,16 @@ public class QueryAuditAnalyzer {
     long uniquePatternCount = uniquePatterns.size();
 
     return new QueryAuditReport(
-        null,
-        testName,
-        confirmedIssues,
-        infoIssues,
-        acknowledgedIssues,
-        queries,
-        (int) uniquePatternCount,
-        filteredQueries.size(),
-        totalExecutionTimeNanos);
+            null,
+            testName,
+            confirmedIssues,
+            infoIssues,
+            acknowledgedIssues,
+            queries,
+            (int) uniquePatternCount,
+            filteredQueries.size(),
+            totalExecutionTimeNanos)
+        .withCustomFindings(customConfirmed, customInfo, customAcknowledged);
   }
 
   /**
@@ -243,7 +283,11 @@ public class QueryAuditAnalyzer {
             report.getTotalExecutionTimeNanos());
     return mergedReport
         .withTestIdentity(report.getTestId(), report.getTestSelector())
-        .withIndexMetadata(report.getIndexMetadata());
+        .withIndexMetadata(report.getIndexMetadata())
+        .withCustomFindings(
+            report.getCustomConfirmedFindings(),
+            report.getCustomInfoFindings(),
+            report.getCustomAcknowledgedFindings());
   }
 
   private void classifyIssues(
@@ -252,40 +296,19 @@ public class QueryAuditAnalyzer {
       List<Issue> infoIssues,
       List<Issue> acknowledgedIssues) {
     for (Issue issue : issues) {
-      // The exact issue code is the correctness net for detectors that do not declare a rule code.
-      if (config.isRuleExcluded(issue.type().getCode())) {
-        continue;
-      }
-      if (config.isSuppressed(issue.type().getCode(), issue.table(), issue.column())) {
-        continue;
-      }
-
-      Issue effectiveIssue = applySeverityOverride(issue);
-      if (Baseline.isAcknowledged(baseline, effectiveIssue)) {
-        acknowledgedIssues.add(effectiveIssue);
-      } else if (effectiveIssue.severity() == Severity.INFO) {
-        infoIssues.add(effectiveIssue);
-      } else {
-        confirmedIssues.add(effectiveIssue);
+      FindingPolicy.Classified classified = findingPolicy.classify(Finding.fromIssue(issue));
+      if (classified != null) {
+        Issue effective =
+            classified.finding().severity() == issue.severity()
+                ? issue
+                : classified.finding().toIssue().orElseThrow();
+        switch (classified.bucket()) {
+          case ACKNOWLEDGED -> acknowledgedIssues.add(effective);
+          case INFO -> infoIssues.add(effective);
+          case CONFIRMED -> confirmedIssues.add(effective);
+        }
       }
     }
-  }
-
-  private Issue applySeverityOverride(Issue issue) {
-    Severity effectiveSeverity =
-        config.getEffectiveSeverity(issue.type().getCode(), issue.severity());
-    if (effectiveSeverity == issue.severity()) {
-      return issue;
-    }
-    return new Issue(
-        issue.type(),
-        effectiveSeverity,
-        issue.query(),
-        issue.table(),
-        issue.column(),
-        issue.detail(),
-        issue.suggestion(),
-        issue.sourceLocation());
   }
 
   public QueryAuditConfig getConfig() {
@@ -294,6 +317,15 @@ public class QueryAuditAnalyzer {
 
   public List<DetectionRule> getRules() {
     return List.copyOf(rules);
+  }
+
+  public List<AuditRule> getAuditRules() {
+    return auditRuleRuntime.rules();
+  }
+
+  /** Immutable descriptor snapshots for active open rules, in execution order. */
+  public List<RuleDescriptor> getRuleDescriptors() {
+    return auditRuleRuntime.descriptors();
   }
 
   /** Whether every active rule was constructed from the fingerprinted core configuration. */
