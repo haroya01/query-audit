@@ -149,11 +149,61 @@ cannot be linked to its old row safely, so re-record the complete suite once whe
 The Gradle names use the [shared property bridge](ci-cd.md#plain-junit-build-tool-setup). Maven users pass the
 test-JVM property with `-D`, for example `-DqueryAudit.contractsPath=config/query-contracts`.
 
+## Contract a request or job
+
+A test method often mixes fixture setup, the request under test, and database assertions.
+`QueryContractScope` (0.7.0) counts only the work you pass to it. Use the `QueryInterceptor`
+bean that the Spring Boot starter registers, or the interceptor you hooked into a plain
+DataSource:
+
+```java
+private final QueryContractScope contracts =
+    QueryContractScope.forDirectory(queryInterceptor, Path.of("src/test/resources/query-contracts"))
+        .awaitingCompletion(asyncWork::awaitIdle);
+
+@Test
+void createsALink() throws Exception {
+    MvcResult result =
+        contracts.verify("link-create", () -> mockMvc.perform(post("/api/v1/links").content(body)).andReturn());
+    assertThat(result.getResponse().getStatus()).isEqualTo(201);
+}
+```
+
+`verify` returns the work's result. Use `capture` and `verify(captured)` separately when the test
+needs the captured `queries()` or `counts()` before the check. `awaitingCompletion` runs after
+the work and before capture stops, so SQL from background work the request triggered is counted
+once the callback waits for it.
+
+Every `*.contracts` file and `.query-audit-contracts` in the directory is read. Entries use the
+same format as test contracts, with the scope ID as the `@junit` identity:
+
+```text
+@junit | link-create | 1 | 1 | 0 | 0 | 2
+```
+
+| Situation | Result |
+|---|---|
+| Counts match | passes and returns the work's result |
+| Counts differ in either direction | `AssertionError` with the delta and the SQL of the grown types |
+| No entry for the scope ID | `AssertionError`; new scopes are never accepted silently |
+| The same ID in two files | `IllegalStateException` |
+| The capture reached `max-queries` | `AssertionError`; a truncated capture cannot verify a contract |
+| Another capture is running | `IllegalStateException` |
+
+With `-DqueryAudit.contracts.record=true`, `verify` writes the counts instead: an existing ID is
+updated in the file that owns it and a new ID goes to `.query-audit-contracts` in the directory.
+Recording rewrites that file's header comments. Review the diff before committing.
+
+A scope counts SQL from every thread that uses the audited DataSource while it is open. Run
+scoped tests sequentially against an isolated database, keep schedulers off, and do not combine
+a scope with `@QueryAudit` capture in the same test.
+
 ## Contracts vs. related features
 
 | | Scope | Fails on | Update flow |
 |---|---|---|---|
 | **Contracts** | every recorded test | any count deviation, both directions | re-record, review file diff |
 | [`@ExpectQueries`](annotations.md#expectqueries) | one method | budget exceeded | edit the annotation |
+| [`QueryContractScope`](#contract-a-request-or-job) | one request, job, or journey | any count deviation, missing contract | re-record, review file diff |
 | Count baseline (`queryAudit.updateBaseline`) | tests with a recorded baseline | threshold-based regression finding, subject to finding policy | update baseline |
 | [Issue baseline](suppressing.md) | findings | new findings | acknowledge |

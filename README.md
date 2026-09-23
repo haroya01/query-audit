@@ -1,15 +1,45 @@
 # QueryAudit
 
-**Keep query changes under test.**
+**Catch N+1 queries and query regressions before merge.**
 
 [![Build](https://github.com/haroya01/query-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/haroya01/query-audit/actions/workflows/ci.yml)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.haroya01/query-audit-core)](https://central.sonatype.com/artifact/io.github.haroya01/query-audit-core)
 [![Java 17+](https://img.shields.io/badge/Java-17%2B-blue)](https://openjdk.org/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Review query-count contracts across your JUnit 5 tests. Compare CI runs with checks for
-missing audits and changed analysis settings. Start with read/write limits and inspect
-the captured SQL when a policy fails.
+QueryAudit watches the SQL your JUnit 5 tests run. With no configuration it reports the
+same SELECT repeated from one call site as an N+1. Reviewed query counts become contracts
+that fail when a change adds, removes, or moves queries, for a test method or for one HTTP
+request. Compare CI runs with checks for missing audits and changed analysis settings.
+
+## Catch an N+1 at its call site
+
+Since 0.7.0 the default profile runs one rule: the same SELECT, executed three or more times
+from the same full application call stack, is an N+1. A batched `IN (?, ?, ...)` fetch is the
+fix, not the problem, so `@BatchSize` and batch fetching stay quiet. Make it fail the test:
+
+```java
+@Test
+@QueryAudit(failOn = IssueType.N_PLUS_ONE)
+void listsOrders() {
+    orderService.findRecentOrders().forEach(order -> order.getCustomer().getName());
+}
+```
+
+```text
+QueryAudit detected 1 issue(s) in listsOrders():
+
+  [ERROR] N+1 Query detected (table: customers)
+    Detail: The same SELECT ran 5 times from one call site
+    Suggestion: Load the rows once before the loop: JOIN FETCH, @EntityGraph, or one query with an IN list.
+    Call stack:
+      at example.OrderService.findRecentOrders:31
+      ...
+```
+
+Hibernate lazy-load events are reported as INFO next to it and name the association to fetch.
+Index, EXPLAIN, and SQL style rules are still available through `profile: strict` or
+`enabled-rules`; see [configuration](docs/guide/configuration.md#rule-profiles).
 
 ## Keep a read path free of writes
 
@@ -76,6 +106,31 @@ If the change is intended, re-record and review the contract file's diff in the 
 Contracts compare counts in both directions; they do not snapshot SQL text or result rows.
 
 [Recording, Gradle setup, and contract updates](docs/guide/contracts.md)
+
+## Contract one request or job
+
+A test often mixes fixture setup, the request under test, and assertions. Since 0.7.0,
+`QueryContractScope` counts only the work inside the scope, including background work the
+request triggered once you wait for it:
+
+```java
+QueryContractScope contracts =
+    QueryContractScope.forDirectory(queryInterceptor, Path.of("src/test/resources/query-contracts"))
+        .awaitingCompletion(asyncWork::awaitIdle);
+
+contracts.verify("link-create", () -> mockMvc.perform(post("/api/v1/links").content(body)));
+```
+
+Reviewed counts live in `*.contracts` files under that directory:
+
+```text
+@junit | link-create | 1 | 1 | 0 | 0 | 2
+```
+
+A missing contract, a duplicated ID, or a truncated capture fails. Record new scopes with
+`-DqueryAudit.contracts.record=true` and review the diff. Scopes run one at a time and count
+every thread that uses the audited DataSource, so keep background schedulers off in these tests.
+[Scoped contracts](docs/guide/contracts.md#contract-a-request-or-job)
 
 ## Find the SQL and call site
 
@@ -150,7 +205,8 @@ dependencies {
 ```
 
 Enable capture with `@EnableQueryInspector` on the test class, then add `@ExpectQueries`
-to the method. Findings remain advisory; explicit budgets still fail.
+to the method. Explicit budgets and contracts fail. Findings, including N+1, stay advisory
+until you opt in with `failOn`.
 The [installation guide](docs/getting-started/installation.md) includes Maven, Groovy,
 plain JUnit, and a capture check. MySQL and PostgreSQL modules add database index metadata.
 

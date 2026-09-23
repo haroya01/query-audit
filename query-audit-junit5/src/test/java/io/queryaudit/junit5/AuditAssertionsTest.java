@@ -81,6 +81,32 @@ class AuditAssertionsTest {
   }
 
   @Test
+  void failureMessagesShowTheTopOfTheCapturedCallStack() {
+    Finding nPlusOne =
+        new Finding(
+            FindingKindId.of("n-plus-one"),
+            Severity.ERROR,
+            "SELECT * FROM customers WHERE id = ?",
+            "customers",
+            null,
+            "The same SELECT ran 5 times from one call site",
+            "Load the rows once before the loop",
+            String.join(
+                "\n",
+                "shop.CustomerRepository.findById:12",
+                "shop.OrderService.describe:40",
+                "shop.OrderService.list:31",
+                "shop.OrderController.list:18",
+                "shop.OrderControllerTest.lists:22",
+                "shop.Unshown.frame:1"));
+
+    assertThat(AuditAssertions.findingsFailureMessage("lists", List.of(nPlusOne)))
+        .contains(
+            "Call stack:", "at shop.OrderService.list:31", "at shop.OrderControllerTest.lists:22")
+        .doesNotContain("shop.Unshown.frame");
+  }
+
+  @Test
   void hidingOnlyCustomInfoRetainsConfirmedAndAcknowledgedFindings() {
     Finding custom =
         new Finding(

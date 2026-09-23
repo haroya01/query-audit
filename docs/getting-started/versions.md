@@ -29,6 +29,18 @@ Audited methods must run on the same thread: `0.6.0` rejects concurrent audited 
 verify capture when changing Spring contexts or sharing annotation policies.
 See [limitations](../guide/limitations.md) for the supported scope and reported cases.
 
+## Coming in 0.7.0
+
+The development branch changes defaults and adds one API. These are not in `0.6.0`:
+
+| Change | Details |
+| --- | --- |
+| Call-site N+1 is the only default built-in rule | [Rule profiles](../guide/configuration.md#rule-profiles) |
+| Hibernate lazy-load N+1 evidence is INFO; one batch fetch no longer fails | [N+1 detection](../detections/n-plus-one.md) |
+| `QueryContractScope` contracts one request, job, or journey | [Contract a request or job](../guide/contracts.md#contract-a-request-or-job) |
+| Finding failures print the top of the call stack | [Read a failure](../guide/reports.md#read-a-policy-failure) |
+| Capture rebinds to the new DataSource after a Spring context is replaced | [#287](https://github.com/haroya01/query-audit/issues/287) |
+
 ## Tested combinations
 
 The release's [CI workflow](https://github.com/haroya01/query-audit/blob/v0.6.0/.github/workflows/ci.yml)

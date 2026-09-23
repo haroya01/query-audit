@@ -34,7 +34,7 @@ All properties are optional. The table below lists every supported key under the
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Master switch for the entire auto-configuration. When `false`, the `QueryInterceptor` bean and the wrapping `BeanPostProcessor` are both skipped — the `@QueryAudit` annotation will not work either. Use `wrap-data-source.enabled: false` instead if you want to keep the interceptor active but skip the auto-wrap. |
-| `profile` | `String` | `"recommended"` | Rule tier: `strict` (all rules), `recommended` (opinionated rules off), or `minimal` (safety-critical only). See [Rule Profiles](#rule-profiles). |
+| `profile` | `String` | `"recommended"` | Rule tier: `recommended` (call-site N+1 only), `minimal` (N+1, index, and write safety), or `strict` (all rules). See [Rule Profiles](#rule-profiles). |
 | `enabled-rules` | `List<String>` | `[]` | Rule codes to run even when the profile tier excludes them. `disabled-rules` still wins. |
 | `mode` | `String` | `"annotated"` | Which tests the JUnit extension audits: `annotated` (opt-in via `@QueryAudit`) or `all` (every test, opt-out via `@QueryAuditExclude`). `all` additionally requires JUnit extension autodetection — see [Audit Coverage Mode](#audit-coverage-mode). |
 | `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
@@ -115,35 +115,44 @@ query-audit:
 
 ## Rule Profiles
 
-Since 0.6.0, omitted or blank profile settings select `recommended`. It keeps the general
-detection rules while excluding context-dependent advice. Choose `strict` to run every rule
-or `minimal` to start with a smaller set:
+Since 0.7.0, omitted or blank profile settings select `recommended`, which runs only the
+call-site N+1 rule among built-in rules. Choose `minimal` or `strict` to add index, write, and
+SQL style checks:
 
 | Profile | What runs | Use it for |
 |---|---|---|
-| `strict` | Every rule — the default before 0.6.0 | Maximum coverage, mature suppression setup |
-| `recommended` (default) | Everything except the rules listed below | First adoption, day-to-day CI |
-| `minimal` | Selected safety and cost findings (`n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query`) | Review a smaller set of findings before choosing what to enforce |
+| `recommended` (default) | `n-plus-one`: the same SELECT repeated from one full application call stack | First adoption, day-to-day CI |
+| `minimal` | `n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query` | Adding index and write-safety review |
+| `strict` | Every rule | Maximum coverage, mature suppression setup |
 
 ```yaml
 query-audit:
   profile: recommended
   enabled-rules:
-    - force-index-hint   # re-activate a rule the profile excludes
+    - update-without-where   # add one rule to the profile
 ```
 
 Precedence: `disabled-rules` > `enabled-rules` > profile tier.
 
-The `recommended` exclusions are rules that legitimately fire on correct SQL — index hints,
-offset pagination at small scale, leading LIKE wildcards, EXPLAIN advisories
-(`full-scan`/`filesort`/`temporary-table`), and style opinions such as `or-abuse` or
-`regexp-usage`. The full list is in the migration note below. The
-tier assignment is v1 and will be revised as per-rule false-positive statistics accumulate —
-[false-positive reports](https://github.com/haroya01/query-audit/issues) directly shape it.
+`recommended` and `minimal` are allow-lists over built-in rules, so a new built-in rule stays
+off until it is added explicitly. `recommended` never filters custom finding kinds from
+`AuditRule` extensions. Legacy `DetectionRule` extensions report built-in issue types and follow
+the profile like built-in rules; enable their codes with `enabled-rules`. External rules
+registered via `ServiceLoader` without a rule code are never filtered by profiles.
 
-`recommended` is deny-list based: a newly added rule joins it automatically unless flagged as
-opinionated. External rules registered via `ServiceLoader` without a rule code are never
-filtered by profiles.
+The N+1 rule groups captured SELECT statements by normalized SQL and the full application call
+stack, ignoring proxy, reflection, and framework frames. Three executions from one call site
+report a confirmed `n-plus-one` finding; `n-plus-one.threshold` changes the count. A query with
+a multi-placeholder `IN` list is treated as a batched fetch and never counted. Hibernate
+lazy-load events are reported as INFO `n-plus-one` findings that name the association; they
+explain a finding but never confirm one on their own.
+
+### Migrating from 0.6.x to 0.7.0
+
+If you did not configure a profile, upgrading reduces the active built-in rules to
+`n-plus-one`. Set `profile: strict` to keep every rule, or list the rules you enforce in
+`enabled-rules`. Hibernate lazy-load N+1 findings move from ERROR to INFO; the confirmed finding
+now comes from repeated SQL at one call site, so one batch fetch no longer fails a test.
 
 ### Migrating from 0.5.x to 0.6.0
 

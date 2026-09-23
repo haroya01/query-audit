@@ -165,6 +165,14 @@ final class AuditAssertions {
       if (issue.suggestion() != null) {
         sb.append("\n    Suggestion: ").append(issue.suggestion());
       }
+      if (issue.sourceLocation() != null && !issue.sourceLocation().isBlank()) {
+        sb.append("\n    Call stack:");
+        issue
+            .sourceLocation()
+            .lines()
+            .limit(5)
+            .forEach(frame -> sb.append("\n      at ").append(frame));
+      }
       sb.append("\n");
     }
     return sb.toString();

@@ -46,40 +46,31 @@ scales linearly and is one of the most common causes of slow application perform
 
 ## How QueryAudit Detects It
 
-QueryAudit combines two kinds of evidence. SQL repetition produces `n-plus-one-suspect` findings;
-Hibernate lazy-load events support `n-plus-one` findings when that integration is active.
-Neither requires `EXPLAIN`. Review the actual statement count and fetch strategy together:
-batch loading and the tested associations affect how the signal should be interpreted. See
-[known constraints](../guide/limitations.md) before enforcing the finding.
+Since 0.7.0 the confirmed `n-plus-one` finding comes from JDBC evidence, and it is the only
+built-in rule in the default `recommended` profile. Neither `EXPLAIN` nor Hibernate is required.
 
-### SQL repetition analysis
-
-1. **Normalize SQL** -- Replace all literal values with `?` placeholders
+1. **Normalize SQL** -- Replace literal values with `?` placeholders
 
     ```
     SELECT * FROM members WHERE id = 42   --> SELECT * FROM members WHERE id = ?
     SELECT * FROM members WHERE id = 77   --> SELECT * FROM members WHERE id = ?
-    SELECT * FROM members WHERE id = 103  --> SELECT * FROM members WHERE id = ?
     ```
 
-2. **Group by normalized pattern** -- Identical normalized queries are grouped together
+2. **Group by call site** -- Statements are grouped by normalized SQL and the full application
+   call stack. Proxy, reflection, CGLIB, and framework frames are ignored, so the same repository
+   method called from two different places forms two groups.
 
-3. **Count** -- If the same SELECT pattern appears **>= threshold** times (default: 3), it
-   produces an INFO `n-plus-one-suspect` finding.
+3. **Count** -- A group with **>= threshold** SELECT statements (default: 3) produces an ERROR
+   `n-plus-one` finding. A statement with a multi-placeholder `IN (?, ?, ...)` list is a batched
+   fetch and is never counted, so `@BatchSize` and batch fetching do not fail a test.
 
-```java title="NPlusOneDetector.java (simplified)"
-Map<String, List<QueryRecord>> grouped = new LinkedHashMap<>();
-for (QueryRecord query : queries) {
-    if (query.normalizedSql() == null || !SqlParser.isSelectQuery(query.sql())) continue;
-    grouped.computeIfAbsent(query.normalizedSql(), k -> new ArrayList<>()).add(query);
-}
+Hibernate lazy-load events are recorded when the integration is active. They produce INFO
+`n-plus-one` findings that name the collection or proxy and suggest the fetch to add. They
+explain a confirmed finding but never confirm one on their own. The older SQL-only
+`n-plus-one-suspect` rule is still available through `strict` or `enabled-rules`.
 
-for (var entry : grouped.entrySet()) {
-    if (entry.getValue().size() >= threshold) {
-        // --> INFO: n-plus-one-suspect
-    }
-}
-```
+Findings are advisory by default. `@QueryAudit(failOn = IssueType.N_PLUS_ONE)` or
+`@DetectNPlusOne` fails the test on a confirmed finding.
 
 ---
 
