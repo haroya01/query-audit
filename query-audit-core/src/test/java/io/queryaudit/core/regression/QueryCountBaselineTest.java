@@ -243,7 +243,7 @@ class QueryCountBaselineTest {
     QueryCountBaseline.save(file, counts);
 
     String content = Files.readString(file);
-    assertThat(content).contains("# Query Guard Count Baseline");
+    assertThat(content).contains("# QueryAudit Count Baseline");
     assertThat(content).contains("RoomApiTest | testCreateRoom | 12 | 3 | 0 | 0 | 15");
   }
 

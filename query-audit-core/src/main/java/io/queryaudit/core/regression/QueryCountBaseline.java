@@ -20,7 +20,7 @@ import java.util.TreeMap;
  * <h3>File format</h3>
  *
  * <pre>
- * # Query Guard Count Baseline
+ * # QueryAudit Count Baseline
  * # Format: identityType | identityValue | selectCount | insertCount | updateCount | deleteCount | totalCount
  * &#64;junit | [engine:junit-jupiter]/[class:com.example.RoomApiTest]/[method:testCreateRoom()] | 12 | 3 | 0 | 0 | 15
  * </pre>
@@ -282,7 +282,7 @@ public final class QueryCountBaseline {
    * @throws IOException if the file cannot be written
    */
   public static void save(Path file, Map<String, QueryCounts> counts) throws IOException {
-    save(file, counts, "Query Guard Count Baseline");
+    save(file, counts, "QueryAudit Count Baseline");
   }
 
   /**

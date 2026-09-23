@@ -470,7 +470,7 @@ class QueryAuditJpaIntegrationTest {
 
       // Verify content
       String indexHtml = Files.readString(outputDir.resolve("index.html"));
-      assertThat(indexHtml).contains("Query Guard Report");
+      assertThat(indexHtml).contains("QueryAudit Report");
       assertThat(indexHtml).contains("HtmlReportTests");
 
       String classHtml = Files.readString(outputDir.resolve("HtmlReportTests.html"));

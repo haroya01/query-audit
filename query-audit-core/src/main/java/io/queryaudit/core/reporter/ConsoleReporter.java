@@ -158,7 +158,7 @@ public class ConsoleReporter implements Reporter {
   private void printHeader(QueryAuditReport report) {
     out.println();
     out.println(color(BOLD, DIVIDER));
-    out.println(color(BOLD, "  QUERY GUARD REPORT"));
+    out.println(color(BOLD, "  QUERYAUDIT REPORT"));
     if (report.getTestName() != null && !report.getTestName().isBlank()) {
       out.println(color(DIM, "  Test: " + report.getTestName()));
     }

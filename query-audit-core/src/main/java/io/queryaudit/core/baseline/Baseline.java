@@ -19,7 +19,7 @@ import java.util.List;
  * <h3>File format</h3>
  *
  * <pre>
- * # Query Guard Baseline — acknowledged issues
+ * # QueryAudit Baseline — acknowledged issues
  * # Format: issue-code | table | column | acknowledged-by | reason | query-pattern
  * missing-where-index | users | deleted_at | dev@example.com | Low cardinality | select id from users where deleted_at is null
  * </pre>
@@ -94,7 +94,7 @@ public final class Baseline {
   public static void save(Path baselineFile, List<BaselineEntry> entries) throws IOException {
     Files.createDirectories(baselineFile.getParent());
     try (BufferedWriter writer = Files.newBufferedWriter(baselineFile, StandardCharsets.UTF_8)) {
-      writer.write("# Query Guard Baseline — acknowledged issues");
+      writer.write("# QueryAudit Baseline — acknowledged issues");
       writer.newLine();
       writer.write(
           "# Format: issue-code | table | column | acknowledged-by | reason | query-pattern");

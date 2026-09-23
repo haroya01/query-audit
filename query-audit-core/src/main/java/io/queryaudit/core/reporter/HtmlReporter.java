@@ -153,7 +153,7 @@ public class HtmlReporter implements Reporter {
     sb.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
     sb.append("<meta charset=\"UTF-8\">\n");
     sb.append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
-    sb.append("<title>Query Guard Report</title>\n");
+    sb.append("<title>QueryAudit Report</title>\n");
     HtmlReportAssets.appendStyles(sb);
     sb.append("</head>\n<body>\n");
 
@@ -165,7 +165,7 @@ public class HtmlReporter implements Reporter {
         "      <svg class=\"logo\" viewBox=\"0 0 24 24\" width=\"32\" height=\"32\" fill=\"none\""
             + " stroke=\"currentColor\" stroke-width=\"2\">");
     sb.append("<path d=\"M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z\"/></svg>\n");
-    sb.append("      <h1>Query Guard Report</h1>\n");
+    sb.append("      <h1>QueryAudit Report</h1>\n");
     sb.append("    </div>\n");
     sb.append("    <span class=\"timestamp\">Generated: ")
         .append(esc(timestamp))
@@ -196,7 +196,7 @@ public class HtmlReporter implements Reporter {
 
     // Footer
     sb.append("<footer class=\"footer\">\n");
-    sb.append("  <p>Query Guard &mdash; Static &amp; Runtime SQL Analysis</p>\n");
+    sb.append("  <p>QueryAudit &mdash; Static &amp; Runtime SQL Analysis</p>\n");
     sb.append("</footer>\n");
 
     HtmlReportAssets.appendScript(sb);
@@ -232,7 +232,7 @@ public class HtmlReporter implements Reporter {
     sb.append("<meta charset=\"UTF-8\">\n");
     sb.append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
     sb.append("<meta name=\"qg-report-hash\" content=\"").append(reportHash).append("\">\n");
-    sb.append("<title>Query Guard Report — ").append(esc(className)).append("</title>\n");
+    sb.append("<title>QueryAudit Report — ").append(esc(className)).append("</title>\n");
     HtmlReportAssets.appendStyles(sb);
     sb.append("</head>\n<body data-class=\"").append(esc(className)).append("\">\n");
 
@@ -288,7 +288,7 @@ public class HtmlReporter implements Reporter {
 
     // Footer
     sb.append("<footer class=\"footer\">\n");
-    sb.append("  <p>Query Guard &mdash; Static &amp; Runtime SQL Analysis</p>\n");
+    sb.append("  <p>QueryAudit &mdash; Static &amp; Runtime SQL Analysis</p>\n");
     sb.append("</footer>\n");
 
     HtmlReportAssets.appendScript(sb);

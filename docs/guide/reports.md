@@ -678,7 +678,7 @@ contains its findings and the retained query timeline and patterns.
 
 ```
 ────────────────────────────────────────────────────────────────────────
-  QUERY GUARD REPORT
+  QUERYAUDIT REPORT
   Test: findRecentOrders_shouldUseIndex
 ────────────────────────────────────────────────────────────────────────
 ```
