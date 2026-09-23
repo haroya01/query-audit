@@ -69,8 +69,8 @@ Hibernate lazy-load events are recorded when the integration is active. They pro
 explain a confirmed finding but never confirm one on their own. The older SQL-only
 `n-plus-one-suspect` rule is still available through `strict` or `enabled-rules`.
 
-Findings are advisory by default. `@QueryAudit(failOn = IssueType.N_PLUS_ONE)` or
-`@DetectNPlusOne` fails the test on a confirmed finding.
+`@QueryAudit` fails the test on a confirmed finding and `@EnableQueryInspector` only reports it.
+`@QueryAudit(failOn = IssueType.N_PLUS_ONE)` fails on N+1 alone when other rules are enabled.
 
 ---
 

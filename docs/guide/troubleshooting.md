@@ -112,11 +112,12 @@ when a flush actually sends SQL: a queued entity change is not yet a JDBC statem
 inside the audited test when that write is part of the intended contract. Check the installed
 [version](../getting-started/versions.md) and [counting rules](contracts.md) before adjusting a budget.
 
-## @ExpectMaxQueryCount Fails Unexpectedly
+## A Query Budget Fails Unexpectedly
 
-`@ExpectMaxQueryCount` limits the total captured query count, including reads and writes.
-`@ExpectQueries` lets you limit each type separately. Both count all captured per-test setup,
-test-body, and teardown statements. `includeSetupQueries` filters detector analysis inputs only;
+`@ExpectQueries(total = n)` limits every captured statement, and the type attributes limit each
+type separately. The deprecated `@ExpectMaxQueryCount` behaves like `total`. Budgets count all
+captured per-test setup, test-body, and teardown statements. A
+[scoped contract](contracts.md#contract-a-request-or-job) counts one request or job only. `includeSetupQueries` filters detector analysis inputs only;
 it does not remove statements from the raw report or either query budget.
 
 Read the failure's statement list first. Look for implicit ORM loads, explicit flushes, application
@@ -206,8 +207,8 @@ Do not automatically regenerate it to make CI pass. See [contracts](contracts.md
 
 3. **Baseline drift:** The `.query-audit-counts` baseline file is out of date. Regenerate it
    locally and review the diff. With the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), use
-   `./gradlew test -PqueryAuditUpdateBaseline=true`; with Maven, use
-   `mvn test -DqueryAudit.updateBaseline=true`.
+   `./gradlew test -PqueryAudit.counts.record=true`; with Maven, use
+   `mvn test -DqueryAudit.counts.record=true`.
 
 4. **Schema differences:** The CI database may have different indexes or table
    definitions than your local environment.

@@ -308,8 +308,8 @@ it uses one and fails if that fallback also matches another stable test. QueryAu
 match `@junit` rows to ordinary tests, so upgrade every runner before relying on stable identities.
 Re-run the full suite in baseline-recording mode to create stable rows for every matching test.
 With the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), use
-`./gradlew test -PqueryAuditUpdateBaseline=true`; with Maven, use
-`mvn test -DqueryAudit.updateBaseline=true`.
+`./gradlew test -PqueryAudit.counts.record=true`; with Maven, use
+`mvn test -DqueryAudit.counts.record=true`.
 
 ---
 

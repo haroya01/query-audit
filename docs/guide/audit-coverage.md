@@ -29,13 +29,13 @@ tasks.named('test', Test) {
     useJUnitPlatform()
     forkEvery = 0
     maxParallelForks = 1
-    systemProperty 'queryAudit.reportFormat', 'json'
-    systemProperty 'queryAudit.reportOutputDir',
+    systemProperty 'queryAudit.report.format', 'json'
+    systemProperty 'queryAudit.report.outputDir',
         layout.buildDirectory.dir('reports/query-audit').get().asFile.absolutePath
 }
 ```
 
-The properties above must reach the **test JVM**. Passing `-DqueryAudit.reportOutputDir=...` to
+The properties above must reach the **test JVM**. Passing `-DqueryAudit.report.outputDir=...` to
 Gradle alone does not forward it to forked tests. Use the explicit `systemProperty` configuration.
 
 Generate a candidate from the first complete suite report:
@@ -77,11 +77,11 @@ update.
 
 QueryAudit automatically uses `.query-audit-tests` when it exists in the test JVM's working
 directory. In a typical Gradle project this is the project directory. To choose another file,
-pass `queryAudit.coverageManifest` to the test JVM:
+pass `queryAudit.coverage.manifest` to the test JVM:
 
 ```groovy
 tasks.named('test', Test) {
-    systemProperty 'queryAudit.coverageManifest',
+    systemProperty 'queryAudit.coverage.manifest',
         file('config/query-audit-tests.txt').absolutePath
 }
 ```
@@ -96,7 +96,7 @@ listener registration enabled. The listener observes the test plan even when eve
 test is disabled or no test reaches `QueryAuditExtension`.
 
 With a manifest enabled, QueryAudit always writes `report.json`, including when the selected
-report format is HTML or console. Set `queryAudit.reportOutputDir` as above to give the listener
+report format is HTML or console. Set `queryAudit.report.outputDir` as above to give the listener
 the same output directory when no extension runs. A Spring-only output-directory setting cannot
 supply that path if Spring never starts.
 

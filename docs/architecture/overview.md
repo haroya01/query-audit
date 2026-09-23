@@ -59,7 +59,7 @@ behind those results. For setup and expected output, use [Choose Your Workflow](
   @AfterAll
       |
       +- 16. Write the selected JSON or HTML suite artifact (if configured)
-      +- 17. Update query count baseline (if queryAudit.updateBaseline=true in the test JVM)
+      +- 17. Update query count baseline (if queryAudit.counts.record=true in the test JVM)
       +- 18. Auto-open the selected HTML report (if configured)
 ```
 
@@ -99,8 +99,8 @@ query-audit/
 |   +-- QueryAuditExtension            Lifecycle callbacks (BeforeAll/Each, AfterAll/Each)
 |   +-- @QueryAudit                    Full analysis annotation
 |   +-- @EnableQueryInspector          Report-only annotation
-|   +-- @DetectNPlusOne               N+1 focused annotation
-|   +-- @ExpectMaxQueryCount           Query count assertion annotation
+|   +-- @DetectNPlusOne               N+1 focused annotation (deprecated)
+|   +-- @ExpectMaxQueryCount           Total count budget (deprecated; use @ExpectQueries total)
 |
 +-- query-audit-spring-boot-starter    Spring Boot auto-configuration
     +-- QueryAuditAutoConfiguration    BeanPostProcessor for DataSource wrapping
@@ -519,13 +519,13 @@ QueryAudit reads the update flag from the test JVM. With the
 [Gradle property bridge](../guide/ci-cd.md#plain-junit-build-tool-setup), run:
 
 ```bash
-./gradlew test -PqueryAuditUpdateBaseline=true
+./gradlew test -PqueryAudit.counts.record=true
 ```
 
 Maven users can pass the system property directly:
 
 ```bash
-mvn test -DqueryAudit.updateBaseline=true
+mvn test -DqueryAudit.counts.record=true
 ```
 
 ---

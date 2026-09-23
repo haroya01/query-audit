@@ -16,11 +16,12 @@ request. Compare CI runs with checks for missing audits and changed analysis set
 
 Since 0.7.0 the default profile runs one rule: the same SELECT, executed three or more times
 from the same full application call stack, is an N+1. A batched `IN (?, ?, ...)` fetch is the
-fix, not the problem, so `@BatchSize` and batch fetching stay quiet. Make it fail the test:
+fix, not the problem, so `@BatchSize` and batch fetching stay quiet. `@QueryAudit` fails the
+test on it; `@EnableQueryInspector` reports it without failing:
 
 ```java
 @Test
-@QueryAudit(failOn = IssueType.N_PLUS_ONE)
+@QueryAudit
 void listsOrders() {
     orderService.findRecentOrders().forEach(order -> order.getCustomer().getName());
 }
@@ -110,26 +111,35 @@ Contracts compare counts in both directions; they do not snapshot SQL text or re
 ## Contract one request or job
 
 A test often mixes fixture setup, the request under test, and assertions. Since 0.7.0,
-`QueryContractScope` counts only the work inside the scope, including background work the
-request triggered once you wait for it:
+`QueryContractScope` counts only the work you give it, including background work the request
+triggered. The Spring Boot starter configures it:
 
-```java
-QueryContractScope contracts =
-    QueryContractScope.forDirectory(queryInterceptor, Path.of("src/test/resources/query-contracts"))
-        .awaitingCompletion(asyncWork::awaitIdle);
-
-contracts.verify("link-create", () -> mockMvc.perform(post("/api/v1/links").content(body)));
+```yaml
+query-audit:
+  contracts:
+    path: src/test/resources/query-contracts
+    await-executors: [taskExecutor]
 ```
 
-Reviewed counts live in `*.contracts` files under that directory:
+```java
+@Autowired QueryContractScope contracts;
+
+@Test
+void createsALink() throws Exception {
+    contracts.verify("link-create", () -> mockMvc.perform(post("/api/v1/links").content(body)))
+        .andExpect(status().isCreated());
+}
+```
+
+Test methods and scopes share the same contract files and format:
 
 ```text
 @junit | link-create | 1 | 1 | 0 | 0 | 2
 ```
 
-A missing contract, a duplicated ID, or a truncated capture fails. Record new scopes with
-`-DqueryAudit.contracts.record=true` and review the diff. Scopes run one at a time and count
-every thread that uses the audited DataSource, so keep background schedulers off in these tests.
+A changed count fails with the delta and the contract file. A scope without a contract fails with
+the line to add. Record with `-DqueryAudit.contracts.record=true` and review the diff. Use
+`try (var journey = contracts.open("signup-journey"))` to cover several requests.
 [Scoped contracts](docs/guide/contracts.md#contract-a-request-or-job)
 
 ## Find the SQL and call site
@@ -204,9 +214,10 @@ dependencies {
 }
 ```
 
-Enable capture with `@EnableQueryInspector` on the test class, then add `@ExpectQueries`
-to the method. Explicit budgets and contracts fail. Findings, including N+1, stay advisory
-until you opt in with `failOn`.
+Add `@QueryAudit` to the test class to fail on findings, or `@EnableQueryInspector` to report
+them without failing. Put budgets on the method with `@ExpectQueries`. Budgets and contracts fail
+under either annotation. Every setting uses one name in `application.yml` and on the command line;
+see [setting names](docs/guide/configuration.md#setting-names).
 The [installation guide](docs/getting-started/installation.md) includes Maven, Groovy,
 plain JUnit, and a capture check. MySQL and PostgreSQL modules add database index metadata.
 

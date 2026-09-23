@@ -45,31 +45,19 @@ Plain JUnit projects configure the same value as a test-JVM system property. Mav
 property passed with `-D` to the test process:
 
 ```bash
-mvn test -DqueryAudit.reportFormat=json
+mvn test -DqueryAudit.report.format=json
 ```
 
-Gradle does not forward command-line system properties to forked `Test` workers by default. Add a
-small project-property bridge once, then use the `-P` commands throughout this guide:
+Gradle does not forward command-line system properties to forked `Test` workers by default. Add
+this bridge once. It forwards every `-PqueryAudit.*` project property under the same name, so
+Gradle and Maven commands use identical setting names:
 
 === "Groovy DSL"
 
     ```groovy
-    def queryAuditTestProperties = [
-        queryAuditReportFormat: 'queryAudit.reportFormat',
-        queryAuditMode: 'queryAudit.mode',
-        queryAuditUpdateBaseline: 'queryAudit.updateBaseline',
-        queryAuditContractsRecord: 'queryAudit.contracts.record',
-        queryAuditContractsPath: 'queryAudit.contractsPath',
-        queryAuditCountBaselinePath: 'queryAudit.countBaselinePath',
-        queryAuditAutoOpenReport: 'queryaudit.autoOpenReport'
-    ]
-
     tasks.withType(Test).configureEach {
-        queryAuditTestProperties.each { projectProperty, systemPropertyName ->
-            def value = providers.gradleProperty(projectProperty)
-            if (value.isPresent()) {
-                systemProperty systemPropertyName, value.get()
-            }
+        providers.gradlePropertiesPrefixedBy('queryAudit.').get().each { name, value ->
+            systemProperty name, value
         }
     }
     ```
@@ -77,21 +65,9 @@ small project-property bridge once, then use the `-P` commands throughout this g
 === "Kotlin DSL"
 
     ```kotlin
-    val queryAuditTestProperties = mapOf(
-        "queryAuditReportFormat" to "queryAudit.reportFormat",
-        "queryAuditMode" to "queryAudit.mode",
-        "queryAuditUpdateBaseline" to "queryAudit.updateBaseline",
-        "queryAuditContractsRecord" to "queryAudit.contracts.record",
-        "queryAuditContractsPath" to "queryAudit.contractsPath",
-        "queryAuditCountBaselinePath" to "queryAudit.countBaselinePath",
-        "queryAuditAutoOpenReport" to "queryaudit.autoOpenReport"
-    )
-
     tasks.withType<Test>().configureEach {
-        for ((projectProperty, systemPropertyName) in queryAuditTestProperties) {
-            providers.gradleProperty(projectProperty).orNull?.let {
-                systemProperty(systemPropertyName, it)
-            }
+        providers.gradlePropertiesPrefixedBy("queryAudit.").get().forEach { (name, value) ->
+            systemProperty(name, value)
         }
     }
     ```
@@ -99,8 +75,11 @@ small project-property bridge once, then use the `-P` commands throughout this g
 A plain JUnit JSON run is now:
 
 ```bash
-./gradlew test -PqueryAuditReportFormat=json
+./gradlew test -PqueryAudit.report.format=json
 ```
+
+The bridge needs Gradle 8.0 or later. Setting names follow one rule; see
+[setting names](configuration.md#setting-names).
 
 ## GitHub Actions with MySQL
 
@@ -278,14 +257,14 @@ Use budgets or contracts when a smaller count change must fail directly.
 With the Gradle bridge above, record a query-count baseline locally with:
 
 ```bash
-./gradlew test -PqueryAuditUpdateBaseline=true
+./gradlew test -PqueryAudit.counts.record=true
 ```
 
 The recording run can still report the old baseline as a regression. Review the resulting
 `.query-audit-counts` diff, then rerun `./gradlew test` and commit the file in the same change that
 justifies the new counts. Do not let a pull-request job push baseline changes automatically.
 
-For snapshot contracts, use `-PqueryAuditContractsRecord=true` and follow the
+For snapshot contracts, use `-PqueryAudit.contracts.record=true` and follow the
 [query contract workflow](contracts.md).
 
 ## See also

@@ -90,16 +90,16 @@ database credentials and service setup.
 
 ??? info "Plain JUnit: pass settings into the Gradle test JVM"
     Use the [plain JUnit capture setup](../getting-started/installation.md#plain-junit-5) instead of
-    the Spring test above. A command such as `./gradlew test -DqueryAudit.reportFormat=json` does
+    the Spring test above. A command such as `./gradlew test -DqueryAudit.report.format=json` does
     not automatically forward the property to Gradle's forked test JVM. Configure the `test` task:
 
     === "Kotlin DSL"
 
         ```kotlin
         tasks.named<Test>("test") {
-            systemProperty("queryAudit.reportFormat", "json")
-            systemProperty("queryAudit.reportOutputDir", "build/reports/query-audit")
-            systemProperty("queryaudit.autoOpenReport", "false")
+            systemProperty("queryAudit.report.format", "json")
+            systemProperty("queryAudit.report.outputDir", "build/reports/query-audit")
+            systemProperty("queryAudit.autoOpenReport", "false")
         }
         ```
 
@@ -107,9 +107,9 @@ database credentials and service setup.
 
         ```groovy
         tasks.named('test', Test) {
-            systemProperty 'queryAudit.reportFormat', 'json'
-            systemProperty 'queryAudit.reportOutputDir', 'build/reports/query-audit'
-            systemProperty 'queryaudit.autoOpenReport', 'false'
+            systemProperty 'queryAudit.report.format', 'json'
+            systemProperty 'queryAudit.report.outputDir', 'build/reports/query-audit'
+            systemProperty 'queryAudit.autoOpenReport', 'false'
         }
         ```
 

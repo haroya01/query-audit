@@ -162,9 +162,9 @@ The JUnit extension then writes one aggregate file to
 create HTML files.
 
 For plain JUnit, Maven can pass the test-JVM property directly with
-`mvn test -DqueryAudit.reportFormat=json`. Gradle users should add the
+`mvn test -DqueryAudit.report.format=json`. Gradle users should add the
 [project-property bridge](ci-cd.md#plain-junit-build-tool-setup) once, then run
-`./gradlew test -PqueryAuditReportFormat=json`.
+`./gradlew test -PqueryAudit.report.format=json`.
 
 ### Example Output
 
@@ -304,7 +304,7 @@ The suite outcome uses one precedence rule everywhere: `INCONCLUSIVE > FAIL > PA
 | Outcome | Meaning |
 |---|---|
 | `PASS` | The reported audits completed and every configured policy and contract passed. A non-null `coverage` is also required to verify the expected-test manifest. |
-| `FAIL` | The audit completed, but `failOnDetection`, `@DetectNPlusOne`, `@ExpectQueries`, `@ExpectMaxQueryCount`, or a recorded query contract failed. |
+| `FAIL` | The audit completed, but `failOnDetection`, `@ExpectQueries`, a recorded query contract, or the deprecated `@DetectNPlusOne` or `@ExpectMaxQueryCount` failed. |
 | `INCONCLUSIVE` | Collection or a required input was incomplete, so the run cannot produce a trustworthy verdict. Any partial findings and statistics remain in `reports`. |
 
 Confirmed findings do not automatically mean `FAIL`. For example, a completed run with
@@ -637,9 +637,9 @@ query-audit:
 This selection writes the HTML index and per-class pages and does not create `report.json`.
 
 For plain JUnit, Maven can select the format with
-`mvn test -DqueryAudit.reportFormat=html`. Gradle users should use the
+`mvn test -DqueryAudit.report.format=html`. Gradle users should use the
 [project-property bridge](ci-cd.md#plain-junit-build-tool-setup) and run
-`./gradlew test -PqueryAuditReportFormat=html`.
+`./gradlew test -PqueryAudit.report.format=html`.
 
 Or via annotation:
 
@@ -648,7 +648,7 @@ Or via annotation:
 ```
 
 For plain JUnit, the equivalent test-JVM system property is
-`-Dqueryaudit.autoOpenReport=true`.
+`-DqueryAudit.autoOpenReport=true`.
 
 ### Example HTML Report Structure
 
@@ -823,7 +823,7 @@ query-audit:
     redaction: full
 ```
 
-Plain JUnit uses `-DqueryAudit.reportRedaction=full`. Core callers can set
+Plain JUnit uses `-DqueryAudit.report.redaction=full`. Core callers can set
 `QueryAuditConfig.builder().reportRedaction(ReportRedaction.FULL)` when constructing a
 `JsonReporter`, or pass `ReportRedaction.FULL` to `JsonReporter.toRunEnvelopeJson`.
 All active contexts in one JUnit run must use the same mode. Unknown values fail configuration.

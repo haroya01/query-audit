@@ -40,6 +40,10 @@ The development branch changes defaults and adds one API. These are not in `0.6.
 | `QueryContractScope` contracts one request, job, or journey | [Contract a request or job](../guide/contracts.md#contract-a-request-or-job) |
 | Finding failures print the top of the call stack | [Read a failure](../guide/reports.md#read-a-policy-failure) |
 | Capture rebinds to the new DataSource after a Spring context is replaced | [#287](https://github.com/haroya01/query-audit/issues/287) |
+| One setting name rule for `application.yml`, `-D`, and `-P`; earlier names stay accepted | [Setting names](../guide/configuration.md#setting-names) |
+| Test-method and scoped contracts share one file or directory, set by `query-audit.contracts.path` | [Contracts](../guide/contracts.md#configuration) |
+| `@ExpectQueries(total = n)`; `@ExpectMaxQueryCount` and `@DetectNPlusOne` are deprecated | [Annotations](../guide/annotations.md) |
+| Count baselines are deprecated in favor of contracts | [Contracts](../guide/contracts.md#contracts-vs-related-features) |
 
 ## Tested combinations
 
