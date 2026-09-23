@@ -38,8 +38,9 @@ final class AuditScopeInitializer {
   void initialize(
       AuditScope scope, QueryAuditConfig config, AuditExtensions extensions, Boundary boundary)
       throws Exception {
-    if (scope.interceptor() != null) return;
+    if (scope.interceptor() != null && boundary == Boundary.CLASS) return;
     DataSourceResolver.ResolvedDataSource resolved = dataSources.resolve(scope.context());
+    if (scope.interceptor() != null && !replacesInheritedDataSource(scope, resolved)) return;
     if (resolved == null) {
       if (boundary == Boundary.METHOD) missingDataSource(scope);
       return;
@@ -81,6 +82,12 @@ final class AuditScopeInitializer {
       scope.clearInitialization();
       throw failure;
     }
+  }
+
+  private static boolean replacesInheritedDataSource(
+      AuditScope scope, DataSourceResolver.ResolvedDataSource resolved) {
+    DataSource inherited = scope.dataSource();
+    return resolved != null && inherited != null && resolved.dataSource() != inherited;
   }
 
   private void initializeCapabilities(
