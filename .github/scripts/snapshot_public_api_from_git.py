@@ -2,7 +2,7 @@
 """Explicit maintainer operation: compile an exact Git revision, then print its API floor.
 
 Example (classpath contains the core/JUnit compile dependencies, not project output):
-  python3 .github/scripts/snapshot_public_api_from_git.py --revision 3eec770 --classpath "$dependency_classpath"
+  python3 .github/scripts/snapshot_public_api_from_git.py --revision <commit> --classpath "$dependency_classpath"
 
 This never reads Java source from the working tree and never writes a tracked baseline itself.
 Review and version the printed JSON deliberately. Ordinary compatibility checks do not run this.

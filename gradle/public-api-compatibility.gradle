@@ -11,7 +11,7 @@ tasks.register('checkPublicApiCompatibility', Exec) {
     dependsOn ':query-audit-core:classes', ':query-audit-junit5:classes',
             tasks.named('testPublicApiCompatibilityChecker')
     def script = rootProject.file('.github/scripts/check_public_api.py')
-    def baseline = rootProject.file('config/public-api/3eec770.json')
+    def baseline = rootProject.file('config/public-api/11bfd7f.json')
     def coreClasses = project(':query-audit-core').layout.buildDirectory.dir('classes/java/main')
     def junitClasses = project(':query-audit-junit5').layout.buildDirectory.dir('classes/java/main')
     inputs.files(script, baseline)

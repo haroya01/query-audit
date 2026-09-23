@@ -157,6 +157,12 @@
           "flags": 1,
           "signature": null
         },
+        "getContractsPath()Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
         "getDisabledRules()Ljava/util/Set;": {
           "annotation_default": false,
           "exceptions": [],
@@ -455,6 +461,12 @@
           "flags": 1,
           "signature": null
         },
+        "contractsPath(Ljava/lang/String;)Lio/queryaudit/core/config/QueryAuditConfig$Builder;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
         "countInsteadOfExistsEnabled(Z)Lio/queryaudit/core/config/QueryAuditConfig$Builder;": {
           "annotation_default": false,
           "exceptions": [],
@@ -640,6 +652,151 @@
       "signature": null,
       "superclass": "java/lang/Object"
     },
+    "io/queryaudit/core/contract/CapturedQueries": {
+      "fields": {},
+      "flags": 17,
+      "interfaces": [],
+      "methods": {
+        "<init>(Ljava/lang/String;Ljava/lang/Object;Lio/queryaudit/core/interceptor/QueryCaptureSnapshot;)V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "(Ljava/lang/String;TT;Lio/queryaudit/core/interceptor/QueryCaptureSnapshot;)V"
+        },
+        "contractId()Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "counts()Lio/queryaudit/core/regression/QueryCounts;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "equals(Ljava/lang/Object;)Z": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 17,
+          "signature": null
+        },
+        "hashCode()I": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 17,
+          "signature": null
+        },
+        "queries()Ljava/util/List;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "()Ljava/util/List<Lio/queryaudit/core/model/QueryRecord;>;"
+        },
+        "snapshot()Lio/queryaudit/core/interceptor/QueryCaptureSnapshot;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "toString()Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 17,
+          "signature": null
+        },
+        "value()Ljava/lang/Object;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "()TT;"
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": "<T:Ljava/lang/Object;>Ljava/lang/Record;",
+      "superclass": "java/lang/Record"
+    },
+    "io/queryaudit/core/contract/QueryContractScope": {
+      "fields": {
+        "RECORD_PROPERTYLjava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 25,
+          "signature": null
+        }
+      },
+      "flags": 17,
+      "interfaces": [],
+      "methods": {
+        "awaitingCompletion(Ljava/lang/Runnable;)Lio/queryaudit/core/contract/QueryContractScope;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "capture(Ljava/lang/String;Ljava/util/concurrent/Callable;)Lio/queryaudit/core/contract/CapturedQueries;": {
+          "annotation_default": false,
+          "exceptions": [
+            "java/lang/Exception"
+          ],
+          "flags": 1,
+          "signature": "<T:Ljava/lang/Object;>(Ljava/lang/String;Ljava/util/concurrent/Callable<TT;>;)Lio/queryaudit/core/contract/CapturedQueries<TT;>;"
+        },
+        "location()Ljava/nio/file/Path;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "of(Lio/queryaudit/core/interceptor/QueryInterceptor;Ljava/nio/file/Path;)Lio/queryaudit/core/contract/QueryContractScope;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "open(Ljava/lang/String;)Lio/queryaudit/core/contract/QueryContractScope$ContractCapture;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "verify(Lio/queryaudit/core/contract/CapturedQueries;)V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "(Lio/queryaudit/core/contract/CapturedQueries<*>;)V"
+        },
+        "verify(Ljava/lang/String;Ljava/util/concurrent/Callable;)Ljava/lang/Object;": {
+          "annotation_default": false,
+          "exceptions": [
+            "java/lang/Exception"
+          ],
+          "flags": 1,
+          "signature": "<T:Ljava/lang/Object;>(Ljava/lang/String;Ljava/util/concurrent/Callable<TT;>;)TT;"
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Object"
+    },
+    "io/queryaudit/core/contract/QueryContractScope$ContractCapture": {
+      "fields": {},
+      "flags": 17,
+      "interfaces": [
+        "java/lang/AutoCloseable"
+      ],
+      "methods": {
+        "close()V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Object"
+    },
     "io/queryaudit/core/detector/DetectionRule": {
       "fields": {},
       "flags": 1537,
@@ -779,6 +936,12 @@
           "flags": 1,
           "signature": "()Ljava/util/List<Lio/queryaudit/core/extension/AuditRule;>;"
         },
+        "auditRulesById()Ljava/util/Map;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "()Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/extension/AuditRule;>;"
+        },
         "builder()Lio/queryaudit/core/extension/AuditExtensions$Builder;": {
           "annotation_default": false,
           "exceptions": [],
@@ -832,6 +995,12 @@
           "exceptions": [],
           "flags": 1,
           "signature": "()Ljava/util/List<Lio/queryaudit/core/detector/DetectionRule;>;"
+        },
+        "rulesById()Ljava/util/Map;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "()Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/detector/DetectionRule;>;"
         }
       },
       "permitted_subclasses": [],
@@ -905,6 +1074,93 @@
       "permitted_subclasses": [],
       "signature": null,
       "superclass": "java/lang/Object"
+    },
+    "io/queryaudit/core/extension/AuditRuleException": {
+      "fields": {},
+      "flags": 17,
+      "interfaces": [],
+      "methods": {
+        "<init>(Ljava/lang/String;Lio/queryaudit/core/extension/RuleId;Lio/queryaudit/core/extension/AuditRuleException$Reason;)V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "reason()Lio/queryaudit/core/extension/AuditRuleException$Reason;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "registrationId()Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "ruleId()Lio/queryaudit/core/extension/RuleId;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/IllegalArgumentException"
+    },
+    "io/queryaudit/core/extension/AuditRuleException$Reason": {
+      "fields": {
+        "DECLARATION_FAILEDLio/queryaudit/core/extension/AuditRuleException$Reason;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 25,
+          "signature": null
+        },
+        "DESCRIPTOR_CHANGEDLio/queryaudit/core/extension/AuditRuleException$Reason;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 25,
+          "signature": null
+        },
+        "EXECUTION_FAILEDLio/queryaudit/core/extension/AuditRuleException$Reason;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 25,
+          "signature": null
+        },
+        "INVALID_DECLARATIONLio/queryaudit/core/extension/AuditRuleException$Reason;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 25,
+          "signature": null
+        },
+        "INVALID_RESULTLio/queryaudit/core/extension/AuditRuleException$Reason;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 25,
+          "signature": null
+        }
+      },
+      "flags": 16409,
+      "interfaces": [],
+      "methods": {
+        "valueOf(Ljava/lang/String;)Lio/queryaudit/core/extension/AuditRuleException$Reason;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "values()[Lio/queryaudit/core/extension/AuditRuleException$Reason;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": "Ljava/lang/Enum<Lio/queryaudit/core/extension/AuditRuleException$Reason;>;",
+      "superclass": "java/lang/Enum"
     },
     "io/queryaudit/core/extension/AuditRuleTestKit": {
       "fields": {},
@@ -1613,6 +1869,108 @@
           ],
           "flags": 1,
           "signature": "<T:Ljava/lang/Object;>(Ljava/lang/Class<TT;>;)TT;"
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Object"
+    },
+    "io/queryaudit/core/interceptor/QueryCaptureSession": {
+      "fields": {},
+      "flags": 17,
+      "interfaces": [
+        "java/lang/AutoCloseable"
+      ],
+      "methods": {
+        "claimUnboundWork()Lio/queryaudit/core/interceptor/QueryCaptureSession$Scope;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "close()V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "incompleteReasons()Ljava/util/List;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "()Ljava/util/List<Ljava/lang/String;>;"
+        },
+        "interceptor()Lio/queryaudit/core/interceptor/QueryInterceptor;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "open(Lio/queryaudit/core/interceptor/QueryInterceptor;Lio/queryaudit/core/interceptor/LazyLoadTracker;Ljava/lang/String;I)Lio/queryaudit/core/interceptor/QueryCaptureSession;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "setPhase(Lio/queryaudit/core/model/LifecyclePhase;)V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "stop()Lio/queryaudit/core/interceptor/QueryCaptureSnapshot;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "suppress()Lio/queryaudit/core/interceptor/QueryCaptureSession$Scope;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "testId()Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "tracker()Lio/queryaudit/core/interceptor/LazyLoadTracker;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "wrap(Ljava/lang/Runnable;)Ljava/lang/Runnable;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "wrap(Ljava/util/concurrent/Callable;)Ljava/util/concurrent/Callable;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "<T:Ljava/lang/Object;>(Ljava/util/concurrent/Callable<TT;>;)Ljava/util/concurrent/Callable<TT;>;"
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Object"
+    },
+    "io/queryaudit/core/interceptor/QueryCaptureSession$Scope": {
+      "fields": {},
+      "flags": 1545,
+      "interfaces": [
+        "java/lang/AutoCloseable"
+      ],
+      "methods": {
+        "close()V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1025,
+          "signature": null
         }
       },
       "permitted_subclasses": [],
@@ -3681,6 +4039,186 @@
       "signature": null,
       "superclass": "java/lang/Record"
     },
+    "io/queryaudit/core/regression/QueryContracts": {
+      "fields": {
+        "DEFAULT_FILE_NAMELjava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 25,
+          "signature": null
+        }
+      },
+      "flags": 17,
+      "interfaces": [],
+      "methods": {
+        "verify(Ljava/lang/String;Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;Ljava/util/Map;Ljava/util/List;)Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "(Ljava/lang/String;Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;Ljava/util/List<Lio/queryaudit/core/model/QueryRecord;>;)Ljava/lang/String;"
+        },
+        "verify(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;Ljava/util/Map;Ljava/util/List;)Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;Ljava/util/List<Lio/queryaudit/core/model/QueryRecord;>;)Ljava/lang/String;"
+        },
+        "verify(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;Ljava/util/Map;Ljava/util/List;Ljava/lang/String;)Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;Ljava/util/List<Lio/queryaudit/core/model/QueryRecord;>;Ljava/lang/String;)Ljava/lang/String;"
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Object"
+    },
+    "io/queryaudit/core/regression/QueryCountBaseline": {
+      "fields": {
+        "DEFAULT_FILE_NAMELjava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 25,
+          "signature": null
+        }
+      },
+      "flags": 17,
+      "interfaces": [],
+      "methods": {
+        "find(Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/queryaudit/core/regression/QueryCounts;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "(Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lio/queryaudit/core/regression/QueryCounts;"
+        },
+        "hasLegacyIdentity(Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;)Z": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "(Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;Ljava/lang/String;Ljava/lang/String;)Z"
+        },
+        "key(Ljava/lang/String;)Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "key(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "line(Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;)Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": null
+        },
+        "load(Ljava/nio/file/Path;)Ljava/util/Map;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "(Ljava/nio/file/Path;)Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;"
+        },
+        "save(Ljava/nio/file/Path;Ljava/util/Map;)V": {
+          "annotation_default": false,
+          "exceptions": [
+            "java/io/IOException"
+          ],
+          "flags": 9,
+          "signature": "(Ljava/nio/file/Path;Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;)V"
+        },
+        "save(Ljava/nio/file/Path;Ljava/util/Map;Ljava/lang/String;)V": {
+          "annotation_default": false,
+          "exceptions": [
+            "java/io/IOException"
+          ],
+          "flags": 9,
+          "signature": "(Ljava/nio/file/Path;Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;Ljava/lang/String;)V"
+        },
+        "usesLegacyIdentity(Ljava/util/Map;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "(Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/regression/QueryCounts;>;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Z"
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Object"
+    },
+    "io/queryaudit/core/regression/QueryCounts": {
+      "fields": {},
+      "flags": 17,
+      "interfaces": [],
+      "methods": {
+        "<init>(IIIII)V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "deleteCount()I": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "equals(Ljava/lang/Object;)Z": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 17,
+          "signature": null
+        },
+        "from(Ljava/util/List;)Lio/queryaudit/core/regression/QueryCounts;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 9,
+          "signature": "(Ljava/util/List<Lio/queryaudit/core/model/QueryRecord;>;)Lio/queryaudit/core/regression/QueryCounts;"
+        },
+        "hashCode()I": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 17,
+          "signature": null
+        },
+        "insertCount()I": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "selectCount()I": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "toString()Ljava/lang/String;": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 17,
+          "signature": null
+        },
+        "totalCount()I": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        },
+        "updateCount()I": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": null
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Record"
+    },
     "io/queryaudit/core/reporter/ConsoleReporter": {
       "fields": {},
       "flags": 1,
@@ -4937,6 +5475,66 @@
       "signature": "Ljava/lang/Enum<Lio/queryaudit/junit5/BooleanOverride;>;",
       "superclass": "java/lang/Enum"
     },
+    "io/queryaudit/junit5/ExpectMaxQueryCount": {
+      "fields": {},
+      "flags": 9729,
+      "interfaces": [
+        "java/lang/annotation/Annotation"
+      ],
+      "methods": {
+        "value()I": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1025,
+          "signature": null
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Object"
+    },
+    "io/queryaudit/junit5/ExpectQueries": {
+      "fields": {},
+      "flags": 9729,
+      "interfaces": [
+        "java/lang/annotation/Annotation"
+      ],
+      "methods": {
+        "delete()I": {
+          "annotation_default": true,
+          "exceptions": [],
+          "flags": 1025,
+          "signature": null
+        },
+        "insert()I": {
+          "annotation_default": true,
+          "exceptions": [],
+          "flags": 1025,
+          "signature": null
+        },
+        "select()I": {
+          "annotation_default": true,
+          "exceptions": [],
+          "flags": 1025,
+          "signature": null
+        },
+        "total()I": {
+          "annotation_default": true,
+          "exceptions": [],
+          "flags": 1025,
+          "signature": null
+        },
+        "update()I": {
+          "annotation_default": true,
+          "exceptions": [],
+          "flags": 1025,
+          "signature": null
+        }
+      },
+      "permitted_subclasses": [],
+      "signature": null,
+      "superclass": "java/lang/Object"
+    },
     "io/queryaudit/junit5/QueryAudit": {
       "fields": {},
       "flags": 9729,
@@ -4963,6 +5561,12 @@
           "signature": null
         },
         "failOnDetection()Lio/queryaudit/junit5/BooleanOverride;": {
+          "annotation_default": true,
+          "exceptions": [],
+          "flags": 1025,
+          "signature": null
+        },
+        "failOnKinds()[Ljava/lang/String;": {
           "annotation_default": true,
           "exceptions": [],
           "flags": 1025,
@@ -5086,7 +5690,8 @@
         "org/junit/jupiter/api/extension/AfterTestExecutionCallback",
         "org/junit/jupiter/api/extension/BeforeAllCallback",
         "org/junit/jupiter/api/extension/BeforeEachCallback",
-        "org/junit/jupiter/api/extension/BeforeTestExecutionCallback"
+        "org/junit/jupiter/api/extension/BeforeTestExecutionCallback",
+        "org/junit/jupiter/api/extension/InvocationInterceptor"
       ],
       "methods": {
         "<init>()V": {
@@ -5140,6 +5745,22 @@
           "exceptions": [],
           "flags": 1,
           "signature": null
+        },
+        "interceptAfterAllMethod(Lorg/junit/jupiter/api/extension/InvocationInterceptor$Invocation;Lorg/junit/jupiter/api/extension/ReflectiveInvocationContext;Lorg/junit/jupiter/api/extension/ExtensionContext;)V": {
+          "annotation_default": false,
+          "exceptions": [
+            "java/lang/Throwable"
+          ],
+          "flags": 1,
+          "signature": "(Lorg/junit/jupiter/api/extension/InvocationInterceptor$Invocation<Ljava/lang/Void;>;Lorg/junit/jupiter/api/extension/ReflectiveInvocationContext<Ljava/lang/reflect/Method;>;Lorg/junit/jupiter/api/extension/ExtensionContext;)V"
+        },
+        "interceptBeforeAllMethod(Lorg/junit/jupiter/api/extension/InvocationInterceptor$Invocation;Lorg/junit/jupiter/api/extension/ReflectiveInvocationContext;Lorg/junit/jupiter/api/extension/ExtensionContext;)V": {
+          "annotation_default": false,
+          "exceptions": [
+            "java/lang/Throwable"
+          ],
+          "flags": 1,
+          "signature": "(Lorg/junit/jupiter/api/extension/InvocationInterceptor$Invocation<Ljava/lang/Void;>;Lorg/junit/jupiter/api/extension/ReflectiveInvocationContext<Ljava/lang/reflect/Method;>;Lorg/junit/jupiter/api/extension/ExtensionContext;)V"
         }
       },
       "permitted_subclasses": [],
@@ -5160,7 +5781,12 @@
       "io/queryaudit/junit5/QueryAudit",
       "io/queryaudit/junit5/BooleanOverride",
       "io/queryaudit/junit5/QueryAuditExtension",
-      "io/queryaudit/junit5/QueryAuditDataSourceStore"
+      "io/queryaudit/junit5/QueryAuditDataSourceStore",
+      "io/queryaudit/junit5/ExpectQueries",
+      "io/queryaudit/junit5/ExpectMaxQueryCount",
+      "io/queryaudit/core/regression/QueryContracts",
+      "io/queryaudit/core/regression/QueryCountBaseline",
+      "io/queryaudit/core/regression/QueryCounts"
     ],
     "excluded": [
       "io/queryaudit/core/extension/internal/"
@@ -5169,12 +5795,13 @@
       "io/queryaudit/core/extension/",
       "io/queryaudit/core/model/",
       "io/queryaudit/core/reporter/",
-      "io/queryaudit/core/interceptor/"
+      "io/queryaudit/core/interceptor/",
+      "io/queryaudit/core/contract/"
     ]
   },
-  "source_revision": "3eec7709ebd11ce1c63cd4bc47fc8ea3c8736b2a",
+  "source_revision": "11bfd7f65d9217a6ce05a24923970b8322805bbd",
   "source_tree_hashes": {
-    "query-audit-core/src/main/java": "2c2bc7c5f37769f2aeed2ccd050ffff34ef37957",
-    "query-audit-junit5/src/main/java": "b0095b1cd025f4bfdb68d66a6ef8a7d43ed88ca8"
+    "query-audit-core/src/main/java": "deffe5c23a17b5056136bc2fa4eb881e8d6590b7",
+    "query-audit-junit5/src/main/java": "c36166fa2c7b4e19400630dd21ab14e6ac085d65"
   }
 }
