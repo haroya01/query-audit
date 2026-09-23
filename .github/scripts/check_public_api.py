@@ -24,6 +24,7 @@ PREFIXES = (
     "io/queryaudit/core/model/",
     "io/queryaudit/core/reporter/",
     "io/queryaudit/core/interceptor/",
+    "io/queryaudit/core/contract/",
 )
 ENTRY_POINTS = (
     "io/queryaudit/core/config/QueryAuditConfig",
@@ -36,6 +37,11 @@ ENTRY_POINTS = (
     "io/queryaudit/junit5/BooleanOverride",
     "io/queryaudit/junit5/QueryAuditExtension",
     "io/queryaudit/junit5/QueryAuditDataSourceStore",
+    "io/queryaudit/junit5/ExpectQueries",
+    "io/queryaudit/junit5/ExpectMaxQueryCount",
+    "io/queryaudit/core/regression/QueryContracts",
+    "io/queryaudit/core/regression/QueryCountBaseline",
+    "io/queryaudit/core/regression/QueryCounts",
 )
 
 
