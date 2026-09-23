@@ -393,7 +393,7 @@ class OpenAuditRuleAnalyzerTest {
   }
 
   private static QueryAuditConfig.Builder config() {
-    return QueryAuditConfig.builder().addDisabledRule("service-loader-detection-rule");
+    return QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addDisabledRule("service-loader-detection-rule");
   }
 
   private static QueryAuditReport analyze(QueryAuditAnalyzer analyzer) {

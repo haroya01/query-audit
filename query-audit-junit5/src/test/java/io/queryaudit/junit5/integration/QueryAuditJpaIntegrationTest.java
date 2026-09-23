@@ -342,7 +342,8 @@ class QueryAuditJpaIntegrationTest {
                   "dev",
                   "JPA native query"));
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), baseline);
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(
+              QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), baseline);
       QueryAuditReport report = analyzer.analyze("baseline", queries, null);
 
       // SELECT * should be acknowledged, not confirmed

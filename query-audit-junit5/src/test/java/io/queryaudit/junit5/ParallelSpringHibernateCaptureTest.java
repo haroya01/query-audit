@@ -194,6 +194,15 @@ class ParallelSpringHibernateCaptureTest {
               issue ->
                   assertThat(issue.detail())
                       .contains(
+                          "ran " + (scenario.staggered ? Math.min(3, owners) : owners) + " times"));
+      assertThat(
+              report.getInfoIssues().stream()
+                  .filter(issue -> issue.type() == IssueType.N_PLUS_ONE))
+          .singleElement()
+          .satisfies(
+              issue ->
+                  assertThat(issue.detail())
+                      .contains(
                           "initialized "
                               + owners
                               + " times for "

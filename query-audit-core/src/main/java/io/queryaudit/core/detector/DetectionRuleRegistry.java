@@ -105,6 +105,7 @@ final class DetectionRuleRegistry {
 
   private List<DetectionRule> createBuiltInRules() {
     List<DetectionRule> rules = new ArrayList<>();
+    rules.add(new CallSiteNPlusOneDetector(config.getNPlusOneThreshold()));
     rules.add(new NPlusOneDetector(config.getNPlusOneThreshold()));
     rules.add(new SelectAllDetector());
     rules.add(new WhereFunctionDetector());

@@ -42,15 +42,17 @@ class DetectionRuleRegistryTest {
     DetectionRule secondAdditionalRule = new NoOpRule();
 
     List<DetectionRule> rules =
-        new DetectionRuleRegistry(QueryAuditConfig.defaults())
+        new DetectionRuleRegistry(
+                QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build())
             .createRules(List.of(firstAdditionalRule, secondAdditionalRule));
 
     int discoveredRuleIndex = indexOf(rules, TestServiceLoaderDetectionRule.class);
     assertThat(discoveredRuleIndex).isPositive();
     List<DetectionRule> builtInRules = rules.subList(0, discoveredRuleIndex);
 
-    assertThat(builtInRules).hasSize(58);
-    assertThat(rules.get(0)).isInstanceOf(NPlusOneDetector.class);
+    assertThat(builtInRules).hasSize(59);
+    assertThat(rules.get(0)).isInstanceOf(CallSiteNPlusOneDetector.class);
+    assertThat(rules.get(1)).isInstanceOf(NPlusOneDetector.class);
     assertThat(builtInRules.get(builtInRules.size() - 1))
         .isInstanceOf(ForceIndexHintDetector.class);
     assertThat(builtInRules).extracting(DetectionRule::getClass).doesNotHaveDuplicates();

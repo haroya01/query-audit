@@ -75,20 +75,20 @@ class FocusedAnnotationActivationTest {
   }
 
   @Test
-  @DisplayName("@DetectNPlusOne activates at method and class scope")
+  @DisplayName("@DetectNPlusOne fails a repeated call-site SELECT at method and class scope")
   void detectNPlusOneActivatesAtBothScopes() {
     TestExecutionSummary summary =
         runFixtures(MethodDetectNPlusOneFixture.class, ClassDetectNPlusOneFixture.class);
 
     assertThat(summary.getTestsFoundCount()).isEqualTo(2);
-    assertThat(summary.getTestsFailedCount()).isZero();
+    assertThat(summary.getTestsFailedCount()).isEqualTo(2);
     assertThat(HtmlReportAggregator.getInstance().getReports())
         .hasSize(2)
         .allSatisfy(
             report -> {
               assertThat(report.getTotalQueryCount()).isEqualTo(2);
-              assertThat(report.getInfoIssues())
-                  .noneMatch(issue -> issue.type() == IssueType.N_PLUS_ONE_SUSPECT);
+              assertThat(report.getConfirmedIssues())
+                  .anyMatch(issue -> issue.type() == IssueType.N_PLUS_ONE);
             });
   }
 

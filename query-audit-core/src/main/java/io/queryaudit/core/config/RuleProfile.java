@@ -1,25 +1,25 @@
 package io.queryaudit.core.config;
 
+import io.queryaudit.core.model.IssueType;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Named rule tiers controlling which detection rules run by default.
  *
  * <ul>
  *   <li>{@link #STRICT} — every rule (the default before 0.6.0).
- *   <li>{@link #RECOMMENDED} — everything except the opinionated / context-dependent rules that
- *       legitimately fire on correct SQL. The default since 0.6.0.
- *   <li>{@link #MINIMAL} — safety-critical rules only, for a lean CI gate.
+ *   <li>{@link #RECOMMENDED} — the call-site N+1 rule only. The default since 0.7.0.
+ *   <li>{@link #MINIMAL} — N+1 plus index, join, and write-safety rules.
  * </ul>
  *
- * <p>{@code RECOMMENDED} is deny-list based: a new rule joins it automatically unless it is added
- * to the opinionated set. Explicit {@code disabled-rules} / {@code enabled-rules} configuration
+ * <p>Both {@code RECOMMENDED} and {@code MINIMAL} are allow-lists over built-in rules: a new built-in
+ * rule stays off until it is added to one explicitly. {@code RECOMMENDED} never filters custom
+ * finding kinds. Explicit {@code disabled-rules} / {@code enabled-rules} configuration
  * always wins over the profile. External rules registered via {@code ServiceLoader} without a rule
  * code are never filtered by profiles.
- *
- * <p>The tier assignment below is v1, derived from rule severity and the false-positive history in
- * the issue tracker; it is expected to be revised as per-rule hit/FP statistics accumulate.
  *
  * @author haroya
  * @since 0.5.0
@@ -29,34 +29,10 @@ public enum RuleProfile {
   RECOMMENDED,
   MINIMAL;
 
-  /**
-   * Rules excluded from {@link #RECOMMENDED}: style opinions, context-dependent judgments, and
-   * report-only advisories that fire on legitimate SQL often enough to erode trust on first run.
-   */
-  private static final Set<String> OPINIONATED =
-      Set.of(
-          "force-index-hint", // hints are sometimes the right call
-          "offset-pagination", // fine at small scale
-          "like-leading-wildcard", // leading wildcards are often intentional
-          "or-abuse", // style opinion
-          "case-in-where", // style opinion
-          "regexp-usage", // style opinion
-          "find-in-set", // style opinion
-          "having-misuse", // heuristic
-          "distinct-misuse", // heuristic
-          "union-without-all", // deduplication is often wanted
-          "count-star-no-where", // legitimate table statistics
-          "count-instead-of-exists", // cannot tell aggregates from existence checks (issue #126)
-          "full-scan", // EXPLAIN advisory, environment-dependent
-          "filesort", // EXPLAIN advisory, environment-dependent
-          "temporary-table", // EXPLAIN advisory, environment-dependent
-          "covering-index-opportunity", // advice, not a defect
-          "n-plus-one-suspect", // SQL-level heuristic; the confirmed rule stays
-          "mergeable-queries", // advice, not a defect
-          "for-update-no-timeout", // environment-dependent
-          "window-no-partition", // often deliberate over the full result
-          "connection-held-idle" // wall-clock heuristic; needs realistic latency in tests
-          );
+  private static final Set<String> RECOMMENDED_RULES = Set.of("n-plus-one");
+
+  private static final Set<String> BUILT_IN_CODES =
+      Arrays.stream(IssueType.values()).map(IssueType::getCode).collect(Collectors.toUnmodifiableSet());
 
   /**
    * The {@link #MINIMAL} allow-list: rules whose findings are near-certain production incidents.
@@ -75,7 +51,8 @@ public enum RuleProfile {
   public boolean includes(String issueCode) {
     return switch (this) {
       case STRICT -> true;
-      case RECOMMENDED -> !OPINIONATED.contains(issueCode);
+      case RECOMMENDED ->
+          RECOMMENDED_RULES.contains(issueCode) || !BUILT_IN_CODES.contains(issueCode);
       case MINIMAL -> SAFETY_CRITICAL.contains(issueCode);
     };
   }

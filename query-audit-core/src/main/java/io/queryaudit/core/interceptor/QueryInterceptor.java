@@ -44,6 +44,9 @@ public class QueryInterceptor implements QueryExecutionListener {
           "java.lang.Thread",
           "sun.",
           "jdk.internal.",
+          "jdk.proxy",
+          "java.lang.reflect.",
+          "com.sun.proxy.",
           "io.queryaudit.core.interceptor.",
           "org.springframework.",
           "org.hibernate.",
@@ -139,9 +142,10 @@ public class QueryInterceptor implements QueryExecutionListener {
           continue;
         }
         String pooledSql = poolString(sqlPool, sql);
-        String stackTrace = poolString(stackTracePool, captureStackTrace());
+        CapturedStack captured = captureStack();
+        String stackTrace = poolString(stackTracePool, captured.frames());
         String normalized = SqlParser.normalize(pooledSql);
-        int stackHash = stackTrace == null ? 0 : stackTrace.hashCode();
+        int stackHash = captured.fullHash();
         recordedQueries.add(
             new QueryRecord(
                 pooledSql,
@@ -263,17 +267,21 @@ public class QueryInterceptor implements QueryExecutionListener {
    * newlines. The result is interned so that identical stack traces (common in N+1 scenarios) share
    * a single String instance.
    */
-  private static String captureStackTrace() {
+  private static CapturedStack captureStack() {
     StackTraceElement[] elements = Thread.currentThread().getStackTrace();
     StringBuilder sb = new StringBuilder(512);
     int count = 0;
+    int fullHash = 1;
 
     for (StackTraceElement element : elements) {
-      if (count >= MAX_FRAMES) {
-        break;
-      }
       String className = element.getClassName();
       if (shouldSkip(className)) {
+        continue;
+      }
+      fullHash =
+          31 * (31 * (31 * fullHash + className.hashCode()) + element.getMethodName().hashCode())
+              + element.getLineNumber();
+      if (count >= MAX_FRAMES) {
         continue;
       }
       if (count > 0) {
@@ -287,10 +295,15 @@ public class QueryInterceptor implements QueryExecutionListener {
       count++;
     }
 
-    return sb.toString();
+    return new CapturedStack(sb.toString(), fullHash);
   }
 
+  private record CapturedStack(String frames, int fullHash) {}
+
   private static boolean shouldSkip(String className) {
+    if (className.contains("$$SpringCGLIB$$") || className.contains("$$EnhancerBySpringCGLIB$$")) {
+      return true;
+    }
     for (String prefix : SKIP_PREFIXES) {
       if (className.startsWith(prefix)) {
         return true;

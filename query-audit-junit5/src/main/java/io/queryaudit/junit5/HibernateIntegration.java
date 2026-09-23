@@ -6,6 +6,7 @@ import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.LazyLoadTracker;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
+import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.provenance.AuditCapability;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -102,7 +103,20 @@ class HibernateIntegration {
 
     LazyLoadNPlusOneDetector hibernateDetector =
         new LazyLoadNPlusOneDetector(analyzer.getConfig().getNPlusOneThreshold());
-    List<Issue> hibernateIssues = hibernateDetector.evaluate(tracker.getRecords());
+    List<Issue> hibernateIssues =
+        hibernateDetector.evaluate(tracker.getRecords()).stream()
+            .map(
+                issue ->
+                    new Issue(
+                        issue.type(),
+                        Severity.INFO,
+                        issue.query(),
+                        issue.table(),
+                        issue.column(),
+                        issue.detail(),
+                        issue.suggestion(),
+                        issue.sourceLocation()))
+            .toList();
     return analyzer.mergeDetectedIssues(report, hibernateIssues);
   }
 

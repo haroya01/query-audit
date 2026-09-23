@@ -2,6 +2,8 @@ package io.queryaudit.junit5.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.*;
@@ -52,7 +54,7 @@ class SeverityAppropriatenessTest {
   }
 
   private QueryAuditReport analyze(String testName, List<QueryRecord> queries, IndexMetadata meta) {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
     return analyzer.analyze("SeverityTest", testName, queries, meta);
   }
 
@@ -240,8 +242,8 @@ class SeverityAppropriatenessTest {
   class SqlNPlusOneSeverity {
 
     @Test
-    @DisplayName("SQL 패턴 N+1 — INFO여야 함 (LazyLoadDetector가 ERROR 권위)")
-    void sqlNPlusOneShouldBeInfo() {
+    @DisplayName("같은 호출 위치에서 반복된 SELECT는 확정 N+1 ERROR")
+    void callSiteNPlusOneIsConfirmed() {
       queryInterceptor.start();
       for (int i = 1; i <= 5; i++) {
         entityManager
@@ -252,9 +254,8 @@ class SeverityAppropriatenessTest {
 
       QueryAuditReport report =
           analyze("sqlNPlusOneSeverity", queryInterceptor.getRecordedQueries());
-      assertThat(warnings(report))
-          .as("SQL-level N+1은 INFO 보조 — WARNING/ERROR이면 과잉")
-          .noneMatch(i -> i.type() == IssueType.N_PLUS_ONE);
+      assertThat(report.getConfirmedIssues())
+          .anyMatch(i -> i.type() == IssueType.N_PLUS_ONE && i.severity() == Severity.ERROR);
     }
   }
 

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
@@ -712,7 +713,7 @@ class DetectorStressTest {
     /** Empty query list — should return empty report. */
     @Test
     void emptyQueryList_emptyReport() {
-      QueryAuditAnalyzer analyzer = newAnalyzer(QueryAuditConfig.defaults());
+      QueryAuditAnalyzer analyzer = newAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("test", List.of(), EMPTY_INDEX);
       assertThat(report.getConfirmedIssues()).isEmpty();
       assertThat(report.getInfoIssues()).isEmpty();
@@ -722,7 +723,7 @@ class DetectorStressTest {
     /** null query list — should return empty report. */
     @Test
     void nullQueryList_emptyReport() {
-      QueryAuditAnalyzer analyzer = newAnalyzer(QueryAuditConfig.defaults());
+      QueryAuditAnalyzer analyzer = newAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("test", null, EMPTY_INDEX);
       assertThat(report.getConfirmedIssues()).isEmpty();
       assertThat(report.getAllQueries()).isEmpty();
@@ -731,7 +732,7 @@ class DetectorStressTest {
     /** All queries suppressed — should return empty issues. */
     @Test
     void allQueriesSuppressed_emptyIssues() {
-      QueryAuditConfig config = QueryAuditConfig.builder().addSuppressQuery("SELECT").build();
+      QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSuppressQuery("SELECT").build();
       QueryAuditAnalyzer analyzer = newAnalyzer(config);
       List<QueryRecord> queries =
           List.of(
@@ -745,7 +746,7 @@ class DetectorStressTest {
     /** Disabled config — should return empty report. */
     @Test
     void disabledConfig_emptyReport() {
-      QueryAuditConfig config = QueryAuditConfig.builder().enabled(false).build();
+      QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).enabled(false).build();
       QueryAuditAnalyzer analyzer = newAnalyzer(config);
       List<QueryRecord> queries =
           List.of(
@@ -773,7 +774,7 @@ class DetectorStressTest {
                   "SELECT * FROM users WHERE id = ?",
                   "dev",
                   "ok"));
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), baseline);
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), baseline);
 
       List<QueryRecord> queries =
           List.of(
@@ -790,7 +791,7 @@ class DetectorStressTest {
     /** 4-arg analyze with testClass. */
     @Test
     void fourArgAnalyze_withTestClass() {
-      QueryAuditAnalyzer analyzer = newAnalyzer(QueryAuditConfig.defaults());
+      QueryAuditAnalyzer analyzer = newAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("MyTest", "myMethod", List.of(), EMPTY_INDEX);
       assertThat(report.getTestClass()).isEqualTo("MyTest");
       assertThat(report.getTestName()).isEqualTo("myMethod");
@@ -799,7 +800,7 @@ class DetectorStressTest {
     /** 4-arg analyze null queries. */
     @Test
     void fourArgAnalyze_nullQueries() {
-      QueryAuditAnalyzer analyzer = newAnalyzer(QueryAuditConfig.defaults());
+      QueryAuditAnalyzer analyzer = newAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("MyTest", "myMethod", null, EMPTY_INDEX);
       assertThat(report.getConfirmedIssues()).isEmpty();
     }
@@ -825,7 +826,7 @@ class DetectorStressTest {
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void concurrentAnalyses_noConcurrentModificationException() throws Exception {
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
       List<QueryRecord> sharedQueries = new ArrayList<>();
       for (int i = 0; i < 50; i++) {
@@ -871,7 +872,7 @@ class DetectorStressTest {
     @Test
     @Timeout(value = 30, unit = TimeUnit.SECONDS)
     void tenThousandQueries_completesInTime() {
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
       List<QueryRecord> queries = new ArrayList<>();
       for (int i = 0; i < 10_000; i++) {
@@ -892,7 +893,7 @@ class DetectorStressTest {
     @Test
     @Timeout(value = 10, unit = TimeUnit.SECONDS)
     void thousandUniquePatterns_noOOM() {
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
       List<QueryRecord> queries = new ArrayList<>();
       for (int i = 0; i < 1000; i++) {

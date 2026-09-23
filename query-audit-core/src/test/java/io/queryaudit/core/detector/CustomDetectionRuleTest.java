@@ -3,6 +3,7 @@ package io.queryaudit.core.detector;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
@@ -52,7 +53,7 @@ class CustomDetectionRuleTest {
   void additionalRulesViaConstructor_areEvaluated() {
     List<DetectionRule> additionalRules = List.of(new ForbiddenKeywordDetector());
     QueryAuditAnalyzer analyzer =
-        new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of(), additionalRules);
+        new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of(), additionalRules);
 
     List<QueryRecord> queries = List.of(record("SELECT id FROM FORBIDDEN_TABLE WHERE id = 1"));
 
@@ -67,7 +68,7 @@ class CustomDetectionRuleTest {
   void additionalRulesRunAlongsideBuiltInRules() {
     List<DetectionRule> additionalRules = List.of(new ForbiddenKeywordDetector());
     QueryAuditAnalyzer analyzer =
-        new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of(), additionalRules);
+        new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of(), additionalRules);
 
     // This query triggers both SELECT * (built-in) and FORBIDDEN (custom)
     List<QueryRecord> queries = List.of(record("SELECT * FROM FORBIDDEN_TABLE WHERE id = 1"));
@@ -85,7 +86,7 @@ class CustomDetectionRuleTest {
   @Test
   void nullAdditionalRules_doesNotCauseError() {
     QueryAuditAnalyzer analyzer =
-        new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of(), null);
+        new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of(), null);
 
     List<QueryRecord> queries = List.of(record("SELECT id FROM users WHERE id = 1"));
 
@@ -100,7 +101,7 @@ class CustomDetectionRuleTest {
     List<DetectionRule> additionalRules = List.of(new ForbiddenKeywordDetector());
     QueryAuditAnalyzer analyzer =
         new QueryAuditAnalyzer(
-            QueryAuditConfig.defaults(), (java.nio.file.Path) null, additionalRules);
+            QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), (java.nio.file.Path) null, additionalRules);
 
     List<QueryRecord> queries = List.of(record("SELECT id FROM FORBIDDEN_TABLE WHERE id = 1"));
 
@@ -114,7 +115,7 @@ class CustomDetectionRuleTest {
   void serviceLoaderDiscovery_loadsExternalRules() {
     // The test META-INF/services/io.queryaudit.core.detector.DetectionRule file
     // registers TestServiceLoaderDetectionRule, which flags queries containing "SERVICELOADER_TEST"
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     List<QueryRecord> queries = List.of(record("SELECT id FROM SERVICELOADER_TEST WHERE id = 1"));
 
@@ -128,7 +129,7 @@ class CustomDetectionRuleTest {
   void serviceLoaderAndAdditionalRules_bothWork() {
     List<DetectionRule> additionalRules = List.of(new ForbiddenKeywordDetector());
     QueryAuditAnalyzer analyzer =
-        new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of(), additionalRules);
+        new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of(), additionalRules);
 
     // This query triggers both the ServiceLoader rule and the programmatic additional rule
     List<QueryRecord> queries =
@@ -149,7 +150,7 @@ class CustomDetectionRuleTest {
   void getRules_includesServiceLoaderAndAdditionalRules() {
     List<DetectionRule> additionalRules = List.of(new ForbiddenKeywordDetector());
     QueryAuditAnalyzer analyzer =
-        new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of(), additionalRules);
+        new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of(), additionalRules);
 
     List<DetectionRule> rules = analyzer.getRules();
 

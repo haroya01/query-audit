@@ -314,39 +314,51 @@ class QueryAuditExtensionRunOutcomeTest {
 
   @Test
   void failOnDetectionMarksACompletedRunAsFailed() throws Exception {
-    QueryInterceptor interceptor = new QueryInterceptor();
-    interceptor.start();
-    ExecutionInfo execution = new ExecutionInfo();
-    execution.setElapsedTime(1L);
-    interceptor.afterQuery(
-        execution, List.of(new QueryInfo("UPDATE outcome_items SET name = 'updated'")));
-    AuditContext fixture = contextFor(FailOnDetectionFixture.class, "audited", interceptor);
+    String previousProfile = System.getProperty("queryAudit.profile");
+    System.setProperty("queryAudit.profile", "strict");
+    try {
+      QueryInterceptor interceptor = new QueryInterceptor();
+      interceptor.start();
+      ExecutionInfo execution = new ExecutionInfo();
+      execution.setElapsedTime(1L);
+      interceptor.afterQuery(
+          execution, List.of(new QueryInfo("UPDATE outcome_items SET name = 'updated'")));
+      AuditContext fixture = contextFor(FailOnDetectionFixture.class, "audited", interceptor);
 
-    assertThatThrownBy(() -> new QueryAuditExtension().afterEach(fixture.methodContext()))
-        .isInstanceOf(AssertionError.class)
-        .hasMessageContaining("QueryAudit detected");
+      assertThatThrownBy(() -> new QueryAuditExtension().afterEach(fixture.methodContext()))
+          .isInstanceOf(AssertionError.class)
+          .hasMessageContaining("QueryAudit detected");
 
-    assertThat(runState(fixture).result(HtmlReportAggregator.getInstance().getReports()).outcome())
-        .isEqualTo(AuditOutcome.FAIL);
+      assertThat(runState(fixture).result(HtmlReportAggregator.getInstance().getReports()).outcome())
+          .isEqualTo(AuditOutcome.FAIL);
+      } finally {
+      restoreProperty("queryAudit.profile", previousProfile);
+    }
   }
 
   @Test
   void nonEnforcingFindingsRemainVisibleInAPassingRun() throws Exception {
-    QueryInterceptor interceptor = new QueryInterceptor();
-    interceptor.start();
-    ExecutionInfo execution = new ExecutionInfo();
-    execution.setElapsedTime(1L);
-    interceptor.afterQuery(
-        execution, List.of(new QueryInfo("UPDATE outcome_items SET name = 'updated'")));
-    AuditContext fixture = contextFor(ReportOnlyFixture.class, "audited", interceptor);
+    String previousProfile = System.getProperty("queryAudit.profile");
+    System.setProperty("queryAudit.profile", "strict");
+    try {
+      QueryInterceptor interceptor = new QueryInterceptor();
+      interceptor.start();
+      ExecutionInfo execution = new ExecutionInfo();
+      execution.setElapsedTime(1L);
+      interceptor.afterQuery(
+          execution, List.of(new QueryInfo("UPDATE outcome_items SET name = 'updated'")));
+      AuditContext fixture = contextFor(ReportOnlyFixture.class, "audited", interceptor);
 
-    new QueryAuditExtension().afterEach(fixture.methodContext());
+      new QueryAuditExtension().afterEach(fixture.methodContext());
 
-    assertThat(HtmlReportAggregator.getInstance().getReports())
-        .singleElement()
-        .satisfies(report -> assertThat(report.getConfirmedIssues()).isNotEmpty());
-    assertThat(runState(fixture).result(HtmlReportAggregator.getInstance().getReports()).outcome())
-        .isEqualTo(AuditOutcome.PASS);
+      assertThat(HtmlReportAggregator.getInstance().getReports())
+          .singleElement()
+          .satisfies(report -> assertThat(report.getConfirmedIssues()).isNotEmpty());
+      assertThat(runState(fixture).result(HtmlReportAggregator.getInstance().getReports()).outcome())
+          .isEqualTo(AuditOutcome.PASS);
+      } finally {
+      restoreProperty("queryAudit.profile", previousProfile);
+    }
   }
 
   private static void assertIncomplete(AuditContext fixture, IncompleteReasonCode expectedCode) {

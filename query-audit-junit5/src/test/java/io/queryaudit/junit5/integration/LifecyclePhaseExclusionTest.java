@@ -3,6 +3,7 @@ package io.queryaudit.junit5.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Issue;
@@ -72,7 +73,7 @@ class LifecyclePhaseExclusionTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("FalsePositiveProof", "deleteAll", queries, null);
 
       // PROVES THE PROBLEM: deleteAll() triggers ERROR-level update-without-where
@@ -100,7 +101,7 @@ class LifecyclePhaseExclusionTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report =
           analyzer.analyze("FalsePositiveProof", "repeatedSave", queries, null);
 
@@ -152,7 +153,7 @@ class LifecyclePhaseExclusionTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("FalsePositiveProof", "combined", queries, null);
 
       // Count false positives from setup
@@ -246,7 +247,7 @@ class LifecyclePhaseExclusionTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("DesiredBehavior", "excludeSetup", queries, null);
 
       // After the fix: setup-phase false positives should NOT appear
@@ -267,7 +268,7 @@ class LifecyclePhaseExclusionTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report =
           analyzer.analyze("DesiredBehavior", "detectTestPhase", queries, null);
 
@@ -294,7 +295,7 @@ class LifecyclePhaseExclusionTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report =
           analyzer.analyze("DesiredBehavior", "excludeTeardown", queries, null);
 
@@ -338,7 +339,7 @@ class LifecyclePhaseExclusionTest {
 
       // With includeSetupQueries = true, setup queries should be analyzed
       QueryAuditConfig config =
-          QueryAuditConfig.builder().includeSetupQueries(true).failOnDetection(false).build();
+          QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).includeSetupQueries(true).failOnDetection(false).build();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
       QueryAuditReport report = analyzer.analyze("DesiredBehavior", "includeSetup", queries, null);
 
@@ -373,7 +374,7 @@ class LifecyclePhaseExclusionTest {
       assertThat(setupCount).as("Should have captured setup queries").isGreaterThanOrEqualTo(2);
       assertThat(testCount).as("Should have captured test queries").isGreaterThanOrEqualTo(1);
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("DesiredBehavior", "countAll", allQueries, null);
 
       // Total count includes all phases (for reporting transparency)
@@ -494,7 +495,7 @@ class LifecyclePhaseExclusionTest {
       // With includeSetupQueries=true (as @QueryAudit annotation would set),
       // SETUP-phase queries should be analyzed and issues detected.
       QueryAuditConfig config =
-          QueryAuditConfig.builder().includeSetupQueries(true).failOnDetection(false).build();
+          QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).includeSetupQueries(true).failOnDetection(false).build();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
       QueryAuditReport report = analyzer.analyze("IncludeSetup", "optIn", queries, null);
 
@@ -521,7 +522,7 @@ class LifecyclePhaseExclusionTest {
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
 
       // Default config: includeSetupQueries=false → SETUP excluded
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("IncludeSetup", "default", queries, null);
 
       assertThat(report.getConfirmedIssues())
@@ -553,7 +554,7 @@ class LifecyclePhaseExclusionTest {
       queryInterceptor.stop();
 
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("Edge", "mixed", queries, null);
 
       // TEST-phase update-without-where should still be detected
@@ -576,7 +577,7 @@ class LifecyclePhaseExclusionTest {
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
       assertThat(queries).as("Queries should be captured").isNotEmpty();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("Edge", "allSetup", queries, null);
 
       assertThat(report.getConfirmedIssues())
@@ -622,7 +623,7 @@ class LifecyclePhaseExclusionTest {
 
       // Suppress update-without-where — so even TEST-phase won't trigger it
       QueryAuditConfig config =
-          QueryAuditConfig.builder().addSuppressPattern("update-without-where").build();
+          QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSuppressPattern("update-without-where").build();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
       QueryAuditReport report = analyzer.analyze("Edge", "combined", queries, null);
 
@@ -648,7 +649,7 @@ class LifecyclePhaseExclusionTest {
       List<QueryRecord> queries = queryInterceptor.getRecordedQueries();
       int totalCaptured = queries.size();
 
-      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+      QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
       QueryAuditReport report = analyzer.analyze("Edge", "count", queries, null);
 
       // totalQueryCount should include ALL phases (not just TEST)

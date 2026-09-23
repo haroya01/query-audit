@@ -87,7 +87,10 @@ final class AuditScopeInitializer {
   private static boolean replacesInheritedDataSource(
       AuditScope scope, DataSourceResolver.ResolvedDataSource resolved) {
     DataSource inherited = scope.dataSource();
-    return resolved != null && inherited != null && resolved.dataSource() != inherited;
+    return resolved != null
+        && resolved.staticField() == null
+        && inherited != null
+        && resolved.dataSource() != inherited;
   }
 
   private void initializeCapabilities(

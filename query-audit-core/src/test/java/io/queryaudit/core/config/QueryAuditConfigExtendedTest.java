@@ -30,7 +30,7 @@ class QueryAuditConfigExtendedTest {
 
   @Test
   void disabledRulesPreventDetection() {
-    QueryAuditConfig config = QueryAuditConfig.builder().addDisabledRule("select-all").build();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addDisabledRule("select-all").build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
 
     QueryAuditReport report =
@@ -44,7 +44,7 @@ class QueryAuditConfigExtendedTest {
   @Test
   void severityOverrideChangesIssueSeverity() {
     QueryAuditConfig config =
-        QueryAuditConfig.builder().addSeverityOverride("select-all", Severity.ERROR).build();
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSeverityOverride("select-all", Severity.ERROR).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
 
     QueryAuditReport report =
@@ -58,7 +58,7 @@ class QueryAuditConfigExtendedTest {
   @Test
   void severityOverrideCanDowngradeToInfo() {
     QueryAuditConfig config =
-        QueryAuditConfig.builder().addSeverityOverride("where-function", Severity.INFO).build();
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSeverityOverride("where-function", Severity.INFO).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
 
     QueryAuditReport report =
@@ -73,7 +73,7 @@ class QueryAuditConfigExtendedTest {
   @Test
   void configurableThresholdsWorkForTooManyJoins() {
     // Default threshold is 5, so 4 JOINs should not trigger
-    QueryAuditConfig defaultConfig = QueryAuditConfig.defaults();
+    QueryAuditConfig defaultConfig = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
     QueryAuditAnalyzer defaultAnalyzer = new QueryAuditAnalyzer(defaultConfig, List.of());
 
     String sql =
@@ -86,7 +86,7 @@ class QueryAuditConfigExtendedTest {
     assertThat(report.getConfirmedIssues()).noneMatch(i -> i.type() == IssueType.TOO_MANY_JOINS);
 
     // With threshold 2, 3 JOINs should trigger
-    QueryAuditConfig strictConfig = QueryAuditConfig.builder().tooManyJoinsThreshold(2).build();
+    QueryAuditConfig strictConfig = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).tooManyJoinsThreshold(2).build();
     QueryAuditAnalyzer strictAnalyzer = new QueryAuditAnalyzer(strictConfig, List.of());
     report = strictAnalyzer.analyze("test", List.of(q(sql)), EMPTY_INDEX);
     assertThat(report.getConfirmedIssues()).anyMatch(i -> i.type() == IssueType.TOO_MANY_JOINS);
@@ -95,7 +95,7 @@ class QueryAuditConfigExtendedTest {
   @Test
   void isRuleDisabledReturnsTrueForDisabledRule() {
     QueryAuditConfig config =
-        QueryAuditConfig.builder().disabledRules(Set.of("n-plus-one", "select-all")).build();
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).disabledRules(Set.of("n-plus-one", "select-all")).build();
     assertThat(config.isRuleDisabled("n-plus-one")).isTrue();
     assertThat(config.isRuleDisabled("select-all")).isTrue();
     assertThat(config.isRuleDisabled("where-function")).isFalse();
@@ -104,7 +104,7 @@ class QueryAuditConfigExtendedTest {
   @Test
   void getEffectiveSeverityReturnsOverrideWhenPresent() {
     QueryAuditConfig config =
-        QueryAuditConfig.builder().addSeverityOverride("select-all", Severity.ERROR).build();
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSeverityOverride("select-all", Severity.ERROR).build();
     assertThat(config.getEffectiveSeverity("select-all", Severity.INFO)).isEqualTo(Severity.ERROR);
     assertThat(config.getEffectiveSeverity("where-function", Severity.ERROR))
         .isEqualTo(Severity.ERROR); // no override, returns default
@@ -112,7 +112,7 @@ class QueryAuditConfigExtendedTest {
 
   @Test
   void defaultThresholdValues() {
-    QueryAuditConfig config = QueryAuditConfig.defaults();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
     assertThat(config.getLargeInListThreshold()).isEqualTo(100);
     assertThat(config.getTooManyJoinsThreshold()).isEqualTo(5);
     assertThat(config.getExcessiveColumnThreshold()).isEqualTo(15);
@@ -129,7 +129,7 @@ class QueryAuditConfigExtendedTest {
   void repeatedUpdateExclusionsAreDefensivelyCopied() {
     Set<String> exclusions = new HashSet<>(Set.of("audit_*"));
     QueryAuditConfig.Builder builder =
-        QueryAuditConfig.builder().repeatedUpdateExcludeTables(exclusions);
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).repeatedUpdateExcludeTables(exclusions);
     exclusions.add("changed_after_assignment");
 
     QueryAuditConfig config = builder.addRepeatedUpdateExcludeTable("etl_*").build();
@@ -155,7 +155,7 @@ class QueryAuditConfigExtendedTest {
             .addDisabledRule("repeated-single-update")
             .build();
 
-    assertThat(repeatedUpdateIssues(recommended)).hasSize(1);
+    assertThat(repeatedUpdateIssues(recommended)).isEmpty();
     assertThat(repeatedUpdateIssues(minimal)).isEmpty();
     assertThat(repeatedUpdateIssues(enabled)).hasSize(1);
     assertThat(repeatedUpdateIssues(disabled)).isEmpty();
@@ -164,7 +164,7 @@ class QueryAuditConfigExtendedTest {
   @Test
   void severityOverrideAppliesToRepeatedUpdates() {
     QueryAuditConfig config =
-        QueryAuditConfig.builder()
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT)
             .addSeverityOverride("repeated-single-update", Severity.ERROR)
             .build();
 
