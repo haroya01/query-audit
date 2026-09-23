@@ -11,8 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * Each attribute limits one query type independently; attributes left at {@code -1} are not
  * verified.
  *
- * <p>Complements {@link ExpectMaxQueryCount}, which limits the total query count regardless of
- * type. Both annotations can be combined on the same test method.
+ * <p>{@code total} limits every captured statement regardless of type. It replaces {@link
+ * ExpectMaxQueryCount} since 0.7.0.
  *
  * <pre>{@code
  * @Test
@@ -49,4 +49,6 @@ public @interface ExpectQueries {
 
   /** Maximum number of DELETE queries allowed, or {@code -1} to skip verification. */
   int delete() default -1;
+
+  int total() default -1;
 }

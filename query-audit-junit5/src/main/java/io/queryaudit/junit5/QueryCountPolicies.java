@@ -4,10 +4,13 @@ import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
+import io.queryaudit.core.regression.ContractFiles;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCountRegressionDetector;
 import io.queryaudit.core.regression.QueryCounts;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,8 +72,11 @@ final class QueryCountPolicies {
     if (inlineContract) {
       return null;
     }
-    String failure =
-        AuditAssertions.contractFailure(testId, testClass, testName, queries, contracts);
-    return failure;
+    Path location = AuditSettingsResolver.resolveContractsPath(scope.context());
+    String source =
+        Files.isDirectory(location)
+            ? ContractFiles.load(location).fileFor(QueryCountBaseline.key(testId)).toString()
+            : location.toString();
+    return AuditAssertions.contractFailure(testId, testClass, testName, queries, contracts, source);
   }
 }

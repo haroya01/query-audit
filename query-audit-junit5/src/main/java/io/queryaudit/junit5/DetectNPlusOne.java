@@ -20,7 +20,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
  *
  * @author haroya
  * @since 0.2.0
+ * @deprecated since 0.7.0; N+1 is the default rule, so use {@code @QueryAudit(failOn =
+ *     IssueType.N_PLUS_ONE, nPlusOneThreshold = n)}.
  */
+@Deprecated(since = "0.7.0")
 @Target({ElementType.TYPE, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 @ExtendWith(QueryAuditExtension.class)

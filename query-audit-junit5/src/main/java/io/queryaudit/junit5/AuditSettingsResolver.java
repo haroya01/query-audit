@@ -36,7 +36,10 @@ final class AuditSettingsResolver {
 
   static Path resolveReportOutputDirectory(QueryAuditConfig config) {
     String configuredPath =
-        System.getProperty("queryAudit.reportOutputDir", config.getReportOutputDir());
+        resolveSystemProperty("queryAudit.report.outputDir", "queryAudit.reportOutputDir");
+    if (configuredPath == null) {
+      configuredPath = config.getReportOutputDir();
+    }
     if (configuredPath == null || configuredPath.isBlank()) {
       throw new ExtensionConfigurationException(
           "QueryAudit: report output directory must not be blank. Configure"
@@ -56,10 +59,28 @@ final class AuditSettingsResolver {
             "queryAudit.contracts.record", "queryGuard.contracts.record", "false"));
   }
 
-  static Path resolveContractsPath() {
-    String sysProp = resolveSystemProperty("queryAudit.contractsPath", "queryGuard.contractsPath");
+  static boolean isCountRecordMode() {
+    return Boolean.parseBoolean(
+        Objects.requireNonNullElse(
+            firstSystemProperty(
+                "queryAudit.counts.record",
+                "queryAudit.updateBaseline",
+                "queryGuard.updateBaseline"),
+            "false"));
+  }
+
+  static Path resolveContractsPath(ExtensionContext context) {
+    String sysProp =
+        firstSystemProperty(
+            "queryAudit.contracts.path", "queryAudit.contractsPath", "queryGuard.contractsPath");
     if (sysProp != null && !sysProp.isEmpty()) {
       return Path.of(sysProp);
+    }
+    QueryAuditConfig springConfig = context == null ? null : lookupSpringConfig(context);
+    if (springConfig != null
+        && springConfig.getContractsPath() != null
+        && !springConfig.getContractsPath().isBlank()) {
+      return Path.of(springConfig.getContractsPath());
     }
     return Path.of(QueryContracts.DEFAULT_FILE_NAME);
   }
@@ -171,18 +192,30 @@ final class AuditSettingsResolver {
       builder.nPlusOneThreshold(detectNPlusOne.threshold());
     }
 
+    String failOnDetection = System.getProperty("queryAudit.failOnDetection");
+    if (failOnDetection != null) {
+      builder.failOnDetection(Boolean.parseBoolean(failOnDetection));
+    }
+
+    String baselinePath = System.getProperty("queryAudit.baselinePath");
+    if (baselinePath != null && !baselinePath.isBlank()) {
+      builder.baselinePath(baselinePath);
+    }
+
     String profile = System.getProperty("queryAudit.profile");
     if (profile != null) {
       builder.ruleProfile(RuleProfile.parse(profile));
     }
 
     String reportFormat =
-        resolveSystemProperty("queryAudit.reportFormat", "queryGuard.reportFormat");
+        firstSystemProperty(
+            "queryAudit.report.format", "queryAudit.reportFormat", "queryGuard.reportFormat");
     if (reportFormat != null) {
       builder.reportFormat(ReportFormat.parse(reportFormat));
     }
 
-    String reportRedaction = System.getProperty("queryAudit.reportRedaction");
+    String reportRedaction =
+        resolveSystemProperty("queryAudit.report.redaction", "queryAudit.reportRedaction");
     if (reportRedaction != null) {
       builder.reportRedaction(ReportRedaction.parse(reportRedaction));
     }
@@ -263,7 +296,10 @@ final class AuditSettingsResolver {
 
   Path resolveCountBaselinePath(ExtensionContext context) {
     String sysProp =
-        resolveSystemProperty("queryAudit.countBaselinePath", "queryGuard.countBaselinePath");
+        firstSystemProperty(
+            "queryAudit.counts.path",
+            "queryAudit.countBaselinePath",
+            "queryGuard.countBaselinePath");
     if (sysProp != null && !sysProp.isEmpty()) {
       return Path.of(sysProp);
     }
@@ -271,12 +307,16 @@ final class AuditSettingsResolver {
   }
 
   boolean shouldAutoOpenReport(ExtensionContext context) {
-    String sysProp = System.getProperty("queryaudit.autoOpenReport");
+    String sysProp =
+        resolveSystemProperty("queryAudit.autoOpenReport", "queryaudit.autoOpenReport");
     if (sysProp != null) {
       return Boolean.parseBoolean(sysProp);
     }
 
-    String envVar = System.getenv("QUERYGUARD_AUTO_OPEN_REPORT");
+    String envVar = System.getenv("QUERYAUDIT_AUTO_OPEN_REPORT");
+    if (envVar == null) {
+      envVar = System.getenv("QUERYGUARD_AUTO_OPEN_REPORT");
+    }
     if (envVar != null) {
       return Boolean.parseBoolean(envVar);
     }
@@ -313,6 +353,10 @@ final class AuditSettingsResolver {
     } catch (Exception | NoClassDefFoundError ignored) {
       return null;
     }
+  }
+
+  static String firstSystemProperty(String... keys) {
+    return resolveSystemProperty(keys);
   }
 
   static String resolveSystemProperty(String... keys) {

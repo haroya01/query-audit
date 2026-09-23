@@ -61,7 +61,10 @@ class QueryContractScopeTest {
                           return null;
                         }))
         .isInstanceOf(AssertionError.class)
-        .hasMessageContaining("link-list deviates from its recorded query contract")
+        .hasMessageContaining(
+            "link-list deviates from its recorded query contract ("
+                + directory.resolve("api.contracts")
+                + ")")
         .hasMessageContaining("UPDATE: contract 0, executed 1 (+1)")
         .hasMessageContaining("UPDATE links SET viewed_at");
   }
@@ -73,6 +76,8 @@ class QueryContractScopeTest {
     assertThatThrownBy(() -> scope().verify("link-create", () -> null))
         .isInstanceOf(AssertionError.class)
         .hasMessageContaining("Missing query contract: link-create")
+        .hasMessageContaining("Measured: @junit | link-create | 0 | 0 | 0 | 0 | 0")
+        .hasMessageContaining(directory.resolve(".query-audit-contracts").toString())
         .hasMessageContaining(QueryContractScope.RECORD_PROPERTY);
   }
 
@@ -139,6 +144,7 @@ class QueryContractScopeTest {
       assertThatThrownBy(() -> scope().capture("link-list", () -> null))
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("already running");
+      assertThat(interceptor.isActive()).isTrue();
     } finally {
       interceptor.stop();
     }
@@ -184,8 +190,95 @@ class QueryContractScopeTest {
     assertThat(captured.counts().selectCount()).isEqualTo(1);
   }
 
+  @Test
+  void aJourneyBlockVerifiesEveryQueryItRunsWhenItCloses() {
+    write("journeys.contracts", "@junit | signup-journey | 1 | 1 | 0 | 0 | 2");
+
+    try (var journey = scope().open("signup-journey")) {
+      fire("INSERT INTO users (email) VALUES (?)");
+      fire("SELECT * FROM users WHERE id = ?");
+    }
+
+    assertThat(interceptor.isActive()).isFalse();
+  }
+
+  @Test
+  void aJourneyBlockFailsOnADeviationAfterTheBodyCompletes() {
+    write("journeys.contracts", "@junit | signup-journey | 1 | 0 | 0 | 0 | 1");
+
+    assertThatThrownBy(
+            () -> {
+              try (var journey = scope().open("signup-journey")) {
+                fire("SELECT 1");
+                fire("SELECT 2");
+              }
+            })
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("SELECT: contract 1, executed 2 (+1)");
+  }
+
+  @Test
+  void keepsTheBodyFailureWhenTheContractAlsoFails() {
+    write("journeys.contracts", "@junit | signup-journey | 0 | 0 | 0 | 0 | 0");
+
+    assertThatThrownBy(
+            () -> {
+              try (var journey = scope().open("signup-journey")) {
+                fire("SELECT 1");
+                throw new IllegalArgumentException("request failed");
+              }
+            })
+        .isInstanceOf(IllegalArgumentException.class)
+        .satisfies(
+            failure ->
+                assertThat(failure.getSuppressed())
+                    .singleElement()
+                    .isInstanceOf(AssertionError.class));
+  }
+
+  @Test
+  void namesTheScopeThatWasLeftOpen() {
+    var leftOpen = scope().open("signup-journey");
+    try {
+      assertThatThrownBy(() -> scope().open("link-list"))
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("\"signup-journey\" is still open")
+          .hasMessageContaining("before opening \"link-list\"");
+    } finally {
+      System.setProperty(QueryContractScope.RECORD_PROPERTY, "true");
+      leftOpen.close();
+    }
+  }
+
+  @Test
+  void aSingleContractFileWorksLikeADirectory() throws Exception {
+    Path file = directory.resolve("contracts.txt");
+    Files.write(file, List.of("@junit | link-list | 1 | 0 | 0 | 0 | 1"));
+
+    QueryContractScope.of(interceptor, file).verify("link-list", () -> fire("SELECT 1"));
+    System.setProperty(QueryContractScope.RECORD_PROPERTY, "true");
+    QueryContractScope.of(interceptor, file).verify("link-create", () -> fire("SELECT 1"));
+
+    assertThat(Files.readAllLines(file))
+        .contains(
+            "@junit | link-list | 1 | 0 | 0 | 0 | 1", "@junit | link-create | 1 | 0 | 0 | 0 | 1");
+  }
+
+  @Test
+  void acceptsTheLegacyRecordProperty() throws Exception {
+    System.setProperty("queryGuard.contracts.record", "true");
+    try {
+      scope().verify("link-list", () -> fire("SELECT 1"));
+    } finally {
+      System.clearProperty("queryGuard.contracts.record");
+    }
+
+    assertThat(Files.readString(directory.resolve(".query-audit-contracts")))
+        .contains("@junit | link-list | 1 | 0 | 0 | 0 | 1");
+  }
+
   private QueryContractScope scope() {
-    return QueryContractScope.forDirectory(interceptor, directory);
+    return QueryContractScope.of(interceptor, directory);
   }
 
   private Object fire(String sql) {

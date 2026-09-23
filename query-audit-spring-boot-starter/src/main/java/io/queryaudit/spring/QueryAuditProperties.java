@@ -1,6 +1,7 @@
 package io.queryaudit.spring;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.regression.QueryContracts;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,8 +31,8 @@ public class QueryAuditProperties {
 
   /**
    * Rule profile tier: {@code strict} (all rules), {@code recommended} (the default, with
-   * opinionated rules off), or {@code minimal} (safety-critical only). {@code disabled-rules} / {@code
-   * enabled-rules} always win over the profile.
+   * opinionated rules off), or {@code minimal} (safety-critical only). {@code disabled-rules} /
+   * {@code enabled-rules} always win over the profile.
    */
   private String profile = "recommended";
 
@@ -47,6 +48,7 @@ public class QueryAuditProperties {
   private boolean autoOpenReport = true;
   private int maxQueries = 10_000;
   private Report report = new Report();
+  private Contracts contracts = new Contracts();
   private List<String> disabledRules = new ArrayList<>();
   private Map<String, String> severityOverrides = new HashMap<>();
   private LargeInList largeInList = new LargeInList();
@@ -140,6 +142,14 @@ public class QueryAuditProperties {
 
   public void setSuppressQueries(List<String> suppressQueries) {
     this.suppressQueries = suppressQueries;
+  }
+
+  public Contracts getContracts() {
+    return contracts;
+  }
+
+  public void setContracts(Contracts contracts) {
+    this.contracts = contracts;
   }
 
   public String getBaselinePath() {
@@ -305,6 +315,27 @@ public class QueryAuditProperties {
 
     public void setThreshold(int threshold) {
       this.threshold = threshold;
+    }
+  }
+
+  public static class Contracts {
+    private String path = QueryContracts.DEFAULT_FILE_NAME;
+    private List<String> awaitExecutors = new ArrayList<>();
+
+    public String getPath() {
+      return path;
+    }
+
+    public void setPath(String path) {
+      this.path = path;
+    }
+
+    public List<String> getAwaitExecutors() {
+      return awaitExecutors;
+    }
+
+    public void setAwaitExecutors(List<String> awaitExecutors) {
+      this.awaitExecutors = awaitExecutors;
     }
   }
 

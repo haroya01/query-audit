@@ -47,6 +47,7 @@ final class AuditAssertions {
         violations, "UPDATE", annotation.update(), queries, SqlParser::isUpdateQuery);
     appendBudgetViolation(
         violations, "DELETE", annotation.delete(), queries, SqlParser::isDeleteQuery);
+    appendBudgetViolation(violations, "TOTAL", annotation.total(), queries, sql -> true);
 
     if (violations.length() == 0) {
       return null;
@@ -183,8 +184,9 @@ final class AuditAssertions {
       String testClass,
       String testName,
       List<QueryRecord> queries,
-      Map<String, QueryCounts> contracts) {
+      Map<String, QueryCounts> contracts,
+      String source) {
     return QueryContracts.verify(
-        testId, testClass, testName, QueryCounts.from(queries), contracts, queries);
+        testId, testClass, testName, QueryCounts.from(queries), contracts, queries, source);
   }
 }

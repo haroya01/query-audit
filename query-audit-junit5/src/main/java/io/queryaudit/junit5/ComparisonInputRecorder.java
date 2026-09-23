@@ -42,6 +42,7 @@ final class ComparisonInputRecorder {
         inlineLimits.put("insert", queries.insert());
         inlineLimits.put("update", queries.update());
         inlineLimits.put("delete", queries.delete());
+        if (queries.total() >= 0) inlineLimits.put("total", queries.total());
       }
       ExpectMaxQueryCount maximum = method.getAnnotation(ExpectMaxQueryCount.class);
       if (maximum != null) {
@@ -64,9 +65,7 @@ final class ComparisonInputRecorder {
               effectiveCounts(scope.countBaseline(), testId, testClass, testName),
               inlineLimits,
               AuditSettingsResolver.isContractRecordMode(),
-              Boolean.parseBoolean(
-                  AuditSettingsResolver.resolveSystemProperty(
-                      "queryAudit.updateBaseline", "queryGuard.updateBaseline", "false")));
+              AuditSettingsResolver.isCountRecordMode());
       AuditCapability explain = scope.explainCapability();
       if (explain == null) {
         throw new IllegalStateException("EXPLAIN capability was not identified");

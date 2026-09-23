@@ -59,6 +59,17 @@ public final class QueryContracts {
       QueryCounts actual,
       Map<String, QueryCounts> contracts,
       List<QueryRecord> queries) {
+    return verify(testId, testClass, testName, actual, contracts, queries, DEFAULT_FILE_NAME);
+  }
+
+  public static String verify(
+      String testId,
+      String testClass,
+      String testName,
+      QueryCounts actual,
+      Map<String, QueryCounts> contracts,
+      List<QueryRecord> queries,
+      String source) {
     QueryCounts contract =
         testId == null
             ? contracts.get(QueryCountBaseline.legacyKey(testClass, testName))
@@ -71,7 +82,7 @@ public final class QueryContracts {
     sb.append("QueryAudit: ")
         .append(testName)
         .append(" deviates from its recorded query contract (")
-        .append(DEFAULT_FILE_NAME)
+        .append(source)
         .append(").\n");
     appendTypeDelta(
         sb,

@@ -44,7 +44,7 @@ class ScopedQueryContractIntegrationTest {
             "# Reviewed HTTP round trips",
             "@junit | link-create | 1 | 1 | 0 | 0 | 2",
             "@junit | link-click | 1 | 1 | 0 | 0 | 2"));
-    scope = QueryContractScope.forDirectory(context.getBean(QueryInterceptor.class), contracts);
+    scope = QueryContractScope.of(context.getBean(QueryInterceptor.class), contracts);
   }
 
   @AfterEach

@@ -7,6 +7,7 @@ import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.config.RuleProfile;
+import io.queryaudit.core.contract.QueryContractScope;
 import io.queryaudit.core.detector.DetectionRule;
 import io.queryaudit.core.extension.AuditExtensions;
 import io.queryaudit.core.extension.AuditRule;
@@ -15,8 +16,10 @@ import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.reporter.delivery.AuditReportSink;
 import io.queryaudit.core.reporter.delivery.ReportSinkRegistration;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
@@ -74,6 +77,7 @@ public class QueryAuditAutoConfiguration {
             .reportRedaction(ReportRedaction.parse(properties.getReport().getRedaction()))
             .reportOutputDir(properties.getReport().getOutputDir())
             .baselinePath(properties.getBaselinePath())
+            .contractsPath(properties.getContracts().getPath())
             .autoOpenReport(properties.isAutoOpenReport())
             .maxQueries(properties.getMaxQueries())
             .disabledRules(new HashSet<>(properties.getDisabledRules()))
@@ -117,6 +121,20 @@ public class QueryAuditAutoConfiguration {
    * <p>A user-supplied catalog replaces this bean collection step, giving programmatic registration
    * the same meaning in Spring and plain JUnit. Registered beans remain owned by Spring.
    */
+  @Bean
+  @ConditionalOnMissingBean(QueryContractScope.class)
+  public QueryContractScope queryContractScope(
+      QueryInterceptor interceptor,
+      QueryAuditProperties properties,
+      ListableBeanFactory beanFactory) {
+    QueryContractScope scope =
+        QueryContractScope.of(interceptor, Path.of(properties.getContracts().getPath()));
+    List<String> executors = properties.getContracts().getAwaitExecutors();
+    return executors.isEmpty()
+        ? scope
+        : scope.awaitingCompletion(new ExecutorIdleAwaiter(beanFactory, executors));
+  }
+
   @Bean
   @ConditionalOnMissingBean(AuditExtensions.class)
   public AuditExtensions queryAuditExtensions(ListableBeanFactory beanFactory) {

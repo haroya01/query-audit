@@ -8,6 +8,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import net.ttddyy.dsproxy.ExecutionInfo;
@@ -32,6 +33,7 @@ public final class QueryCaptureSession implements AutoCloseable {
   private static final ConcurrentHashMap<LazyLoadTracker, Set<QueryCaptureSession>> LAZY_ACTIVE =
       new ConcurrentHashMap<>();
   private static final AtomicLong ROUTER_IDS = new AtomicLong();
+  private static final AtomicInteger UNBOUND_WORK_CLAIMS = new AtomicInteger();
   private static final Origin IGNORED = new Origin(null, LifecyclePhase.TEST, false);
   private static final Origin LEGACY = new Origin(null, LifecyclePhase.TEST, false);
 
@@ -151,6 +153,14 @@ public final class QueryCaptureSession implements AutoCloseable {
     };
   }
 
+  public static Scope claimUnboundWork() {
+    UNBOUND_WORK_CLAIMS.incrementAndGet();
+    AtomicBoolean released = new AtomicBoolean();
+    return () -> {
+      if (released.compareAndSet(false, true)) UNBOUND_WORK_CLAIMS.decrementAndGet();
+    };
+  }
+
   /** Excludes framework-owned metadata/EXPLAIN work from all invocation captures on this thread. */
   public static Scope suppress() {
     return bind(new Binding(null, true, false));
@@ -187,7 +197,9 @@ public final class QueryCaptureSession implements AutoCloseable {
     }
     Set<QueryCaptureSession> sessions = ACTIVE.get(router);
     if (sessions == null || sessions.isEmpty()) return null;
-    sessions.forEach(session -> session.incompleteReasons.add("UNATTRIBUTED_QUERY"));
+    if (UNBOUND_WORK_CLAIMS.get() == 0) {
+      sessions.forEach(session -> session.incompleteReasons.add("UNATTRIBUTED_QUERY"));
+    }
     return router.isActive() ? LEGACY : IGNORED;
   }
 
@@ -220,7 +232,9 @@ public final class QueryCaptureSession implements AutoCloseable {
     }
     Set<QueryCaptureSession> sessions = LAZY_ACTIVE.get(router);
     if (sessions == null || sessions.isEmpty()) return false;
-    sessions.forEach(session -> session.incompleteReasons.add("UNATTRIBUTED_LAZY_LOAD"));
+    if (UNBOUND_WORK_CLAIMS.get() == 0) {
+      sessions.forEach(session -> session.incompleteReasons.add("UNATTRIBUTED_LAZY_LOAD"));
+    }
     return true;
   }
 

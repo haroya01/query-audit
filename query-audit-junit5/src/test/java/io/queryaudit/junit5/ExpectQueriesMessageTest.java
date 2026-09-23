@@ -33,6 +33,12 @@ class ExpectQueriesMessageTest {
 
     @ExpectQueries
     void noBudgets() {}
+
+    @ExpectQueries(total = 2)
+    void totalBudgetTwo() {}
+
+    @ExpectQueries(select = 5, total = 2)
+    void typeAndTotalBudgets() {}
   }
 
   private static ExpectQueries budget(String fixtureMethod) throws NoSuchMethodException {
@@ -41,6 +47,38 @@ class ExpectQueriesMessageTest {
 
   private static QueryRecord query(String sql) {
     return new QueryRecord(sql, 0, 0, CALL_SITE);
+  }
+
+  @Test
+  void totalBudgetCountsEveryStatementType() throws NoSuchMethodException {
+    List<QueryRecord> queries =
+        List.of(
+            query("select * from orders"),
+            query("insert into orders values (?)"),
+            query("update orders set status = ?"));
+
+    String message =
+        QueryAuditExtension.buildExpectQueriesFailureMessage(
+            budget("totalBudgetTwo"), queries, "createOrder()");
+
+    assertThat(message)
+        .contains("TOTAL: executed 3, expected at most 2.")
+        .contains("update orders set status = ?");
+  }
+
+  @Test
+  void totalBudgetAppliesAlongsideTypeBudgets() throws NoSuchMethodException {
+    List<QueryRecord> queries = List.of(query("select 1"), query("select 2"), query("select 3"));
+
+    String message =
+        QueryAuditExtension.buildExpectQueriesFailureMessage(
+            budget("typeAndTotalBudgets"), queries, "createOrder()");
+
+    assertThat(message).contains("TOTAL: executed 3").doesNotContain("SELECT: executed");
+    assertThat(
+            QueryAuditExtension.buildExpectQueriesFailureMessage(
+                budget("totalBudgetTwo"), List.of(query("select 1")), "createOrder()"))
+        .isNull();
   }
 
   @Test

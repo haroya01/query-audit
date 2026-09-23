@@ -1,6 +1,7 @@
 package io.queryaudit.junit5;
 
 import io.queryaudit.core.model.IncompleteReasonCode;
+import io.queryaudit.core.regression.ContractFiles;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCounts;
 import java.nio.file.Path;
@@ -21,15 +22,12 @@ final class AuditPolicyFiles {
   Loaded load(AuditScope scope) {
     return new Loaded(
         QueryCountBaseline.load(settings.resolveCountBaselinePath(scope.context())),
-        QueryCountBaseline.load(AuditSettingsResolver.resolveContractsPath()));
+        ContractFiles.load(AuditSettingsResolver.resolveContractsPath(scope.context()))
+            .contracts());
   }
 
   void writeCountBaselineIfRequested(AuditScope scope) {
-    boolean updateBaseline =
-        Boolean.parseBoolean(
-            AuditSettingsResolver.resolveSystemProperty(
-                "queryAudit.updateBaseline", "queryGuard.updateBaseline", "false"));
-    if (!updateBaseline) {
+    if (!AuditSettingsResolver.isCountRecordMode()) {
       return;
     }
 
@@ -47,7 +45,8 @@ final class AuditPolicyFiles {
               + countBaselinePath.toAbsolutePath()
               + " ("
               + currentCounts.size()
-              + " test(s))");
+              + " test(s)). Count baselines are deprecated since 0.7.0; record query contracts"
+              + " with -DqueryAudit.contracts.record=true instead.");
     } catch (Exception e) {
       throw policyWriteFailure(scope, "count baseline", e);
     }
@@ -62,8 +61,8 @@ final class AuditPolicyFiles {
       return;
     }
     try {
-      Path contractsPath = AuditSettingsResolver.resolveContractsPath();
-      mergeAndSave(contractsPath, currentCounts, "QueryAudit Query Contracts");
+      Path contractsPath = AuditSettingsResolver.resolveContractsPath(scope.context());
+      ContractFiles.record(contractsPath, currentCounts);
       System.out.println(
           "[QueryAudit] Query contracts recorded: "
               + contractsPath.toAbsolutePath()

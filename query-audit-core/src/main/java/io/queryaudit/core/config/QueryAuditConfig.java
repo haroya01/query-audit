@@ -45,6 +45,7 @@ public class QueryAuditConfig {
   private final ReportRedaction reportRedaction;
   private final String reportOutputDir;
   private final String baselinePath;
+  private final String contractsPath;
   private final boolean autoOpenReport;
   private final int maxQueries;
   private final Set<String> disabledRules;
@@ -80,6 +81,7 @@ public class QueryAuditConfig {
     this.reportRedaction = builder.reportRedaction;
     this.reportOutputDir = builder.reportOutputDir;
     this.baselinePath = builder.baselinePath;
+    this.contractsPath = builder.contractsPath;
     this.autoOpenReport = builder.autoOpenReport;
     this.maxQueries = builder.maxQueries;
     this.disabledRules = Collections.unmodifiableSet(new HashSet<>(builder.disabledRules));
@@ -170,6 +172,10 @@ public class QueryAuditConfig {
    */
   public String getBaselinePath() {
     return baselinePath;
+  }
+
+  public String getContractsPath() {
+    return contractsPath;
   }
 
   public boolean isAutoOpenReport() {
@@ -414,6 +420,7 @@ public class QueryAuditConfig {
     private ReportRedaction reportRedaction = ReportRedaction.REDACTED;
     private String reportOutputDir = DEFAULT_REPORT_OUTPUT_DIR;
     private String baselinePath = null;
+    private String contractsPath = null;
     private boolean autoOpenReport = true;
     private int maxQueries = 10_000;
     private Set<String> disabledRules = new HashSet<>();
@@ -457,6 +464,7 @@ public class QueryAuditConfig {
       b.reportRedaction = source.reportRedaction;
       b.reportOutputDir = source.reportOutputDir;
       b.baselinePath = source.baselinePath;
+      b.contractsPath = source.contractsPath;
       b.autoOpenReport = source.autoOpenReport;
       b.maxQueries = source.maxQueries;
       b.disabledRules = new HashSet<>(source.disabledRules);
@@ -555,6 +563,11 @@ public class QueryAuditConfig {
 
     public Builder baselinePath(String baselinePath) {
       this.baselinePath = baselinePath;
+      return this;
+    }
+
+    public Builder contractsPath(String contractsPath) {
+      this.contractsPath = contractsPath;
       return this;
     }
 

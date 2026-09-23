@@ -21,7 +21,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
  *
  * @author haroya
  * @since 0.2.0
+ * @deprecated since 0.7.0; use {@code @ExpectQueries(total = n)}, which reports the same limit with
+ *     the other query budgets.
  */
+@Deprecated(since = "0.7.0")
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
 @ExtendWith(QueryAuditExtension.class)
