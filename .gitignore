@@ -23,6 +23,7 @@ bin/
 
 # Generated site
 site/
+.venv-docs/
 
 # Python release tooling
 __pycache__/

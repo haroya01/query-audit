@@ -1,7 +1,8 @@
 # Architecture Overview
 
-This page describes QueryAudit's internal architecture, module structure, key interfaces,
-and the full lifecycle of a query from execution to report.
+QueryAudit turns SQL captured during JUnit tests into statement-count assertions, reviewable
+contract diffs, failure evidence, and CI outcomes. This page explains the modules and lifecycle
+behind those results. For setup and expected output, use [Choose Your Workflow](../guide/choose-your-workflow.md).
 
 ---
 
@@ -68,6 +69,9 @@ lifecycle callbacks surround the factory method but do not expose a separate bou
 `DynamicTest` child. The run is reported as `INCONCLUSIVE` with
 `AUDIT_INITIALIZATION_FAILED`. Move audited cases to `@Test` or `@ParameterizedTest`, or add
 `@QueryAuditExclude` to a factory that should run without auditing.
+
+QueryAudit `0.6.0` rejects concurrent audited methods because capture is shared within a test class.
+Use same-thread execution for the audited tests and keep database work inside their capture window.
 
 ---
 
@@ -327,14 +331,18 @@ public class SlackReporter implements Reporter {
 
 ---
 
-## Detection Rules (67 active issue types)
+## Detection Rules
+
+Rules contribute supporting findings from captured SQL and available database or framework
+evidence. Query budgets and snapshot assertions remain separate from finding severity,
+suppression, and baselines.
 
 ### SELECT-Focused Rules
 
 | Rule | Issue Type | Severity | What it detects |
 |---|---|---|---|
-| NPlusOneDetector | `N_PLUS_ONE_SUSPECT` | INFO | SQL-level heuristic: same normalized query repeated `threshold`+ times. Suggestive only — the Hibernate-level detector below is authoritative. |
-| LazyLoadNPlusOneDetector | `N_PLUS_ONE` | ERROR | Hibernate-level authoritative: same lazy collection/proxy initialized for `threshold`+ distinct owners. |
+| NPlusOneDetector | `N_PLUS_ONE_SUSPECT` | INFO | SQL-level heuristic: same normalized query repeated `threshold`+ times. Review with the Hibernate event findings below and actual SQL counts. |
+| LazyLoadNPlusOneDetector | `N_PLUS_ONE` | ERROR | Hibernate events: same lazy collection/proxy initialized for `threshold`+ distinct owners. |
 | SelectAllDetector | `SELECT_ALL` | INFO | `SELECT *` usage |
 | CountInsteadOfExistsDetector | `COUNT_INSTEAD_OF_EXISTS` | INFO | `COUNT(*)` where `EXISTS` is better |
 | UnboundedResultSetDetector | `UNBOUNDED_RESULT_SET` | WARNING | SELECT without LIMIT |
@@ -546,16 +554,29 @@ CSS and JavaScript.
 
 ## Design Principles
 
-### Zero False Positives on CONFIRMED Issues
+### Explicit query policies
 
-CONFIRMED issues are **structurally certain** based on SQL parsing and index metadata.
-QueryAudit never guesses. Issues that depend on data volume or query planner behavior
-are classified as INFO, not CONFIRMED.
+A test declares its permitted statement counts or records a snapshot for later review. Ordinary
+assertions still verify returned data and affected rows. A statement-count contract makes the
+captured count change visible without claiming to cover all database behavior.
+
+### Evidence before enforcement
+
+Findings help explain a captured access pattern. `CONFIRMED` groups ERROR/WARNING findings;
+it does not promise zero false positives. SQL parsing, metadata, and framework events have
+[known limits](../guide/limitations.md). Inspect findings before choosing which should fail a test.
+
+### Incomplete evidence stays visible
+
+CI outcomes distinguish a policy failure from missing or incompatible evidence. Expected-test
+coverage and comparison-input checks keep skipped audits or changed analysis settings from
+looking like resolved findings. See [Audit coverage](../guide/audit-coverage.md) and
+[Comparison inputs](../guide/comparison-inputs.md).
 
 ### Test-Time Only
 
-QueryAudit is a **test dependency**. It never runs in production. The datasource
-proxy wrapping only happens in the test classpath.
+Keep QueryAudit on the **test classpath**. Its JUnit integration observes the database work
+exercised by tests; application code does not need to invoke the audit library.
 
 ### Transparent to Application Code
 

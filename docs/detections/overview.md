@@ -1,15 +1,15 @@
 # Detection Rules Overview
 
-QueryAudit ships with **active detection rules** that catch SQL performance issues, logic
-bugs, and anti-patterns during your test runs. The rules are organized by severity and
-confidence model to help you prioritize fixes.
+Use this reference after a test reports a query finding. Find the issue code, inspect its
+captured SQL and available call-site or database evidence, then decide whether the rule belongs
+in that test's policy. Start with `@EnableQueryInspector` to review findings without making them
+fatal; explicit query budgets still fail when exceeded.
 
-!!! info "IssueType enum"
-    The `IssueType` enum currently contains **69** entries. **67** are actively emitted by
-    detection rules (one rule can emit multiple issue types — `MissingIndexDetector` alone
-    emits 4). The remaining 2 are [disabled or reserved](#disabled-reserved-rules).
-    The full canonical list is in
-    [`IssueType.java`](https://github.com/haroya01/query-audit/blob/main/query-audit-core/src/main/java/io/queryaudit/core/model/IssueType.java).
+For the primary workflows—keeping reads free of writes, reviewing count-contract diffs,
+locating failing SQL, and comparing complete CI runs—start with
+[Choose Your Workflow](../guide/choose-your-workflow.md). Detection rules provide supporting
+evidence for those decisions. The tables below retain the rule codes and requirements, including
+[disabled or reserved entries](#disabled-reserved-rules).
 
 ---
 
@@ -17,15 +17,15 @@ confidence model to help you prioritize fixes.
 
 ### Confirmed (Structural / Pattern-based)
 
-These rules analyze **SQL structure and database schema** -- things that do not change with data
-volume. The detection logic examines the SQL text, repetition patterns, or cross-references the
-actual index metadata via `SHOW INDEX` / `pg_catalog`. Heuristics that depend on data distribution
-live in the INFO tier instead.
+These findings use SQL text, repetition patterns, Hibernate events, or index metadata from
+`SHOW INDEX` / `pg_catalog`. They can identify an access pattern without reproducing a production
+query plan. Their correctness still depends on capture, parsing, metadata, and the scope of the
+rule; a structural match does not establish the cost of the query.
 
 !!! success "High-signal tier"
-    Findings here are not gated by row counts or data distribution. False positives are tracked
-    as bugs and fixed -- the design intent is that a confirmed flag is a real problem worth
-    investigating. The most recent false-positive fixes are listed in
+    `CONFIRMED` is the report group for ERROR/WARNING findings, not a measured accuracy percentage.
+    Review the evidence before promoting a rule to a build failure. Known false positives and
+    capture constraints are listed in [Limitations](../guide/limitations.md). Fixes are listed in
     [CHANGELOG](https://github.com/haroya01/query-audit/blob/main/CHANGELOG.md); please report
     any new one you hit.
 
@@ -45,8 +45,8 @@ may differ from production.
 Test data: 5 rows   --> MySQL: "Full scan is faster" --> Table scan (false positive possible)
 Production: 1M rows --> MySQL: "Use index"           --> Index scan
 
- .: Structure/pattern based = 100% reliable regardless of data volume
- .: EXPLAIN based           = may vary with test data size
+Structure/pattern findings: inspect the matched SQL, events, and schema assumptions
+EXPLAIN findings:          also inspect the test data and optimizer's selected plan
 ```
 
 ---
@@ -127,22 +127,21 @@ The complete searchable reference of issue types emitted by the active detection
 | 67 | Connection Held Idle | `connection-held-idle` | INFO | Connection Lifecycle | Connection held while non-database work runs -- the pool-exhaustion shape |
 
 !!! note "Rule numbering"
-    Rules 51-67 are INFO severity. The table numbers are for reference only and do not correspond
-    to priority. Rules 1-11 are ERROR severity and should always be addressed. Rules 12-50 are
-    WARNING severity and should be reviewed.
+    The table numbers are lookup aids, not a priority ranking. Severity suggests review urgency;
+    the selected profile, suppressions, and failure policy determine what affects the test result.
 
 ---
 
 ## Rules by Severity
 
-### ERROR Severity (11 issue types)
+### ERROR Severity
 
-Critical issues -- logic bugs, full table locks, or guaranteed performance degradation.
-**These should always be fixed.**
+Review these findings first: they point to possible correctness, locking, or access-cost problems.
+Check the captured SQL and database context before choosing a fix or suppressing an intentional pattern.
 
 | Code | Description | Category | Detection Method |
 |------|-------------|----------|-----------------|
-| `n-plus-one` | N+1 Query detected | Query Patterns | Normalize SQL, group by pattern, check count >= threshold |
+| `n-plus-one` | N+1 Query detected | Query Patterns | Group Hibernate lazy-load events by role or proxy type and count distinct owners |
 | `where-function` | Function in WHERE disables index | SQL Anti-Patterns | Parse WHERE clause, detect function-wrapped columns |
 | `missing-where-index` | Missing index on WHERE column | Index Issues | Extract WHERE columns + `SHOW INDEX` verification |
 | `missing-join-index` | Missing index on JOIN column | Index Issues | Extract JOIN columns + `SHOW INDEX` verification |
@@ -160,11 +159,11 @@ Critical issues -- logic bugs, full table locks, or guaranteed performance degra
 
 ---
 
-### WARNING Severity (39 issue types)
+### WARNING Severity
 
 Important issues that should be reviewed and typically fixed.
 
-#### Index Issues (6 issue types)
+#### Index Issues
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
@@ -177,9 +176,9 @@ Important issues that should be reviewed and typically fixed.
 
 !!! note "MissingIndexDetector WARNING issue types"
     `missing-order-by-index` and `missing-group-by-index` are also emitted by `MissingIndexDetector`.
-    Combined with the 2 ERROR-level issue types above, this single detector emits 4 issue types total.
+    The clause-specific codes let you configure their finding policies independently.
 
-#### SQL Anti-Patterns (9 issue types)
+#### SQL Anti-Patterns
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
@@ -193,7 +192,7 @@ Important issues that should be reviewed and typically fixed.
 | `unbounded-result-set` | SELECT without LIMIT could return unbounded rows | Detect SELECT without LIMIT clause |
 | `case-in-where` | CASE expression in WHERE prevents index | Detect CASE expressions within WHERE predicates |
 
-#### DML Safety (5 issue types)
+#### DML Safety
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
@@ -203,7 +202,7 @@ Important issues that should be reviewed and typically fixed.
 | `subquery-in-dml` | Subquery in UPDATE/DELETE can't use semijoin | Detect subqueries in UPDATE/DELETE statements |
 | `implicit-columns-insert` | INSERT without column list is fragile | Detect INSERT without column specification |
 
-#### Query Patterns (4 issue types)
+#### Query Patterns
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
@@ -212,7 +211,7 @@ Important issues that should be reviewed and typically fixed.
 | `repeated-single-update` | Repeated UPDATEs scoped by a unique key should use a set-based statement or batch | Normalize UPDATE, require equality predicates that cover a unique index, group by pattern |
 | `query-count-regression` | Query count regression detected | Compare query count against baseline |
 
-#### JOIN Issues (4 issue types)
+#### JOIN Issues
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
@@ -221,7 +220,7 @@ Important issues that should be reviewed and typically fixed.
 | `implicit-join` | Implicit comma-separated join syntax | Detect comma-separated tables in FROM clause |
 | `unused-join` | LEFT JOIN table is never referenced | Detect LEFT JOIN tables unused in SELECT/WHERE |
 
-#### Locking Risks (3 issue types)
+#### Locking Risks
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
@@ -229,7 +228,7 @@ Important issues that should be reviewed and typically fixed.
 | `range-lock-risk` | Range + FOR UPDATE on unindexed column | Detect range predicates with FOR UPDATE |
 | `for-update-no-timeout` | FOR UPDATE without NOWAIT/SKIP LOCKED | Detect FOR UPDATE without timeout modifier |
 
-#### MySQL-Specific (4 issue types)
+#### MySQL-Specific
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
@@ -238,14 +237,14 @@ Important issues that should be reviewed and typically fixed.
 | `regexp-usage` | REGEXP/RLIKE prevents index usage | Detect REGEXP or RLIKE in query |
 | `find-in-set` | FIND_IN_SET indicates comma-separated values | Detect FIND_IN_SET function usage |
 
-#### Hibernate / ORM Patterns (2 issue types)
+#### Hibernate / ORM Patterns
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
 | `collection-delete-reinsert` | DELETE-all + re-INSERT pattern | Detect DELETE + re-INSERT sequence on same table |
 | `derived-delete-loads-entities` | Derived delete loads entities before deletes | Detect SELECT followed by individual DELETE pattern |
 
-#### Query Structure (2 issue types)
+#### Query Structure
 
 | Code | Description | Detection Method |
 |------|-------------|-----------------|
@@ -254,7 +253,7 @@ Important issues that should be reviewed and typically fixed.
 
 ---
 
-### INFO Severity (17 issue types)
+### INFO Severity
 
 Best-practice suggestions and heuristic checks. These won't fail your build by default
 but are worth reviewing.
@@ -275,23 +274,22 @@ but are worth reviewing.
 | `find-by-id-for-association` | `findById()` used only for FK association — consider `getReferenceById()` to skip the SELECT | Spring Data return-type and call-site analysis |
 | `read-modify-write` | Check-then-act race: unlocked SELECT then INSERT/UPDATE on the same table | Sequence analysis + unique-index cross-check; exempts FOR UPDATE, upserts, @Version columns, atomic `SET col = col - ?`, non-overlapping predicates |
 | `connection-held-idle` | Connection held while non-database work runs | held − database-work time per connection checkout, from JDBC lifecycle events; threshold `connection-held-idle.threshold-ms` (200ms default) |
-| `n-plus-one-suspect` | Same-structure query repeated at the SQL level — suspect only; the Hibernate-level tracker is authoritative | SQL pattern repetition heuristic |
+| `n-plus-one-suspect` | Same-structure SELECTs repeated at the SQL level; review with Hibernate events and actual counts | SQL pattern repetition heuristic |
 | `filesort` | Filesort detected in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
 | `temporary-table` | Temporary table usage in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
 
 !!! info "Info rules are still useful"
-    Even though they can produce false positives with small test data, they serve as early
-    warning signals. When combined with Confirmed findings (e.g., a full scan **and** a missing
-    index), the diagnosis becomes highly reliable.
+    These findings can guide investigation. A scan in the native plan and a missing-index finding
+    provide different pieces of evidence; review both with representative data before changing the schema.
 
 ---
 
 ## Disabled & Reserved Rules
 
-The `IssueType` enum currently has **69 entries**. **67 are actively emitted** by detection
-rules. The remaining 2 entries fall into two categories:
+Some issue codes remain available for compatibility even though no active detector emits them.
+Do not use their presence in configuration as evidence that the corresponding check ran.
 
-### Disabled Rules (1 entry)
+### Disabled Rules
 
 | Code | Reason |
 |------|--------|
@@ -302,7 +300,7 @@ rules. The remaining 2 entries fall into two categories:
     `DetectionRuleRegistry.createBuiltInRules()`. The `DUPLICATE_QUERY` IssueType remains in the
     enum for forward compatibility.
 
-### Reserved for Future EXPLAIN-based Detection (1 entry)
+### Reserved for Future EXPLAIN-based Detection
 
 | Code | Description | Status |
 |------|-------------|--------|
@@ -311,22 +309,13 @@ rules. The remaining 2 entries fall into two categories:
 This IssueType exists in the enum but is not emitted yet. It is a placeholder
 for full-table-scan detection in the EXPLAIN analyzers.
 
-### Accounting
-
-| Category | Count |
-|----------|-------|
-| Active issue types emitted by detectors | **67** |
-| Disabled (DuplicateQueryDetector) | 1 |
-| Reserved (full-scan) | 1 |
-| **Total IssueType enum entries** | **69** |
-
-!!! note "Why fewer detector classes than active issue types?"
-    A single detector can emit multiple issue types. The biggest example is
-    `MissingIndexDetector`, which is registered as one detection rule but emits 4 different
+!!! note "Where findings come from"
+    A single detector can emit multiple issue types. For example,
+    `MissingIndexDetector` is registered as one detection rule but emits clause-specific
     `IssueType`s (`missing-where-index`, `missing-join-index`, `missing-order-by-index`,
     `missing-group-by-index`) -- one per SQL clause it analyzes. On top of the core rules,
     the MySQL/PostgreSQL EXPLAIN analyzers emit `filesort` and `temporary-table`, the
-    Hibernate-level trackers emit `find-by-id-for-association` and the authoritative N+1
+    Hibernate-level trackers emit `find-by-id-for-association` and the event-based N+1
     signal, and the connection lifecycle tracker emits `connection-held-idle` -- these run
     outside `DetectionRuleRegistry.createBuiltInRules()`.
 
@@ -336,7 +325,7 @@ for full-table-scan detection in the EXPLAIN analyzers.
 
 ### Query Patterns
 - [`n-plus-one`](n-plus-one.md) -- N+1 Query detection (ERROR)
-- `n-plus-one-suspect` -- SQL-level N+1 heuristic; Hibernate-level tracking is authoritative (INFO)
+- `n-plus-one-suspect` -- SQL-level N+1 heuristic; review alongside Hibernate lazy-load events (INFO)
 - `slow-query` -- Slow query detection (WARNING)
 - `query-count-regression` -- Query count regression (WARNING)
 - `mergeable-queries` -- Mergeable queries detection (INFO)
@@ -427,16 +416,17 @@ for full-table-scan detection in the EXPLAIN analyzers.
 
 ---
 
-## Summary
+## Use findings in a test policy
 
-| Severity | Issue Types | Action |
-|----------|-------------|--------|
-| ERROR | 11 | Must fix -- logic bugs or guaranteed performance degradation |
-| WARNING | 39 | Should fix -- important issues that typically need attention |
-| INFO | 17 | Review -- best-practice suggestions, may have false positives |
-| **Active Total** | **67 issue types** | Emitted by the active detector set |
-| Disabled | 1 | DuplicateQueryDetector (awaiting parameter tracking) |
-| Reserved | 1 | full-scan (EXPLAIN full-table-scan detection planned) |
+| Severity | Review action |
+|----------|---------------|
+| ERROR | Inspect the SQL and evidence promptly; enforce a reviewed rule when it matches the test's contract |
+| WARNING | Evaluate the reported pattern and its applicability before changing code or schema |
+| INFO | Use the observation to guide investigation, including representative data and native plans where relevant |
+
+Findings and statement-count assertions have separate policies. Suppressing a finding does not
+change `@ExpectQueries` or a recorded count contract. See [Annotations](../guide/annotations.md)
+and [Query Snapshot Contracts](../guide/contracts.md).
 
 ---
 

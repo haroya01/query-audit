@@ -1,56 +1,56 @@
 # Missing Index Detection
 
+Use index findings to investigate SQL reported by a test. Install the module for the test database,
+start with `@EnableQueryInspector`, and compare each finding with the existing indexes and native
+query plan. Use representative fixtures and the same database engine as the application before
+deciding whether an index change is useful. [Choose a workflow](../guide/choose-your-workflow.md).
+
 | | |
 |---|---|
 | **Issue codes** | `missing-where-index`, `missing-join-index`, `missing-order-by-index`, `missing-group-by-index` |
 | **Severity** | ERROR (WHERE, JOIN) / WARNING (ORDER BY, GROUP BY) |
-| **Confidence** | Confirmed (100%) |
 
-The `MissingIndexDetector` is a single detector that emits **4 different IssueTypes**, each
-targeting a specific SQL clause where a missing index causes performance degradation.
-
-!!! note "One rule, four issue types"
-    Although `MissingIndexDetector` is registered as a single detection rule in
-    `QueryAuditAnalyzer`, it produces 4 separate issue types. This is why there are fewer detector classes than the
-    67 active issue types. See the
-    [Detection Rules Overview](overview.md#accounting) for the full accounting.
+`MissingIndexDetector` reports clause-specific findings for WHERE, JOIN, ORDER BY, and GROUP BY.
+These findings describe the columns and index metadata it matched; they do not prove that adding
+an index will improve production performance.
 
 ---
 
 ## Core Mechanism
 
-Missing Index detection works by cross-referencing two sources of truth:
+Missing Index detection cross-references two inputs:
 
 1. **SQL column extraction** -- Parse the query to identify which columns are used in WHERE,
    JOIN, ORDER BY, and GROUP BY clauses
-2. **`SHOW INDEX` verification** -- Query the database for actual index metadata and check
+2. **Index metadata** -- Use the database provider (`SHOW INDEX` for MySQL or PostgreSQL catalogs) and check
    whether each referenced column has an index
 
-Because this compares **SQL structure** against **schema metadata** (not `EXPLAIN` output),
-the result is deterministic and 100% reliable regardless of data volume.
+The match uses **SQL structure** and **schema metadata** rather than a selected `EXPLAIN` plan.
+Its accuracy depends on parsing and metadata support. Other predicates, composite or expression
+indexes, and optimizer choices can change the access path; review the full query before applying a suggestion.
 
 ```
 Query: SELECT * FROM orders WHERE status = ?
 
 Step 1: Extract WHERE column  --> status
 Step 2: SHOW INDEX FROM orders --> check if 'status' has an index
-Step 3: No index found         --> ERROR (confirmed, 100%)
+Step 3: No matching index found --> ERROR finding to review with the query plan
 ```
 
 ---
 
-## The 4 Sub-Types
+## Findings by SQL clause
 
 ### 1. Missing WHERE Index (`missing-where-index`)
 
 !!! danger "Severity: ERROR"
-    A missing WHERE index means **every query** touching this condition performs a full table
-    scan on that column. This is the highest-impact missing index scenario.
+    An unindexed filter can require scanning many rows. Other conditions or access paths may
+    narrow the scan; check the complete query and plan before adding an index.
 
 Detects columns used in `WHERE` conditions that have no index.
 
-**Why 100% reliable:** The column appears in the WHERE clause (structural fact) and `SHOW INDEX`
-confirms no index exists (schema fact). Neither depends on data.
+**Evidence:** The detector extracted the WHERE column and found no matching index in the
+available metadata. Check both the extraction and the database's full index definition.
 
 #### Example
 
@@ -123,13 +123,13 @@ SELECT * FROM orders WHERE status = 'pending';
 ### 2. Missing JOIN Index (`missing-join-index`)
 
 !!! danger "Severity: ERROR"
-    Without an index on the join column, MySQL performs a nested loop with a full scan of the
-    inner table **for every row** in the outer table.
+    An unindexed join column can increase join work. The chosen join order and algorithm determine
+    the cost; inspect the native plan for the test database.
 
 Detects columns used in `JOIN ON` conditions that have no index.
 
-**Why 100% reliable:** The column is explicitly named in the ON clause, and `SHOW INDEX`
-confirms no index.
+**Evidence:** The detector matched an ON-clause column without a supported index in the metadata.
+Check the join's direction, predicates, and actual plan before choosing an index.
 
 #### Example
 
@@ -195,12 +195,12 @@ If `orders.member_id` has no index:
 ### 3. Missing ORDER BY Index (`missing-order-by-index`)
 
 !!! warning "Severity: WARNING"
-    While not always critical (small result sets sort quickly), a missing ORDER BY index on a
-    large table forces MySQL to sort all matching rows in memory or on disk (filesort).
+    Sorting many matching rows can add work. Check whether the selected access path already
+    supplies the required order and whether a sort is significant for this operation.
 
 Detects columns used in `ORDER BY` that have no index.
 
-**Why 100% reliable:** The column is in the ORDER BY clause (structural) and has no index
+**Evidence:** The column is in the ORDER BY clause (structural) and has no index
 (schema).
 
 #### Example
@@ -259,21 +259,21 @@ SELECT * FROM products ORDER BY created_at DESC LIMIT 20;
     ```
 
     !!! tip "Column order matters"
-        Always put the WHERE column(s) first, then the ORDER BY column(s). This lets MySQL
-        use the index for filtering AND avoids the filesort.
+        Equality-filter columns followed by ordering columns can support this query shape.
+        Range predicates and sort directions can change whether the index supplies the order;
+        check the native plan.
 
 ---
 
 ### 4. Missing GROUP BY Index (`missing-group-by-index`)
 
 !!! warning "Severity: WARNING"
-    GROUP BY without an index requires building a temporary table to compute groups, which
-    is expensive on large datasets.
+    Grouping can require additional sorting, hashing, or temporary storage. Review the
+    database's selected plan and the number of rows being grouped.
 
-Detects columns used in `GROUP BY` that have no index, forcing MySQL to use a temporary table
-for grouping.
+Detects columns used in `GROUP BY` that have no matching supported index in the metadata.
 
-**Why 100% reliable:** The column is in the GROUP BY clause (structural) and has no index
+**Evidence:** The column is in the GROUP BY clause (structural) and has no index
 (schema).
 
 #### Example
@@ -480,11 +480,14 @@ Columns that likely have few distinct values receive special treatment:
 
 ### 3. Unique/Primary Key Short-Circuit
 
-When another WHERE column on the same table has a **unique or primary key** index with an equality
-condition, the result set is guaranteed to be at most 1 row. In that case:
+QueryAudit `0.6.0` skips other suggestions when it recognizes an equality predicate on a column
+reported as part of a **unique or primary key** index on the same table:
 
 - All other missing WHERE index warnings for that table are **skipped**
-- Missing ORDER BY index warnings are **skipped** (sorting 0-1 rows is free)
+- Missing ORDER BY index warnings are **skipped**
+
+This shortcut does not prove a one-row bound for every query shape. Review the complete key
+definition and predicate, especially for composite unique indexes or alternative filter branches.
 
 ```sql
 -- No missing index warning for 'status' because 'id' is the primary key:

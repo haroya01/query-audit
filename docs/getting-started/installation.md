@@ -1,87 +1,61 @@
 ---
 title: Installation
-description: Choose the Spring Boot or plain JUnit setup and verify SQL capture.
+description: Add test dependencies, enforce a read-path policy, and verify an intentional failure.
 ---
 
 # Installation
 
-QueryAudit belongs on the test classpath. Choose one database module for the database used by
-your tests; it provides the JUnit extension and the matching index metadata provider.
+| Start from | Use |
+| --- | --- |
+| An existing Spring Boot database test | [Spring Boot starter](#spring-boot) |
+| JUnit 5 without Spring | [Plain JUnit 5](#plain-junit-5) |
+| A runnable sample | [Fail an unexpected write, then pass](quickstart.md) |
 
-!!! note "Choose the setup for your version"
-    Dependency snippets use the current Maven Central release. The manual plain-JUnit proxy works
-    with 0.5.x and 0.6.0+; the simpler mutable-field setup requires QueryAudit 0.6.0 or later.
-
-## Compatibility
-
-The current `main` branch verifies these combinations in the
-[pull-request CI workflow](https://github.com/haroya01/query-audit/blob/main/.github/workflows/ci.yml):
-
-| CI coverage | Java | Verified version | Scope |
-|---|---|---|---|
-| Build and regular tests | 17 and 21 | Spring Boot 3.4.1 | Compilation and regular starter tests |
-| Dedicated `boot4Test` suite | 17 and 21 | Spring Boot 4.0.6 | Multi-context lifecycle regression, included in `check` and therefore `build` |
-| MySQL integration tests | 21 | MySQL 8.0 (`mysql:8.0`) | Database metadata and EXPLAIN |
-| PostgreSQL integration tests | 21 | PostgreSQL 16 (`postgres:16-alpine`) | Database metadata and EXPLAIN |
-
-The [starter build](https://github.com/haroya01/query-audit/blob/main/query-audit-spring-boot-starter/build.gradle)
-pins the Spring Boot versions and wires `boot4Test` into `check`.
-The [MySQL](https://github.com/haroya01/query-audit/blob/main/query-audit-mysql/src/test/java/io/queryaudit/mysql/MySqlIntegrationTest.java)
-and [PostgreSQL](https://github.com/haroya01/query-audit/blob/main/query-audit-postgresql/src/test/java/io/queryaudit/postgresql/PostgreSqlIntegrationTest.java)
-test fixtures select the database images.
-
-Java 17 is the source/target baseline; the regular JUnit 5 suite uses 5.11.4.
-These baselines and Spring Boot 3.x/4.x integration are not a guarantee that every
-version in those lines, or every Java/Boot/database combination, has been verified.
-In particular, the dedicated Boot 4 suite is not the full Boot 3 suite rerun against Boot 4.
-The broader scheduled matrix and support policy are tracked in
-[#208](https://github.com/haroya01/query-audit/issues/208).
-
-You still need your normal JDBC driver and a test database. QueryAudit does not create the
-database or replace your migration and fixture setup.
-
-### SQL parser dependency
-
-Starting with 0.6.0, `query-audit-core` brings JSqlParser 5.3 onto the runtime classpath
-transitively. No separate parser dependency is needed. Do not exclude it: a missing or incompatible
-parser is an installation error, not a switch to a different analysis mode.
-
-Structural extraction uses JSqlParser first. Statements it cannot parse, and statements longer
-than 10,000 characters, retain the regex fallback. Simple pattern checks and SQL normalization
-continue to use the built-in parser. A fallback is limited to that statement; later statements
-still use JSqlParser.
-
-If dependency management overrides the parser version, QueryAudit exposes the resolved version
-through `EnhancedSqlParser.parserVersion()`. Repackaged JARs must retain JSqlParser's Maven version
-metadata; QueryAudit fails initialization when it cannot identify the parser version.
+Add QueryAudit to the **test classpath**. These snippets use published `0.6.0`;
+[Versions](versions.md) lists its supported scope and tested combinations.
 
 ## Spring Boot
 
-Add the starter and either the MySQL or PostgreSQL module. The starter discovers and wraps the
-Spring `DataSource`; no proxy bean is needed in the test.
+Add the starter to your existing database test. It wraps the Spring `DataSource` automatically;
+keep your JDBC driver, connection settings, migrations, and fixtures.
 
-=== "Gradle · MySQL"
+=== "Gradle · Kotlin"
+
+    ```kotlin
+    dependencies {
+        testImplementation("org.springframework.boot:spring-boot-starter-test")
+        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.6.0") // x-release-please-version
+        testImplementation("io.github.haroya01:query-audit-mysql:0.6.0") // x-release-please-version
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+    }
+    ```
+
+=== "Gradle · Groovy"
 
     ```groovy
     dependencies {
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
         testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.6.0' // x-release-please-version
         testImplementation 'io.github.haroya01:query-audit-mysql:0.6.0' // x-release-please-version
     }
-    ```
 
-=== "Gradle · PostgreSQL"
-
-    ```groovy
-    dependencies {
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.6.0' // x-release-please-version
-        testImplementation 'io.github.haroya01:query-audit-postgresql:0.6.0' // x-release-please-version
+    test {
+        useJUnitPlatform()
     }
     ```
 
-=== "Maven · MySQL"
+=== "Maven"
 
     ```xml
     <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-spring-boot-starter</artifactId>
@@ -97,87 +71,67 @@ Spring `DataSource`; no proxy bean is needed in the test.
     </dependencies>
     ```
 
-=== "Maven · PostgreSQL"
+Keep Spring Boot's managed test version. If `spring-boot-starter-test` is already present,
+add only the QueryAudit dependencies you need.
 
-    ```xml
-    <dependencies>
-        <dependency>
-            <groupId>io.github.haroya01</groupId>
-            <artifactId>query-audit-spring-boot-starter</artifactId>
-            <version>0.6.0</version> <!-- x-release-please-version -->
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>io.github.haroya01</groupId>
-            <artifactId>query-audit-postgresql</artifactId>
-            <version>0.6.0</version> <!-- x-release-please-version -->
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-    ```
+| Your test database | Database module to use |
+| --- | --- |
+| MySQL | `query-audit-mysql` as shown above |
+| PostgreSQL | Replace `query-audit-mysql` with `query-audit-postgresql` |
+| Query budgets and count contracts only | Omit the database module; the starter includes JUnit integration |
 
-Verify the wiring with a test that executes one statement:
-
-```java
-@SpringBootTest
-@EnableQueryInspector
-class QueryAuditInstallationTest {
-
-    @Autowired
-    private JdbcTemplate jdbc;
-
-    @Test
-    @ExpectMaxQueryCount(1)
-    void capturesJdbcWork() {
-        assertThat(jdbc.queryForObject("select 1", Integer.class)).isEqualTo(1);
-    }
-}
-```
-
-Run `./gradlew test --tests QueryAuditInstallationTest` or
-`mvn -Dtest=QueryAuditInstallationTest test`. The console report should show one captured query.
-QueryAudit 0.5.x also writes `build/reports/query-audit/report.json` after the session. With Spring
-Boot on 0.6.0+, select the machine report in `src/test/resources/application.yml`, rerun the test,
-and check the same path:
-
-```yaml
-query-audit:
-  report:
-    format: json
-```
+**Run it:** [fail a zero-SELECT budget, then apply a read-path policy](spring-boot.md#run-a-controlled-first-audit).
 
 ## Plain JUnit 5
 
-The portable plain JUnit setup exposes a `ProxyDataSource` on the test class. The repository or
-JDBC code under test must use that same object so the extension can attach its capture listener.
+Use `query-audit-junit5` for capture, budgets, and count contracts in Java 17+ JUnit 5 tests.
+The H2 dependency supplies the [runnable sample](quickstart.md); use your existing database otherwise.
 
-Add the database module and a compile-time dependency on `datasource-proxy`:
+=== "Gradle · Kotlin"
 
-=== "Gradle · MySQL"
-
-    ```groovy
+    ```kotlin
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.6.0' // x-release-please-version
-        testImplementation 'net.ttddyy:datasource-proxy:1.10'
+        testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+        testImplementation("io.github.haroya01:query-audit-junit5:0.6.0") // x-release-please-version
+        testImplementation("net.ttddyy:datasource-proxy:1.10")
+        testImplementation("com.h2database:h2:2.3.232")
+    }
+
+    tasks.test {
+        useJUnitPlatform()
     }
     ```
 
-=== "Gradle · PostgreSQL"
+=== "Gradle · Groovy"
 
     ```groovy
     dependencies {
-        testImplementation 'io.github.haroya01:query-audit-postgresql:0.6.0' // x-release-please-version
+        testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+        testImplementation 'io.github.haroya01:query-audit-junit5:0.6.0' // x-release-please-version
         testImplementation 'net.ttddyy:datasource-proxy:1.10'
+        testImplementation 'com.h2database:h2:2.3.232'
+    }
+
+    test {
+        useJUnitPlatform()
     }
     ```
 
-=== "Maven · MySQL"
+=== "Maven"
 
     ```xml
     <dependencies>
         <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.11.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>io.github.haroya01</groupId>
-            <artifactId>query-audit-mysql</artifactId>
+            <artifactId>query-audit-junit5</artifactId>
             <version>0.6.0</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
@@ -187,106 +141,91 @@ Add the database module and a compile-time dependency on `datasource-proxy`:
             <version>1.10</version>
             <scope>test</scope>
         </dependency>
-    </dependencies>
-    ```
-
-=== "Maven · PostgreSQL"
-
-    ```xml
-    <dependencies>
         <dependency>
-            <groupId>io.github.haroya01</groupId>
-            <artifactId>query-audit-postgresql</artifactId>
-            <version>0.6.0</version> <!-- x-release-please-version -->
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>net.ttddyy</groupId>
-            <artifactId>datasource-proxy</artifactId>
-            <version>1.10</version>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.3.232</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
     ```
 
-Wrap the existing test `DataSource` once, expose the proxy as a static field, and pass that proxy
-to the code under test:
+If your project already manages JUnit, keep its compatible JUnit version and launcher aligned.
+Maven must already be configured to execute JUnit 5 tests; a build that discovers no tests has
+not verified capture.
+
+Expose a `ProxyDataSource` as a static test field and make the code under test use **that same
+object**. Copy the [complete test and setup](quickstart.md#4-apply-the-budget-to-your-code).
+
+For an existing MySQL or PostgreSQL test, replace `query-audit-junit5` with
+`query-audit-mysql` or `query-audit-postgresql`; both include the JUnit integration. Keep
+`datasource-proxy` for the explicit proxy setup and use your existing driver/fixture instead of H2.
+
+??? info "Let QueryAudit wrap a mutable field (0.6.0+)"
+
+    The extension can replace a raw field declared as `static javax.sql.DataSource` with its
+    recording proxy during the test. The field must be mutable: a raw `static final` field or a
+    concrete pool type cannot be replaced this way. Construct the repository after wrapping, using
+    the current field value. A repository created earlier with the raw datasource bypasses capture.
+
+    The explicit static proxy in the quick start avoids this replacement requirement and is also
+    the portable setup for older releases.
+
+## Run a failure, then keep the read policy
+
+Add `@EnableQueryInspector` and this policy directly to an existing test that executes one SELECT:
 
 ```java
-import io.queryaudit.junit5.EnableQueryInspector;
-import io.queryaudit.junit5.ExpectMaxQueryCount;
-import java.sql.Connection;
-import java.sql.ResultSet;
-import java.sql.Statement;
-import javax.sql.DataSource;
-import net.ttddyy.dsproxy.support.ProxyDataSourceBuilder;
-import org.junit.jupiter.api.Test;
-
-@EnableQueryInspector
-class OrderRepositoryQueryTest {
-
-    static final DataSource DATA_SOURCE =
-            ProxyDataSourceBuilder.create(TestDatabase.dataSource())
-                    .name("query-audit")
-                    .build();
-
-    @Test
-    @ExpectMaxQueryCount(1)
-    void capturesJdbcWork() throws Exception {
-        try (Connection connection = DATA_SOURCE.getConnection();
-                Statement statement = connection.createStatement();
-                ResultSet result = statement.executeQuery("select 1")) {
-            result.next();
-        }
-    }
-}
+@ExpectQueries(select = 0, insert = 0, update = 0, delete = 0)
 ```
 
-`TestDatabase.dataSource()` stands for the raw `DataSource` already created by your test fixture,
-Testcontainers setup, or connection pool. Do not create a second pool for QueryAudit. The object
-used by the repository must be `DATA_SOURCE`, not the raw object returned by the fixture.
+Run it and require this failure:
 
-QueryAudit 0.6.0+ can install the recording proxy for you when the test exposes the raw object in a
-mutable static field declared as `javax.sql.DataSource`:
-
-```java
-@EnableQueryInspector
-class OrderRepositoryQueryTest {
-
-    static DataSource DATA_SOURCE = TestDatabase.dataSource();
-
-    @Test
-    @ExpectMaxQueryCount(1)
-    void capturesJdbcWork() {
-        new JdbcOrderRepository(DATA_SOURCE).findOne();
-    }
-}
+```text
+SELECT: executed 1, expected at most 0.
 ```
 
-Do not mark this field `final` or declare it as a concrete pool type. The extension temporarily
-replaces the field value before the test and restores the original object afterward. The explicit
-`ProxyDataSource` setup above remains valid for QueryAudit 0.5.x and 0.6.0+.
+Then set `select = 1` and rerun. The test should pass; the zero INSERT/UPDATE/DELETE budgets
+remain to catch writes added to that read path. Keep its functional assertions.
 
-!!! warning "Keep the proxy in the execution path"
-    If the repository keeps using the raw object instead of `DATA_SOURCE`, its SQL bypasses the
-    capture listener and the report shows zero queries. Wrap once and use the proxy throughout
-    that test.
+Budgets are upper bounds, so a passing test alone does not prove SQL capture.
+If the zero-budget run passes, follow [missing-capture troubleshooting](../guide/troubleshooting.md#queryaudit-not-detecting-any-queries).
+
+Next, [record per-test count contracts](../guide/contracts.md) or [require the audit in CI](../guide/first-ci-check.md).
 
 ## Module selection
 
-| Module | Add it when |
-|---|---|
-| `query-audit-spring-boot-starter` | A Spring Boot test should receive automatic `DataSource` wrapping and property binding |
-| `query-audit-mysql` | Tests use MySQL and need MySQL index metadata or EXPLAIN support |
-| `query-audit-postgresql` | Tests use PostgreSQL and need PostgreSQL index metadata or EXPLAIN support |
-| `query-audit-junit5` | Plain JUnit tests only need SQL capture and database-independent checks |
-| `query-audit-core` | A tool consumes the model, schema, reporters, or comparator without the JUnit extension |
+| Module | Use it for |
+| --- | --- |
+| `query-audit-spring-boot-starter` | Automatic Spring DataSource wrapping and property binding |
+| `query-audit-junit5` | Plain JUnit capture, budgets, count contracts, and database-independent checks |
+| `query-audit-mysql` | JUnit integration plus MySQL index metadata and EXPLAIN |
+| `query-audit-postgresql` | JUnit integration plus PostgreSQL index metadata and EXPLAIN |
+| `query-audit-core` | Programmatic analysis, models, reporters, or comparison without JUnit |
 
-The MySQL and PostgreSQL modules both include `query-audit-core` and `query-audit-junit5`
-transitively. Do not add those two modules again unless you need to depend on one directly.
+The starter and database modules include `query-audit-junit5` and `query-audit-core` transitively.
+Add a direct dependency only when your code needs that module's public API.
+
+## Compatibility
+
+Use **Java 17+ and JUnit 5**. See [tested combinations](versions.md#tested-combinations) and
+[known limitations](../guide/limitations.md) for the published release’s scope.
+
+### SQL parser dependency
+
+From 0.6.0, JSqlParser 5.3 is a required transitive dependency. Do not exclude it. Missing,
+incompatible, or unidentifiable parser versions fail initialization.
+
+??? info "Parser overrides and fallback"
+
+    Structural extraction uses JSqlParser first. Unsupported statements and statements longer than
+    10,000 characters use the built-in fallback for that statement; simple pattern checks and
+    normalization also use built-in parsing. A fallback does not establish complete SQL support.
+
+    If dependency management overrides JSqlParser, check `EnhancedSqlParser.parserVersion()`.
+    Repackaged JARs must retain its Maven version metadata. See
+    [parser troubleshooting](../guide/troubleshooting.md#sql-is-too-complex-for-the-parser).
 
 ## Next step
 
-Continue with the [quick start](quickstart.md) to add a useful query budget, read the first
-failure, fix it, and keep the reports in CI. If capture does not work, use the
-[no-query checklist](../guide/troubleshooting.md#queryaudit-not-detecting-any-queries).
+[Prove your first budget](quickstart.md), then [add your first CI check](../guide/first-ci-check.md).

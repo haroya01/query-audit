@@ -1,7 +1,13 @@
 # Adding Database Support
 
-This guide walks through the steps to add support for a new database engine.
-We use PostgreSQL as a running example below. Note that **PostgreSQL support is already implemented** in the `query-audit-postgresql` module -- the code shown here reflects the actual implementation and can serve as a reference when adding support for other databases (e.g., MariaDB, Oracle, SQL Server).
+Add a database provider when query findings need index metadata from an engine that is not yet
+supported. The result is additional schema evidence for captured queries; statement-count
+budgets and contracts do not require an index provider. Use the same database engine and schema
+as the application when validating engine-specific behavior.
+
+This guide uses the implemented `query-audit-postgresql` module as a reference for a new provider.
+To use the existing MySQL or PostgreSQL support, follow [Installation](../getting-started/installation.md)
+instead. Optional execution-plan support has separate [limits](../guide/limitations.md).
 
 ## Overview
 

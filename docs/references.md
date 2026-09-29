@@ -1,7 +1,9 @@
 # References
 
-QueryAudit's detection rules are grounded in official database documentation,
-peer-reviewed academic research, and established technical literature.
+Use these sources to investigate a finding's database assumptions and evaluate a suggested change.
+They provide background for QueryAudit's SQL analysis; the papers' measurements describe their
+own tools and datasets, not QueryAudit's detection accuracy. For test policies and expected
+results, start with [Choose Your Workflow](guide/choose-your-workflow.md).
 
 ---
 
@@ -96,4 +98,4 @@ peer-reviewed academic research, and established technical literature.
 ## See Also
 
 - [Architecture Overview](architecture/overview.md) -- How detection rules use these references
-- [Configuration Reference](guide/configuration.md) -- All 67 active detection rules and their codes
+- [Configuration Reference](guide/configuration.md) -- Rule codes and policy settings

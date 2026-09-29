@@ -1,557 +1,304 @@
+---
+title: Troubleshooting
+description: Find the symptom, verify capture, and make the smallest corrective change.
+---
+
 # Troubleshooting
 
-Common issues and solutions when using QueryAudit.
+**Start by proving capture:** a test that executes one `SELECT` must fail
+`@ExpectQueries(select = 0)`. A passing upper bound and an empty finding list can both mean that
+SQL bypassed capture. Use the complete [Spring check](../getting-started/spring-boot.md#run-a-controlled-first-audit)
+or [plain JUnit quick start](../getting-started/quickstart.md).
 
----
+| Symptom | First check | Next action |
+| --- | --- | --- |
+| SQL ran, but the report says zero queries | Does the one-SELECT/zero-budget check fail? | [Trace the datasource and audit activation](#queryaudit-not-detecting-any-queries) |
+| A test passes after its Spring context is replaced | Does it use `@DirtiesContext` between methods? | Check the [known context-replacement gap](limitations.md) before trusting the result |
+| No audit with a custom or inherited annotation | Which artifact/version is loaded, and does a direct annotation activate capture? | Check [shared-policy checks](limitations.md#shared-annotation-policies), then rerun the zero-budget proof |
+| A budget fails unexpectedly | Which statements were captured during setup, the test, and teardown? | [Check the count boundary](#expectmaxquerycount-fails-unexpectedly) |
+| A batched Hibernate fetch is reported as N+1 | How many SQL statements actually ran? | [Check the known batch false positive](#common-jpahibernate-issues) |
+| An expected finding is missing | Was SQL captured, and is the rule enabled in this profile? | [Check rule inputs](#why-didnt-queryaudit-detect-my-issue) |
+| No JSON/HTML file | Was that format selected, and did the test session finalize? | [Check report generation](#html-report-not-generated) |
+| HTML is green but the run was incomplete | What do the test exit status and JSON outcome say? | [Use the canonical outcome](#html-report-not-generated) |
+| CI differs from local execution | Same artifact, fixture, schema, profile, and policies? | [Compare effective inputs](#tests-fail-in-ci-but-pass-locally) |
+| Memory or runtime grows sharply | Many lazy events, unique queries, or oversized tests? | [Measure and bound the audit](#outofmemoryerror-during-tests) |
 
-## "HikariDataSource has been closed" on Spring Boot 4.x
-
-**Symptom:** Tests fail with
-
-```
-org.springframework.transaction.CannotCreateTransactionException: Could not open JPA EntityManager
-Caused by: java.sql.SQLException: HikariDataSource (HikariPool-N) has been closed.
-  at net.ttddyy.dsproxy.support.ProxyDataSource.performProxyLogic(...)
-```
-
-after sweeping `@QueryAudit` across many `@SpringBootTest` classes.
-
-**Cause:** In query-audit 0.3.1 and earlier on Spring Boot 4.x with 30+ test contexts, Spring's
-destroy-method inference attached `close()` to the `ProxyDataSource` post-BPP instance, which then
-cascade-closed the underlying `HikariDataSource` of a still-cached sibling context. See
-[issue #153](https://github.com/haroya01/query-audit/issues/153) for the full analysis.
-
-**Fix:** **Upgrade to 0.3.2.** The post-BPP `DataSource` is now wrapped in a `NonClosingDataSource`
-decorator that does not implement `Closeable`/`AutoCloseable`, so Spring's destroy inference no
-longer cascades. Boot 3.x was never affected and continues to work unchanged.
-
-If you can't upgrade yet, the surgical escape hatch from #134/#142 still works:
-
-```yaml
-# application-test.yml
-query-audit:
-  wrap-data-source:
-    enabled: false   # Use only when another query-aware DataSource bean is already registered.
-```
-
-An active audit still needs a query-aware Spring `DataSource`. If no other datasource-proxy bean
-is present, disabling the wrapper prevents reliable capture.
-
----
+The [known limitations](limitations.md) page links the reviewed defects and their issue status.
+[Versions](../getting-started/versions.md) lists the published artifact’s scope and tested combinations.
 
 ## QueryAudit Not Detecting Any Queries
 
-**Symptom:** Report shows `0 queries analyzed` even though your test executes SQL.
+Run the capture proof **through the same datasource used by the code under test**. Confirm that
+JUnit actually discovered and executed the test; a skipped test or cached/no-op build is not proof.
 
-**Causes and fixes:**
+| Check | Correction |
+| --- | --- |
+| Audit activation | Put `@EnableQueryInspector` or `@QueryAudit` directly on the test class/method. Keep `query-audit.enabled` enabled. |
+| Spring wiring | Include the starter and retain automatic wrapping unless another datasource-proxy bean already provides capture. |
+| Plain JUnit wiring | Expose the static proxy and pass that same object into the repository; a separately retained raw datasource bypasses it. |
+| Test timing | Execute the proof SQL in the test body. Captured per-test setup/teardown SQL remains in raw reports and budgets; detector analysis excludes it by default. Class-level initialization is outside the per-test audit. |
+| Multiple datasources | Check the actual selected datasource; marking one `@Primary` does not combine all of them. |
+| Async work | Keep the audited SQL on the test execution path; see [execution constraints](#parallel-capture-is-incomplete). |
 
-=== "Spring Boot: DataSource not wrapped"
+A raw mutable `static DataSource` field can be wrapped automatically on 0.6.0+, but a repository
+constructed earlier from the raw object will still bypass capture. The explicit proxy in
+[plain JUnit installation](../getting-started/installation.md#plain-junit-5) avoids that ambiguity.
 
-    The `QueryAuditAutoConfiguration` BeanPostProcessor may not have been applied.
-
-    **Check:** Add `@QueryAudit` or `@EnableQueryInspector` to your test class.
-    Without these annotations, the extension is not registered.
-
-    ```java
-    @SpringBootTest
-    @QueryAudit           // <-- Required
-    class OrderServiceTest { ... }
-    ```
-
-=== "Non-Spring: SQL bypasses the proxy"
-
-    Expose a static `ProxyDataSource` field and make the repository under test use that same
-    object. SQL sent through another raw `DataSource` does not reach the capture listener.
-
-    ```java
-    @QueryAudit
-    class OrderRepositoryTest {
-        static DataSource dataSource =
-                ProxyDataSourceBuilder.create(createDataSource())
-                        .name("query-audit")
-                        .build();
-
-        private final OrderRepository repository =
-                new JdbcOrderRepository(dataSource);
-    }
-    ```
-
-    See [Plain JUnit installation](../getting-started/installation.md#plain-junit-5) for the
-    required dependency and a complete capture check.
-
-    QueryAudit 0.6 can also wrap a raw `static DataSource` field automatically when the field is
-    mutable and declared as `javax.sql.DataSource`. A `static final` raw field cannot be replaced.
-
-=== "Queries executed outside test method"
-
-    QueryAudit captures from `@BeforeEach` through `@AfterEach`; queries in `@BeforeAll` or static
-    initializers are outside that window. Setup and teardown statements are excluded from analysis
-    by default. Use `@QueryAudit(includeSetupQueries = true)` when they should be analyzed too.
-
-=== "QueryAudit disabled"
-
-    Check that you have not set `query-audit.enabled: false` in your test configuration:
-
-    ```yaml
-    # Verify this is not set
-    query-audit:
-      enabled: false   # <-- This disables all query interception
-    ```
-
----
+Context replacement and composed/inherited annotations have reported capture gaps
+([#287](https://github.com/haroya01/query-audit/issues/287),
+[#290](https://github.com/haroya01/query-audit/issues/290)). See their
+[reproduction scope](limitations.md#reported-cases-to-check) and verify capture after either change.
+A zero-query result alone does not prove a clean audit.
 
 ## Why Didn't QueryAudit Detect My Issue?
 
-**Symptom:** You know a query has a problem, but QueryAudit does not flag it.
-
-**Possible causes:**
+After capture is verified, check the rule's [requirements](../detections/overview.md), active
+[profile](configuration.md), exclusions, suppressions, and threshold. Avoid changing several
+settings at once: rerun the same small test after each change.
 
 ### The rule requires index metadata
 
-Many detection rules (e.g., `missing-where-index`, `missing-join-index`,
-`composite-index-leading`) require index metadata from the database. If metadata
-is not available, these rules silently skip.
-
-**Fix:** Ensure the correct database module is on your test classpath:
-
-```groovy
-// Gradle
-testImplementation 'io.github.haroya01:query-audit-mysql:${version}'
-// or
-testImplementation 'io.github.haroya01:query-audit-postgresql:${version}'
-```
+Add the module for the **actual test database**: `query-audit-mysql` or
+`query-audit-postgresql`. H2 can verify query budgets and database-independent checks, but it does
+not provide these vendors' index/EXPLAIN evidence. See [index metadata](#index-metadata-not-collected).
 
 ### The query is suppressed
 
-Check your `suppress-patterns`, `suppress-queries`, and `disabled-rules` configuration.
-A broad suppress pattern may be hiding the issue.
-
-```yaml
-# Check for broad suppressions
-query-audit:
-  suppress-patterns:
-    - "missing-where-index"    # This suppresses ALL missing index findings!
-```
-
-!!! tip "Debugging suppressions"
-    Temporarily remove all suppression settings and re-run the test to see if
-    the issue appears. Then narrow down which suppression pattern was hiding it.
+Inspect `suppress-patterns`, `suppress-queries`, and `.query-audit-baseline`. A broad pattern can
+hide an entire rule or table. Narrow only the relevant entry and rerun. Suppression changes what
+findings are reported; it does not mean the SQL was never captured or should be excluded from a
+query budget.
 
 ### The issue type is INFO and `show-info` is disabled
 
-INFO-level issues are hidden when `report.show-info` is `false`.
-
-```yaml
-query-audit:
-  report:
-    show-info: true    # Ensure INFO issues are visible
-```
+Set `query-audit.report.show-info: true` to include informational findings in reports.
+In `0.6.0`, hiding INFO also removes it from generated JSON. Keep this setting identical across
+comparison runs; see [report behavior](reports.md) and [comparison inputs](comparison-inputs.md).
 
 ### The threshold is too high
 
-Some rules use thresholds. If your query does not exceed the threshold, it won't
-be flagged:
-
-| Rule | Threshold Setting | Default |
-|---|---|---|
-| N+1 | `n-plus-one.threshold` | 3 |
-| Large IN list | `large-in-list.threshold` | 100 |
-| Too many JOINs | `too-many-joins.threshold` | 5 |
-| OR abuse | `or-clause.threshold` | 3 |
-| OFFSET pagination | `offset-pagination.threshold` | 1000 |
-| Excessive columns | `excessive-column.threshold` | 15 |
-| Repeated INSERT | `repeated-insert.threshold` | 3 |
-| Repeated UPDATE | `repeated-update.threshold` | 3 |
-| Slow query (warning) | `slow-query.warning-ms` | 500 |
-| Slow query (error) | `slow-query.error-ms` | 3000 |
+Compare the observed count/value with the rule's effective threshold in
+[configuration](configuration.md). For example, the default repeated-query N+1 threshold is three.
+Do not lower thresholds globally just to make one expected finding appear.
 
 ### The query type is not analyzed
 
-QueryAudit analyzes SELECT, INSERT, UPDATE, and DELETE statements. DDL statements
-(`CREATE TABLE`, `ALTER TABLE`) and session-level commands (`SET`, `SHOW`) are not
-analyzed.
+Detection focuses on SELECT, INSERT, UPDATE, and DELETE. Capturing a statement does not imply a
+rule exists for it; DDL and session commands are not an equivalent source of detector coverage.
 
 ### The rule is disabled
 
-Check if the rule has been explicitly disabled:
-
-```yaml
-query-audit:
-  disabled-rules:
-    - "missing-where-index"    # This rule never runs!
-```
+A profile or `disabled-rules` can exclude it. Check `enabled-rules` and annotation overrides too.
+For a comparison, changing the rule set intentionally changes the audit inputs; see
+[comparison inputs](comparison-inputs.md).
 
 ### SQL is too complex for the parser
 
-QueryAudit uses JSqlParser for structural SQL analysis (extracting WHERE columns, JOIN columns,
-table names, etc.). From 0.6.0 it is a required transitive dependency, so consumers use the same
-parser path as the tests. Unsupported statements and inputs longer than 10,000 characters fall
-back to the built-in regex parser; this may provide less complete structural information. Simple
-pattern checks and normalization always use the built-in parser.
+From 0.6.0, JSqlParser is required transitively. Missing/incompatible parser classes or missing
+version metadata are installation errors: check dependency exclusions and overrides.
 
-If a statement produces an unexpected finding, include the SQL and the values returned by
-`EnhancedSqlParser.parserName()` and `EnhancedSqlParser.parserVersion()` in the bug report.
-Check for exclusions or dependency overrides if the runtime parser cannot load. Missing version
-metadata is also an installation error; it must not be replaced with a guessed version.
+Unsupported statements and SQL longer than 10,000 characters use a limited built-in structural
+fallback. Normalization and some pattern checks also use built-in parsing. A successfully executed
+SQL statement is not proof that every detector understands its dialect or structure.
 
----
+For a reproducible parser report, include sanitized SQL, database/version, QueryAudit version, and
+`EnhancedSqlParser.parserName()` / `EnhancedSqlParser.parserVersion()`. Keep the minimal statement's
+quotes, comments, whitespace, and nesting intact when those affect the result.
 
 ## INSERT/UPDATE/DELETE Not Counted
 
-**Symptom:** Query count only shows SELECTs, INSERT/UPDATE/DELETE are always 0.
-
-**Cause:** You may be using an older version. DML capture was added in 0.2.0.
-
-**Fix:** Update to the latest version of QueryAudit.
-
----
+Use the zero-budget capture check for the write type in the same execution path. For JPA, check
+when a flush actually sends SQL: a queued entity change is not yet a JDBC statement. Keep the flush
+inside the audited test when that write is part of the intended contract. Check the installed
+[version](../getting-started/versions.md) and [counting rules](contracts.md) before adjusting a budget.
 
 ## @ExpectMaxQueryCount Fails Unexpectedly
 
-**Symptom:** Test fails with "executed N queries, expected at most M" where N is higher
-than expected.
+`@ExpectMaxQueryCount` limits the total captured query count, including reads and writes.
+`@ExpectQueries` lets you limit each type separately. Both count all captured per-test setup,
+test-body, and teardown statements. `includeSetupQueries` filters detector analysis inputs only;
+it does not remove statements from the raw report or either query budget.
 
-**Cause:** `@ExpectMaxQueryCount` counts **all** query types, including INSERTs
-from `@BeforeEach` test data setup.
-
-**Fix options:**
-
-1. Increase the limit to account for setup queries
-2. Move data setup to `@BeforeAll` (executed before capturing starts)
-3. Use `@Sql` annotations for test data (executed before the extension lifecycle)
-
-**Debugging tip:** Check the console report's query list to see exactly which queries
-were counted. Look for unexpected queries from:
-
-- `@BeforeEach` setup methods
-- Hibernate schema validation queries
-- Spring Security filter chain queries
-- Connection pool validation queries
-
----
+Read the failure's statement list first. Look for implicit ORM loads, explicit flushes, application
+listeners, or fixture setup/teardown SQL. Keep the intended behavior under test and fix excess
+work before raising the budget. Moving fixture work merely to make the assertion green can hide
+what the test was meant to check.
 
 ## Double Proxy with gavlyukovskiy
 
-**Symptom:** You see duplicate query logs or performance degradation in tests.
-
-**Cause:** Both QueryAudit and spring-boot-data-source-decorator are wrapping
-the DataSource.
-
-**Fix:** See [Spring Boot Integration - Reuse an existing datasource-proxy](../getting-started/spring-boot.md#reuse-an-existing-datasource-proxy).
-
----
+If another datasource decorator already provides a query-aware Spring datasource, use
+`query-audit.wrap-data-source.enabled: false`. Keep QueryAudit enabled and repeat the capture proof.
+Do not disable wrapping around a raw datasource. See
+[reuse an existing proxy](../getting-started/spring-boot.md#reuse-an-existing-datasource-proxy).
 
 ## Index Metadata Not Collected
 
-**Symptom:** Missing index detections don't fire even though indexes are missing.
+Check these inputs in order:
 
-**Causes:**
+1. The test uses a real MySQL/PostgreSQL database with its matching QueryAudit module.
+2. Migrations and index creation finish before the audit initializes metadata.
+3. The test connection points to the intended schema and can read the relevant catalogs/indexes.
+4. The run has no `CAPABILITY_INITIALIZATION_FAILED` or `CAPABILITY_EXECUTION_FAILED` reason.
 
-### No database module on classpath
+The MySQL provider uses `SHOW INDEX`; PostgreSQL uses `pg_catalog`. H2 compatibility mode does not
+substitute for their real metadata. Use the [installation dependency tabs](../getting-started/installation.md)
+and your normal database fixture. Do not add indexes only to satisfy a diagnostic: inspect the
+existing index definitions and the actual query plan.
 
-Ensure the correct module is in your test dependencies:
+??? info "EXPLAIN fails on a statement containing ?"
 
-=== "MySQL"
-
-    ```groovy
-    testImplementation 'io.github.haroya01:query-audit-mysql:${version}'
-    ```
-
-=== "PostgreSQL"
-
-    ```groovy
-    testImplementation 'io.github.haroya01:query-audit-postgresql:${version}'
-    ```
-
-### Using H2 or embedded database
-
-QueryAudit's MySQL module uses `SHOW INDEX` and the PostgreSQL module uses
-`pg_catalog` system tables. H2 and other embedded databases are not supported.
-To get full index-based detection, use Testcontainers with a real database in
-your test environment.
-
-!!! tip "Migrating from H2 to Testcontainers"
-    If you currently use H2 for tests, consider switching to Testcontainers
-    for more realistic testing. This enables QueryAudit's full detection
-    capabilities and catches issues that H2's compatibility mode may hide.
-
-    ```groovy
-    testImplementation 'org.testcontainers:mysql:1.20.4'
-    // or
-    testImplementation 'org.testcontainers:postgresql:1.20.4'
-    ```
-
-### Tables created after metadata collection
-
-If tables are created after QueryAudit collects metadata, the indexes won't be
-visible. This usually works fine because QueryAudit collects metadata in
-`@BeforeAll`, after Spring context initialization.
-
-**Fix:** Ensure your schema is created before tests start. If using `ddl-auto=create-drop`,
-this is handled automatically by Spring.
-
-### JDBC connection permissions
-
-The database user must have read access to the system catalogs:
-
-- **MySQL:** Access to `INFORMATION_SCHEMA` and ability to run `SHOW INDEX`
-- **PostgreSQL:** Access to `pg_class`, `pg_index`, `pg_attribute`, `pg_stats`
-
----
+    The bundled analyzers cannot reconstruct typed bind values from captured SQL. When their
+    EXPLAIN rules are enabled, a statement containing `?` can make the audit incomplete; the
+    conservative check also includes question marks in literals/comments/operators. Do not replace
+    binds with guessed values to manufacture a passing plan. See [comparison inputs](comparison-inputs.md)
+    for the rule/profile boundary and capability outcome.
 
 ## Common JPA/Hibernate Issues
 
 ### N+1 Not Detected on Lazy Collections
 
-**Symptom:** Lazy-loaded collections cause N+1 queries, but QueryAudit does not flag them.
+Verify that the association is actually accessed inside the audited work and inspect executed SQL.
+A cache, fetch join, entity graph, or batch fetch can reduce SQL executions. Conversely, entity-load
+events alone do not prove that one query ran per entity.
 
-**Possible causes:**
-
-1. **Collection accessed outside test method:** If the collection is loaded in a
-   `@Transactional` service method that completes before the query capture window,
-   the queries may not be captured.
-
-2. **Threshold too high:** The default N+1 threshold is 3. If fewer than 3 entities
-   are loaded, the repeated query count stays below the threshold.
-
-    ```java
-    // Only 2 orders -> only 2 lazy loads -> below threshold of 3
-    @QueryAudit(nPlusOneThreshold = 2)  // Lower the threshold
-    ```
-
-3. **Batch fetching enabled:** If Hibernate batch fetching is configured
-   (`@BatchSize` or `hibernate.default_batch_fetch_size`), the query pattern
-   changes and may not trigger N+1 detection.
-
-4. **Using `@EntityGraph` or `JOIN FETCH`:** If the relationship is already
-   eagerly fetched in the query, there is no N+1 -- QueryAudit is correctly
-   not flagging it.
+The reviewed source can flag a **two-query batched fetch** as N+1
+([#289](https://github.com/haroya01/query-audit/issues/289)). Confirm the SQL count before changing a
+working batch strategy, and consult [known limitations](limitations.md). A query budget can enforce
+the observed statement count while the detector result is investigated.
 
 ### FetchType.EAGER Causes Extra Queries
 
-**Symptom:** Queries you did not write appear in the report.
-
-**Cause:** `FetchType.EAGER` on `@ManyToOne` or `@OneToOne` triggers additional
-SELECT queries automatically.
-
-**Fix:** Change to `FetchType.LAZY` and use `JOIN FETCH` or `@EntityGraph` where needed.
-
-```java
-// BEFORE: Eager fetching causes extra queries
-@ManyToOne(fetch = FetchType.EAGER)  // Default for @ManyToOne
-private User user;
-
-// AFTER: Lazy fetching, load only when needed
-@ManyToOne(fetch = FetchType.LAZY)
-private User user;
-```
+Inspect the generated SQL and load timing. Choose the fetch strategy for the use case; `LAZY`, a
+fetch join, or an entity graph may help, but changing the mapping alone does not prove fewer queries.
+Rerun the same fixture and budget.
 
 ### Hibernate Envers / Audit Queries
 
-**Symptom:** Extra INSERT queries appear for audit tables.
-
-**Fix:** Suppress the audit table queries:
-
-```yaml
-query-audit:
-  suppress-queries:
-    - "_aud"              # Suppress Envers audit table queries
-    - "revinfo"           # Suppress revision info queries
-```
+Audit-table writes are still database writes. Include intended writes in the budget. A finding
+suppression can reduce advice about those tables, but does not remove their SQL from count contracts.
 
 ### Hibernate Second-Level Cache
 
-**Symptom:** Query counts vary between test runs.
-
-**Cause:** Hibernate's second-level cache may serve some queries from cache,
-changing the SQL query count between runs.
-
-**Fix:** Either disable the second-level cache in tests or use a higher tolerance
-in `@ExpectMaxQueryCount`.
-
-```yaml
-# application-test.yml
-spring:
-  jpa:
-    properties:
-      hibernate:
-        cache:
-          use_second_level_cache: false
-```
+Use a controlled cache state and deterministic fixtures when comparing query counts. Decide
+whether the test exercises a cold or warm path; do not increase the budget simply to absorb
+unexplained changes between runs.
 
 ### Spring Data JPA Derived Queries
 
-**Symptom:** QueryAudit flags issues on queries you did not write explicitly.
-
-**Cause:** Spring Data JPA generates SQL from method names (e.g.,
-`findByStatusAndCreatedAtAfter`). The generated SQL may trigger detections
-like `missing-where-index`.
-
-**Fix:** This is working as intended. The generated SQL runs in production and
-should be optimized. Add the missing index or use `@Query` with optimized SQL.
-
----
+Generated SQL is subject to the same checks as handwritten SQL. Inspect the actual statement,
+metadata, and plan before acting on advice; a detector finding is not a guarantee that an index or
+query rewrite will help your production workload.
 
 ## Tests Fail in CI but Pass Locally
 
-**Symptom:** QueryAudit detects issues in CI that don't appear locally.
+Compare the resolved QueryAudit/parser versions, database/version, schema, fixture data, cache
+state, Spring profile, enabled rules, and loaded policy files. Keep the input conditions stable
+before deciding whether a finding changed.
 
-**Possible causes:**
+Review a changed `.query-audit-counts` or `.query-audit-contracts` file as a deliberate policy change.
+Do not automatically regenerate it to make CI pass. See [contracts](contracts.md),
+[comparison inputs](comparison-inputs.md), and the [CI gate](ci-cd.md).
 
-1. **Different database:** CI uses a real MySQL/PostgreSQL instance while local
-   uses H2. QueryAudit detects more issues with real databases because index
-   metadata is available.
+## Parallel Capture Is Incomplete
 
-2. **Test ordering:** Tests run in a different order in CI, causing different
-   query patterns.
-
-3. **Baseline drift:** The `.query-audit-counts` baseline file is out of date. Regenerate it
-   locally and review the diff. With the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), use
-   `./gradlew test -PqueryAuditUpdateBaseline=true`; with Maven, use
-   `mvn test -DqueryAudit.updateBaseline=true`.
-
-4. **Schema differences:** The CI database may have different indexes or table
-   definitions than your local environment.
-
-5. **Different Spring profiles:** CI may activate a different Spring profile
-   with different QueryAudit settings.
-
----
-
-## Concurrent Audited Tests Fail Before Execution
-
-QueryAudit keeps one query capture window for the methods in an audited test class. It therefore
-rejects a method when JUnit reports `ExecutionMode.CONCURRENT`, rather than risk clearing another
-method's queries or assigning them to the wrong report.
-
-Run audited methods on the same thread:
-
-```java
-@QueryAudit
-@Execution(ExecutionMode.SAME_THREAD)
-class OrderRepositoryTest {
-    // ...
-}
-```
-
-To make same-thread execution the project default, add this to `junit-platform.properties`:
+Published `0.6.0` rejects concurrent audited methods. Keep audited tests on the same thread;
+add this to `src/test/resources/junit-platform.properties`:
 
 ```properties
-junit.jupiter.execution.parallel.mode.default=same_thread
+junit.jupiter.execution.parallel.enabled=false
 ```
 
-An explicit `@Execution(CONCURRENT)` takes precedence over the default and must be removed or
-changed on the audited class or method.
+Remove explicit `@Execution(CONCURRENT)` from audited classes and methods, or replace it with
+`@Execution(SAME_THREAD)`. Keep audited SQL on the test execution path: this release does not
+provide a supported asynchronous attribution API.
 
----
+`@TestFactory` dynamic children also lack a per-child audit boundary. Use ordinary `@Test` or
+`@ParameterizedTest` methods for audited cases, or exclude the factory. See
+[limitations](limitations.md) before changing the audit scope.
 
 ## Report Not Printing
 
-**Symptom:** No QueryAudit report appears in test output.
+Check that the test ran, auditing is enabled, and the annotation is applied directly. Then inspect
+stderr and the build tool's test output. Gradle users can temporarily show standard streams:
 
-**Check:**
+=== "Gradle · Kotlin"
 
-1. Ensure the annotation is present (`@QueryAudit` or `@EnableQueryInspector`)
-2. Check that `query-audit.enabled` is not set to `false` in your test config
-3. Look for `[QueryAudit]` error messages in stderr
-4. Verify that no test framework filter is suppressing stdout output
-5. If using Gradle, ensure test output is not being suppressed:
-
-    ```groovy
-    test {
-        testLogging {
-            showStandardStreams = true
-        }
+    ```kotlin
+    tasks.test {
+        testLogging.showStandardStreams = true
     }
     ```
 
----
+=== "Gradle · Groovy"
+
+    ```groovy
+    test {
+        testLogging.showStandardStreams = true
+    }
+    ```
+
+Logging visibility does not verify capture; repeat the zero-budget proof if needed.
 
 ## HTML Report Not Generated
 
-**Symptom:** No `build/reports/query-audit/index.html` file after tests.
+On 0.6.0, the default is console-only. Select `query-audit.report.format: html` for HTML or `json`
+for a machine report. Reports are written when the test session finalizes; an earlier engine,
+initialization, or filesystem failure can prevent an artifact. Check the first error and the
+configured output directory. See [report configuration](reports.md).
 
-**Cause:** HTML reports are generated when the root test context closes. If tests fail before
-QueryAudit records a result (for example, while the Spring context starts), there is nothing to
-write. A read-only directory, an invalid output path, or a full disk also prevents the report from
-being created and fails the JUnit run.
+Remove a previous run's expected report before a diagnostic rerun so an old file cannot be mistaken
+for new evidence. In CI, require both the test result and a freshly generated JSON outcome.
 
-**Fix:** Check the test log for an earlier lifecycle failure or a `QueryAudit could not write the
-html report` error. The latter includes the target path; make sure its parent directory is writable
-and that no regular file occupies the configured `report.output-dir` path.
+The reviewed HTML can show `all clean` while the canonical result is `INCONCLUSIVE`
+([#296](https://github.com/haroya01/query-audit/issues/296)). Until that issue is fixed in your version,
+use the test result and JSON for the verdict; a green HTML page is not a CI gate.
 
----
+## "HikariDataSource has been closed" on Spring Boot 4.x
+
+Check the QueryAudit version and context lifecycle first. Older proxy-close handling was tracked in
+[#153](https://github.com/haroya01/query-audit/issues/153). Check the [version guidance](../getting-started/versions.md)
+before applying an old workaround.
+
+Disabling QueryAudit wrapping is appropriate only if another query-aware datasource is already
+registered. It is not a general fix for a closed pool. Context replacement also has a separately
+tracked capture gap in [#287](https://github.com/haroya01/query-audit/issues/287).
 
 ## OutOfMemoryError During Tests
 
-**Symptom:** Tests crash with `java.lang.OutOfMemoryError` when QueryAudit is enabled.
+Measure SQL count, unique statements, lazy-event volume, and heap use on one reproducible test.
+`query-audit.max-queries` bounds SQL capture, but exceeding it makes the audit incomplete. It is not
+a passing performance shortcut, and it does not bound every Hibernate event allocation.
 
-**Cause:** QueryAudit records every SQL statement for analysis. Tests that generate
-a very large number of queries (e.g., batch processing tests) can exhaust heap memory.
-
-**Fix options:**
-
-1. Lower the max queries per test:
-    ```yaml
-    query-audit:
-      max-queries: 5000
-    ```
-
-2. Increase JVM heap:
-    ```groovy
-    test {
-        jvmArgs '-Xmx1g'
-    }
-    ```
-
-3. Suppress high-volume queries:
-    ```yaml
-    query-audit:
-      suppress-queries:
-        - "INSERT INTO batch_table"
-    ```
-
-4. Use `@EnableQueryInspector` only on specific test classes rather than globally.
-
----
+Use smaller representative fixtures or narrower audited tests when those preserve the contract.
+Increase heap only after understanding the source of growth. Suppressing findings does **not**
+prevent SQL capture and should not be presented as a memory limit. See [known limitations](limitations.md)
+for lazy-event allocation and capture boundaries.
 
 ## Performance Impact of QueryAudit
 
-**Symptom:** Tests run noticeably slower with QueryAudit enabled.
+Measure the same test with auditing enabled and disabled on identical fixtures. Separate database
+startup, SQL execution, capture, and analysis where possible. Cost depends on query/event volume,
+SQL shape, metadata size, and enabled rules; there is no universal per-query overhead guarantee.
 
-**Expected impact:** QueryAudit adds a small overhead per query (microseconds) for
-interception and recording. The analysis phase runs after each test method and is
-proportional to the number of unique query patterns.
-
-**If impact is significant:**
-
-1. Reduce `max-queries` to limit recording overhead
-2. Disable rules you don't need with `disabled-rules`
-3. Use `@EnableQueryInspector` selectively rather than on every test class
-4. Check if the slow-down is from QueryAudit or from running against a real
-   database (vs H2). Testcontainers startup adds time to the first test.
-
----
+Start with the recommended profile and the specific paths you intend to protect. Changing limits
+or disabling a rule changes the audit contract; record that decision and recheck the expected result.
 
 ## Diagnostic Checklist
 
-When reporting an issue or debugging unexpected behavior, check these items:
+For an [issue report](https://github.com/haroya01/query-audit/issues/new/choose), include:
 
-- [ ] QueryAudit annotation is present on the test class or method
-- [ ] Correct database module is on the test classpath (`query-audit-mysql` or `query-audit-postgresql`)
-- [ ] `query-audit.enabled` is not set to `false`
-- [ ] No overly broad `suppress-patterns` or `suppress-queries`
-- [ ] No rules are disabled via `disabled-rules` that you expect to run
-- [ ] `report.show-info` is `true` if checking for INFO-level issues
-- [ ] The test database has the expected schema and indexes
-- [ ] The database user has permissions to read system catalogs
-- [ ] JVM heap is sufficient for the test suite size
+- Installed QueryAudit, Java, JUnit, framework, parser, and database versions.
+- The smallest test/fixture that reproduces the problem and the exact build command.
+- Expected versus actual SQL counts or affected/returned rows, plus the capture-proof result.
+- Active QueryAudit settings, relevant policies, and the first failure/incomplete reason.
+- Sanitized SQL/report excerpts that preserve the syntax needed to reproduce the behavior.
 
----
+Do not include credentials, private data, or raw production artifacts. JSON/Actions redaction does
+not apply to console/HTML in the current contract; review what you share.
 
 ## See Also
 
-- [Configuration Reference](configuration.md) -- All configuration options and defaults
-- [Annotations Guide](annotations.md) -- Correct annotation usage
-- [CI/CD Integration](ci-cd.md) -- CI-specific configuration
-- [Architecture Overview](../architecture/overview.md) -- Understanding the analysis pipeline
+- [Known limitations](limitations.md)
+- [Configuration](configuration.md)
+- [Annotations and budgets](annotations.md)
+- [CI verification](ci-cd.md)

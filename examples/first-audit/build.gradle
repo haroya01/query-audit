@@ -1,0 +1,35 @@
+plugins {
+    id 'java'
+}
+
+repositories {
+    mavenCentral()
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+dependencies {
+    // Intentionally pinned to a published release so this works before a source release ships.
+    testImplementation 'io.github.haroya01:query-audit-junit5:0.6.0'
+    testImplementation 'net.ttddyy:datasource-proxy:1.10'
+    testImplementation 'com.h2database:h2:2.3.232'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    systemProperty 'queryAudit.demo.extraQuery', providers.gradleProperty('extraQuery').getOrElse('false')
+    systemProperty 'queryAudit.demo.extraWrite', providers.gradleProperty('extraWrite').getOrElse('false')
+    systemProperty 'queryAudit.reportFormat', 'json'
+    systemProperty 'queryAudit.reportOutputDir', layout.buildDirectory.dir('reports/query-audit').get().asFile.absolutePath
+    systemProperty 'queryaudit.autoOpenReport', 'false'
+    testLogging {
+        events 'passed', 'failed'
+        showStandardStreams = true
+        exceptionFormat = 'full'
+    }
+}

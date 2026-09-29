@@ -1,13 +1,18 @@
 site_name: QueryAudit
 site_url: https://haroya01.github.io/query-audit
-site_description: Database behavior contracts and SQL analysis for JUnit 5 tests
+site_description: Read/write query policies, count contracts, SQL evidence, and CI comparison for JUnit 5 tests
 site_author: QueryAudit Contributors
 repo_url: https://github.com/haroya01/query-audit
 repo_name: haroya01/query-audit
 edit_uri: edit/main/docs/
 
+# Theme templates are rendered by Material, not served as standalone pages.
+exclude_docs: |
+  /overrides/
+
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
   palette:
     - media: "(prefers-color-scheme: light)"
@@ -55,7 +60,8 @@ markdown_extensions:
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  - pymdownx.snippets:
+      check_paths: true
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
@@ -77,28 +83,34 @@ extra:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quickstart.md
-    - Spring Boot: getting-started/spring-boot.md
-  - Detection Rules:
-    - Overview: detections/overview.md
-    - "N+1 Query": detections/n-plus-one.md
-    - Missing Index: detections/missing-index.md
-    - SQL Anti-Patterns: detections/sql-anti-patterns.md
-    - DML Anti-Patterns: detections/dml-anti-patterns.md
-  - References: references.md
-  - Guide:
+  - Start Here:
+    - Run a Query Policy: getting-started/quickstart.md
+    - Install in Your Project: getting-started/installation.md
+    - Spring Boot Setup: getting-started/spring-boot.md
+    - Coming from QuickPerf: guide/coming-from-quickperf.md
+    - Versions and Compatibility: getting-started/versions.md
+  - Guides:
+    - Query Policy Workflows: guide/choose-your-workflow.md
+    - Review Count Contracts: guide/contracts.md
+    - Read SQL and Call Sites: guide/reports.md
+    - Your First CI Check: guide/first-ci-check.md
+    - Require Expected Tests: guide/audit-coverage.md
+    - Advanced CI Recipes: guide/ci-cd.md
+    - Suppress a Finding: guide/suppressing.md
+    - Troubleshooting: guide/troubleshooting.md
+    - Limitations and Known Issues: guide/limitations.md
+  - Reference:
     - Annotations: guide/annotations.md
     - Configuration: guide/configuration.md
-    - Reports: guide/reports.md
-    - Comparison inputs: guide/comparison-inputs.md
-    - Suppressing Issues: guide/suppressing.md
-    - Query Contracts: guide/contracts.md
-    - Audit Coverage: guide/audit-coverage.md
-    - CI/CD Integration: guide/ci-cd.md
-    - Troubleshooting: guide/troubleshooting.md
-  - Architecture:
-    - Overview: architecture/overview.md
+    - Comparison Inputs: guide/comparison-inputs.md
+    - Investigate Findings:
+      - Overview: detections/overview.md
+      - "N+1 Query": detections/n-plus-one.md
+      - Missing Index: detections/missing-index.md
+      - SQL Anti-Patterns: detections/sql-anti-patterns.md
+      - DML Anti-Patterns: detections/dml-anti-patterns.md
+    - Background Reading: references.md
+  - Extend and Contribute:
+    - Architecture: architecture/overview.md
     - Adding Database Support: architecture/new-database.md
     - Contributing: architecture/contributing.md

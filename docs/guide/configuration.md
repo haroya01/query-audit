@@ -1,8 +1,21 @@
 # Configuration Reference
 
+Choose the result you need before changing global settings:
+
+| Workflow | Start with | Expected result |
+|---|---|---|
+| Keep a read path free of writes | `@ExpectQueries(insert = 0, update = 0, delete = 0)`; add a SELECT upper bound when useful | A captured write or exceeded budget fails the test |
+| Review each test's count changes | [Record a query snapshot contract](contracts.md) | Count deviations fail until the reviewed contract is updated |
+| Locate the SQL behind a failure | Keep the failure's statement list and enable [JSON reports](reports.md) | Captured SQL and retained stack traces help locate the application operation |
+| Compare CI runs with known coverage and inputs | [Expected-test coverage](audit-coverage.md) and [report comparison](reports.md#delta-verdict-compare-two-runs) | Missing audits or incompatible inputs remain distinct from a successful comparison |
+
+[Choose Your Workflow](choose-your-workflow.md) provides the recipes. Rule profiles and finding
+thresholds below configure supporting analysis; they do not change explicit query budgets or
+snapshot count contracts.
+
 !!! note "Version scope"
-    This reference follows QueryAudit 0.6 as implemented on `main`. Properties and behaviors added
-    after 0.5 require QueryAudit 0.6.0 or later.
+    This reference documents QueryAudit `0.6.0`. Check [Versions and compatibility](../getting-started/versions.md)
+    for the published dependency and tested framework/database combinations.
 
 QueryAudit can be configured at three levels. When multiple levels conflict, the
 most specific one wins:
@@ -40,7 +53,7 @@ All properties are optional. The table below lists every supported key under the
 | `max-queries` | `int` | `10000` | Maximum number of queries retained per test. If additional queries are dropped, the audit fails as incomplete. |
 | `report.format` | `String` | `"console"` | Suite artifact: `console` writes no file, `json` writes `report.json`, and `html` writes the browser report. Per-test console diagnostics remain available for every selection. |
 | `report.output-dir` | `String` | `"build/reports/query-audit"` | Directory used by the selected JSON or HTML report. |
-| `report.show-info` | `boolean` | `true` | Whether unacknowledged INFO findings appear in console, HTML, and JSON output. Visible summary counts follow this setting; analysis and query statistics are unchanged. |
+| `report.show-info` | `boolean` | `true` | Whether unacknowledged INFO findings appear in console, HTML, and JSON output. Visible summary counts follow this setting; analysis and query statistics are unchanged. Keep the setting identical in comparison runs. |
 | `disabled-rules` | `List<String>` | `[]` | Rule codes to completely disable. |
 | `severity-overrides` | `Map<String,String>` | `{}` | Override severity per rule code (e.g., `select-all: WARNING`). |
 | `large-in-list.threshold` | `int` | `100` | Number of values in IN clause before flagging. |
@@ -109,8 +122,8 @@ or `minimal` to start with a smaller set:
 | Profile | What runs | Use it for |
 |---|---|---|
 | `strict` | Every rule — the default before 0.6.0 | Maximum coverage, mature suppression setup |
-| `recommended` (default) | Everything except the 21 rules listed below | First adoption, day-to-day CI |
-| `minimal` | Safety-critical rules only (`n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query`) | A lean, non-negotiable gate |
+| `recommended` (default) | Everything except the rules listed below | First adoption, day-to-day CI |
+| `minimal` | Selected safety and cost findings (`n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query`) | Review a smaller set of findings before choosing what to enforce |
 
 ```yaml
 query-audit:
@@ -497,15 +510,15 @@ corresponding `-P` property below.
 
 ## Issue Types Reference
 
-All 69 issue codes that can be used in `suppress`, `failOn`, and `suppress-patterns`.
-Of these, 67 are actively emitted; the remaining 2 are disabled or reserved (see
-[Detection Rules Overview](../detections/overview.md#disabled-reserved-rules)).
+Use these codes in `suppress`, `failOn`, and `suppress-patterns` after reviewing the matching
+finding. Some codes are [disabled or reserved](../detections/overview.md#disabled-reserved-rules);
+their presence in configuration does not mean that the corresponding check ran.
 
-### ERROR Severity (11 issue types)
+### ERROR Severity
 
 | Code | Enum | Description |
 |---|---|---|
-| `n-plus-one` | `N_PLUS_ONE` | Hibernate-level authoritative N+1 (same lazy collection/proxy loaded for many distinct owners) |
+| `n-plus-one` | `N_PLUS_ONE` | Hibernate lazy-load finding (same collection/proxy loaded for many distinct owners) |
 | `where-function` | `WHERE_FUNCTION` | Function on column in WHERE disables index |
 | `missing-where-index` | `MISSING_WHERE_INDEX` | No index on WHERE column |
 | `missing-join-index` | `MISSING_JOIN_INDEX` | No index on JOIN column |
@@ -517,7 +530,7 @@ Of these, 67 are actively emitted; the remaining 2 are disabled or reserved (see
 | `order-by-rand` | `ORDER_BY_RAND` | ORDER BY RAND() causes full table scan and sort |
 | `not-in-subquery` | `NOT_IN_SUBQUERY` | NOT IN (subquery) returns empty when subquery contains NULL |
 
-### WARNING Severity (39 active issue types + 1 disabled)
+### WARNING Severity
 
 | Code | Enum | Description |
 |---|---|---|
@@ -562,11 +575,11 @@ Of these, 67 are actively emitted; the remaining 2 are disabled or reserved (see
 | `for-update-no-timeout` | `FOR_UPDATE_WITHOUT_TIMEOUT` | FOR UPDATE without NOWAIT or SKIP LOCKED may block indefinitely |
 | `case-in-where` | `CASE_IN_WHERE` | CASE expression in WHERE clause prevents index usage |
 
-### INFO Severity (17 active issue types + 1 reserved)
+### INFO Severity
 
 | Code | Enum | Description |
 |---|---|---|
-| `n-plus-one-suspect` | `N_PLUS_ONE_SUSPECT` | SQL-level heuristic: same normalized query repeated above threshold (suggestive; see `n-plus-one` for authoritative Hibernate detection) |
+| `n-plus-one-suspect` | `N_PLUS_ONE_SUSPECT` | SQL-level heuristic: same normalized query repeated above threshold (review with the Hibernate evidence in `n-plus-one`) |
 | `select-all` | `SELECT_ALL` | `SELECT *` usage |
 | `redundant-filter` | `REDUNDANT_FILTER` | Duplicate WHERE condition |
 | `count-instead-of-exists` | `COUNT_INSTEAD_OF_EXISTS` | COUNT where EXISTS is better |
@@ -589,7 +602,7 @@ Of these, 67 are actively emitted; the remaining 2 are disabled or reserved (see
 
 ## Memory Optimization
 
-QueryAudit records every SQL statement executed during a test for analysis.
+QueryAudit retains SQL captured through the instrumented DataSource during the audit window.
 In large test suites or tests that generate many queries, this can consume
 significant heap memory. The following settings help control memory usage.
 
@@ -599,8 +612,9 @@ Each test retains up to 10,000 queries by default. Reaching the limit is valid w
 lost. If another query arrives, it is dropped, a warning is printed to stderr, and the suite outcome
 becomes `INCONCLUSIVE` with reason `QUERY_LIMIT_REACHED`. QueryAudit still analyzes the retained
 queries and preserves their partial findings and statistics, but it does not evaluate count-based
-contracts against incomplete data. This prevents both out-of-memory errors and successful audit
-results based on partial collection.
+contracts against incomplete data. This limits memory used by retained query records and keeps
+partial collection from producing a successful audit. Other allocations, such as Hibernate events
+and metadata, still contribute to heap usage.
 
 ```yaml
 query-audit:
