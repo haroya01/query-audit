@@ -145,7 +145,7 @@ For Spring Boot, add the starter to the test classpath:
 
 ```kotlin
 dependencies {
-    testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.6.0") // x-release-please-version
+    testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.6.1") // x-release-please-version
 }
 ```
 
