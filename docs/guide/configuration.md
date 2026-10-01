@@ -38,7 +38,7 @@ All properties are optional. The table below lists every supported key under the
 | `enabled-rules` | `List<String>` | `[]` | Rule codes to run even when the profile tier excludes them. `disabled-rules` still wins. |
 | `mode` | `String` | `"annotated"` | Which tests the JUnit extension audits: `annotated` (opt-in via `@QueryAudit`) or `all` (every test, opt-out via `@QueryAuditExclude`). `all` additionally requires JUnit extension autodetection — see [Audit Coverage Mode](#audit-coverage-mode). |
 | `contracts.path` | `String` | `".query-audit-contracts"` | Query contracts for test methods and `QueryContractScope`: one file, or a directory whose `*.contracts` files are all read. See [contracts](contracts.md). |
-| `contracts.await-executors` | `List<String>` | `[]` | Bean names of `ThreadPoolTaskExecutor` or `ThreadPoolExecutor` pools that the injected `QueryContractScope` waits for before it closes. |
+| `await-executors` | `List<String>` | `[]` | Bean names of `ThreadPoolTaskExecutor` or `ThreadPoolExecutor` pools that audited test methods and the injected `QueryContractScope` wait for. See [Background Work](#background-work). |
 | `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
 | `fail-on-detection` | `boolean` | `true` | Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`. |
 | `count-instead-of-exists.enabled` | `boolean` | `false` | Enable the `count-instead-of-exists` INFO detector. Off by default because it can fire on legitimate aggregate counts. |
@@ -254,6 +254,37 @@ supported adoption path pairs it with the baseline:
 3. From then on, existing findings are frozen — only **new** violations fail the build.
 
 Coverage first, cleanup incrementally — the audit becomes a ratchet instead of a wall.
+
+---
+
+## Background Work
+
+Each audited test captures the SQL that runs on its own thread. Work that the test hands to a
+thread pool, such as an `@Async` method or an `@Async` event listener, runs on another thread. In
+0.7.0 that SQL makes the run `INCONCLUSIVE` unless QueryAudit can tell which test it belongs to.
+
+Name the pools in `await-executors`:
+
+```yaml
+query-audit:
+  await-executors: [taskExecutor, webhookExecutor]
+```
+
+With pools named, the Spring Boot starter changes two things for every audited test method:
+
+- **Wait:** when the test method returns, QueryAudit waits until the named pools are idle, then
+  moves to the teardown phase. Background SQL therefore counts in the test phase, where budgets,
+  contracts, and findings see it. After 30 seconds the test fails with the busy pool's name.
+- **Count:** while the test is the only audit running, SQL and Hibernate lazy loads from threads
+  without a capture binding count toward it instead of making the run `INCONCLUSIVE`.
+
+`QueryContractScope` waits for the same pools; see
+[contract a request or job](contracts.md#contract-a-request-or-job).
+
+Counting covers every thread, not only the named pools, so run audited tests sequentially and keep
+schedulers off during tests. When several audits run in parallel, off-thread SQL cannot be assigned
+to one of them and still makes the run `INCONCLUSIVE`. Without Spring, wrap the tasks with
+`QueryCaptureSession.wrap`; see [parallel capture](troubleshooting.md#parallel-capture-is-incomplete).
 
 ---
 

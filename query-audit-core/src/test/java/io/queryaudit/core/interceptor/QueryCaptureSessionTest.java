@@ -184,6 +184,45 @@ class QueryCaptureSessionTest {
   }
 
   @Test
+  void aSoleAdoptingSessionCountsUnboundWorkers() throws Exception {
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    try (QueryCaptureSession session = QueryCaptureSession.open(router, lazyRouter, "owner", 10)) {
+      session.adoptUnboundWork();
+      executor
+          .submit(
+              () -> {
+                fire(router, "select background");
+                lazyRouter.recordProxyResolved("Entity", 1);
+              })
+          .get(5, TimeUnit.SECONDS);
+      assertThat(session.stop().queries())
+          .extracting(QueryRecord::sql)
+          .containsExactly("select background");
+      assertThat(session.tracker().getRecords()).hasSize(1);
+      assertThat(session.incompleteReasons()).isEmpty();
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void unboundWorkStaysUnattributedWhileAnotherSessionIsActive() throws Exception {
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    try (QueryCaptureSession adopting = QueryCaptureSession.open(router, null, "adopting", 10)) {
+      adopting.adoptUnboundWork();
+      try (QueryCaptureSession other = QueryCaptureSession.open(router, null, "other", 10)) {
+        executor.submit(() -> fire(router, "select background")).get(5, TimeUnit.SECONDS);
+        assertThat(other.stop().queries()).isEmpty();
+        assertThat(other.incompleteReasons()).containsExactly("UNATTRIBUTED_QUERY");
+      }
+      assertThat(adopting.stop().queries()).isEmpty();
+      assertThat(adopting.incompleteReasons()).containsExactly("UNATTRIBUTED_QUERY");
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
   void runnableAndCallablePropagationRestoreTheReusedWorker() throws Exception {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try (QueryCaptureSession session = QueryCaptureSession.open(router, lazyRouter, "owner", 10)) {

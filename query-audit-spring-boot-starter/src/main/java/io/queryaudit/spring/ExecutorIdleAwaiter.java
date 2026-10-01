@@ -59,7 +59,7 @@ final class ExecutorIdleAwaiter implements Runnable {
   private Pool pool(String name) {
     if (!beanFactory.containsBean(name)) {
       throw new IllegalStateException(
-          "query-audit.contracts.await-executors names " + name + ", but no such bean exists");
+          "query-audit.await-executors names " + name + ", but no such bean exists");
     }
     Object bean = beanFactory.getBean(name);
     if (bean instanceof ThreadPoolTaskExecutor executor) {
@@ -69,7 +69,7 @@ final class ExecutorIdleAwaiter implements Runnable {
       return new Pool(name, executor);
     }
     throw new IllegalStateException(
-        "query-audit.contracts.await-executors names "
+        "query-audit.await-executors names "
             + name
             + ", which is not a ThreadPoolTaskExecutor or ThreadPoolExecutor");
   }

@@ -159,9 +159,9 @@ it as a bean that uses the configured contracts:
 
 ```yaml
 query-audit:
+  await-executors: [taskExecutor]
   contracts:
     path: src/test/resources/query-contracts
-    await-executors: [taskExecutor]
 ```
 
 ```java
@@ -194,7 +194,9 @@ into the DataSource.
 
 `await-executors` names the thread pools that requests hand work to. The scope waits until those
 pools are idle before it stops counting, and fails after 30 seconds with the busy pool's name.
-`awaitingCompletion(Runnable)` supplies your own wait instead.
+`awaitingCompletion(Runnable)` supplies your own wait instead. The same setting makes audited test
+methods wait for those pools and count their SQL; see
+[background work](configuration.md#background-work).
 
 Scoped IDs use the same line format as test methods:
 

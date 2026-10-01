@@ -10,6 +10,7 @@ final class InvocationCapture implements ExtensionContext.Store.CloseableResourc
   private final AuditScope scope;
   private final AuditResources owner;
   private final QueryCaptureSession session;
+  private Runnable backgroundWork;
 
   InvocationCapture(AuditScope scope, AuditResources owner, QueryCaptureSession session) {
     this.scope = scope;
@@ -23,6 +24,15 @@ final class InvocationCapture implements ExtensionContext.Store.CloseableResourc
 
   QueryCaptureSession session() {
     return session;
+  }
+
+  void includeBackgroundWork(Runnable awaitIdle) {
+    backgroundWork = awaitIdle;
+    session.adoptUnboundWork();
+  }
+
+  void awaitBackgroundWork() {
+    if (backgroundWork != null) backgroundWork.run();
   }
 
   QueryCaptureSnapshot stop() {

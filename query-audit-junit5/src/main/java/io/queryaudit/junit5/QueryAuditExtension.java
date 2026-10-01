@@ -185,7 +185,8 @@ public class QueryAuditExtension
 
   @Override
   public void afterTestExecution(ExtensionContext context) {
-    transition(context, LifecyclePhase.TEARDOWN);
+    AuditScope scope = AuditScope.of(context);
+    if (activation.callbacksAllowed(scope) && scope.interceptor() != null) scope.finishTestPhase();
   }
 
   private void transition(ExtensionContext context, LifecyclePhase phase) {

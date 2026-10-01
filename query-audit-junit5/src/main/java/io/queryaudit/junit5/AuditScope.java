@@ -323,6 +323,8 @@ final class AuditScope {
     }
     InvocationCapture capture = resources.openCapture(this, maxQueries);
     try {
+      Runnable backgroundWork = BackgroundWork.lookup(context);
+      if (backgroundWork != null) capture.includeBackgroundWork(backgroundWork);
       store().put(KEY_CAPTURE, capture);
     } catch (RuntimeException | Error failure) {
       capture.close();
@@ -346,6 +348,15 @@ final class AuditScope {
     InvocationCapture capture = invocationCapture();
     if (capture != null) capture.session().setPhase(phase);
     else if (interceptor() != null) interceptor().setPhase(phase);
+  }
+
+  void finishTestPhase() {
+    InvocationCapture capture = invocationCapture();
+    try {
+      if (capture != null) capture.awaitBackgroundWork();
+    } finally {
+      transitionCapture(io.queryaudit.core.model.LifecyclePhase.TEARDOWN);
+    }
   }
 
   QueryCaptureSnapshot stopCapture() {
