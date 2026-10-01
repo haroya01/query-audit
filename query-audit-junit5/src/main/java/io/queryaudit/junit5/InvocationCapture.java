@@ -26,9 +26,8 @@ final class InvocationCapture implements ExtensionContext.Store.CloseableResourc
     return session;
   }
 
-  void includeBackgroundWork(Runnable awaitIdle) {
+  void awaitBackgroundWorkWith(Runnable awaitIdle) {
     backgroundWork = awaitIdle;
-    session.adoptUnboundWork();
   }
 
   void awaitBackgroundWork() {

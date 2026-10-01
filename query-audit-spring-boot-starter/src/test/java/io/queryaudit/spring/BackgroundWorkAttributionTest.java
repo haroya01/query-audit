@@ -61,15 +61,14 @@ class BackgroundWorkAttributionTest {
   }
 
   @Test
-  void withoutNamedPoolsBackgroundSqlKeepsTheRunInconclusive(@TempDir Path directory)
+  void withoutNamedPoolsBackgroundSqlTheTestWaitsForStillCounts(@TempDir Path directory)
       throws Exception {
     SummaryGeneratingListener listener = launch(directory, UndeclaredFixture.class);
 
     assertThat(listener.getSummary().getTestsSucceededCount()).isEqualTo(1);
     Map<String, Object> report = report(directory);
-    assertThat(report.get("outcome")).isEqualTo("INCONCLUSIVE");
-    assertThat(JsonPath.<List<String>>read(report, "$.incompleteReasons[*].code"))
-        .contains("AUDIT_ANALYSIS_FAILED");
+    assertThat(report.get("outcome")).isEqualTo("PASS");
+    assertThat(JsonPath.<Integer>read(report, "$.reports[0].summary.totalQueries")).isEqualTo(1);
   }
 
   private static Map<String, Object> report(Path directory) throws Exception {

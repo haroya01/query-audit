@@ -324,7 +324,7 @@ final class AuditScope {
     InvocationCapture capture = resources.openCapture(this, maxQueries);
     try {
       Runnable backgroundWork = BackgroundWork.lookup(context);
-      if (backgroundWork != null) capture.includeBackgroundWork(backgroundWork);
+      if (backgroundWork != null) capture.awaitBackgroundWorkWith(backgroundWork);
       store().put(KEY_CAPTURE, capture);
     } catch (RuntimeException | Error failure) {
       capture.close();
