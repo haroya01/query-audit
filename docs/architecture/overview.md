@@ -70,8 +70,10 @@ lifecycle callbacks surround the factory method but do not expose a separate bou
 `AUDIT_INITIALIZATION_FAILED`. Move audited cases to `@Test` or `@ParameterizedTest`, or add
 `@QueryAuditExclude` to a factory that should run without auditing.
 
-QueryAudit `0.6.0` rejects concurrent audited methods because capture is shared within a test class.
-Use same-thread execution for the audited tests and keep database work inside their capture window.
+Since 0.7, each audited invocation captures into its own session, so concurrent audited methods
+are supported. SQL from another thread counts toward an audit that runs alone; during parallel
+audits it cannot be assigned and makes the run `INCONCLUSIVE`. See
+[parallel capture](../guide/extensions.md#parallel-capture).
 
 ---
 

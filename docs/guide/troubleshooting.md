@@ -72,7 +72,7 @@ query budget.
 ### The issue type is INFO and `show-info` is disabled
 
 Set `query-audit.report.show-info: true` to include informational findings in reports.
-In `0.6.0`, hiding INFO also removes it from generated JSON. Keep this setting identical across
+Hiding INFO also removes it from generated JSON. Keep this setting identical across
 comparison runs; see [report behavior](reports.md) and [comparison inputs](comparison-inputs.md).
 
 ### The threshold is too high
@@ -210,7 +210,8 @@ QueryAudit could not tell which test it belonged to. A test that runs alone coun
 [background work](configuration.md#background-work). With parallel audits, wrap executor tasks with
 `QueryCaptureSession.wrap` on the test thread and join them before the test returns.
 `QUERY_STILL_RUNNING`, `ASYNC_WORK_STILL_RUNNING` or `WORK_AFTER_CAPTURE` mean work outlived its
-capture boundary; name the pools in `await-executors` so the test waits for them. They are incomplete evidence, not a clean audit. See
+capture boundary; name the pools in `await-executors` so the test waits for them. They are
+incomplete evidence, not a clean audit. See
 [Parallel capture](extensions.md#parallel-capture) for a complete example and lifecycle boundaries.
 
 Use a separate EntityManager/transaction per test and keep custom extensions thread-safe. Avoid
@@ -247,7 +248,7 @@ Logging visibility does not verify capture; repeat the zero-budget proof if need
 
 ## HTML Report Not Generated
 
-On 0.6.0, the default is console-only. Select `query-audit.report.format: html` for HTML or `json`
+The default is console-only. Select `query-audit.report.format: html` for HTML or `json`
 for a machine report. Reports are written when the test session finalizes; an earlier engine,
 initialization, or filesystem failure can prevent an artifact. Check the first error and the
 configured output directory. See [report configuration](reports.md).

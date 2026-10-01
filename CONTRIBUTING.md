@@ -394,7 +394,7 @@ To retry a failed Maven Central publication, run the **Release** workflow from `
 the existing published tag in `release_tag`:
 
 ```bash
-gh workflow run release-please.yml --ref main -f release_tag=v0.6.0
+gh workflow run release-please.yml --ref main -f release_tag=v0.7.1
 ```
 
 This retries the tag's source; it does not publish the selected branch, create a release, or change

@@ -4,12 +4,12 @@
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.2.x   | Yes                |
-| < 0.2   | No                 |
+| 0.7.x   | Yes                |
+| < 0.7   | No                 |
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Query Guard, please report it responsibly.
+If you discover a security vulnerability in QueryAudit, please report it responsibly.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
@@ -30,7 +30,7 @@ Instead, please use [GitHub Security Advisories](https://github.com/query-audit/
 
 ### Scope
 
-Query Guard is a **test-time dependency** and does not run in production. Security issues most relevant to this project include:
+QueryAudit is a **test-time dependency** and does not run in production. Security issues most relevant to this project include:
 
 - SQL injection through the library's own query generation (e.g., `SHOW INDEX`)
 - Denial of service via crafted SQL input causing regex catastrophic backtracking

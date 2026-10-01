@@ -35,17 +35,15 @@ the budget.
 
 ## Reported cases to check
 
-The following issues were reproduced on `0.6.0` source and remain open in 0.7.0. These links do
-not claim that 0.7.0 still shows each behavior or that it fixes it. Use each issue's reproduction
+The following issues were reproduced on `0.6.0` source and remain open in 0.7.1. These links do
+not claim that 0.7.1 still shows each behavior or that it fixes it. Use each issue's reproduction
 details when checking your setup.
 
 | Workflow | Reported behavior | Check for your setup |
 |---|---|---|
-| Large lazy-load fixtures | Lazy-event recording has excessive allocation ([#295](https://github.com/haroya01/query-audit/issues/295)) | Start with bounded fixtures and inspect actual SQL counts |
 | SQL safety and result-size findings | Some literal/comment keywords, clause boundaries, and inferred row bounds can cause misses or false positives ([#288](https://github.com/haroya01/query-audit/issues/288), [#291](https://github.com/haroya01/query-audit/issues/291), [#292](https://github.com/haroya01/query-audit/issues/292)) | Add a known violating control for the SQL shape you gate. Use explicit write budgets where the contract forbids writes, and assert affected/result rows separately |
 | Joined-query EXPLAIN analysis | MySQL may omit later plan rows; PostgreSQL may attribute a nested node to the wrong table ([#293](https://github.com/haroya01/query-audit/issues/293), [#294](https://github.com/haroya01/query-audit/issues/294)) | Inspect the complete native plan before acting on an index or scan finding |
-| CI comparison and HTML review | INFO visibility can invalidate comparisons, and method links may not target the right section ([#297](https://github.com/haroya01/query-audit/issues/297), [#298](https://github.com/haroya01/query-audit/issues/298)) | Gate on the canonical JSON verdict and verify expected coverage; keep comparison settings identical. Open the class page directly for human review |
-| Saving a finding baseline through the core API | A filename-only relative save path can fail ([#299](https://github.com/haroya01/query-audit/issues/299)) | Supply an absolute path or an explicit parent directory |
+| CI comparison | Changing only INFO visibility makes a comparison `INCONCLUSIVE` ([#297](https://github.com/haroya01/query-audit/issues/297)) | Keep `report.show-info` identical across the runs you compare |
 
 ## Shared annotation policies
 
