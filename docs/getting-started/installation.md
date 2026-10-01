@@ -11,7 +11,7 @@ description: Add test dependencies, enforce a read-path policy, and verify an in
 | JUnit 5 without Spring | [Plain JUnit 5](#plain-junit-5) |
 | A runnable sample | [Fail an unexpected write, then pass](quickstart.md) |
 
-Add QueryAudit to the **test classpath**. These snippets use published `0.6.0`;
+Add QueryAudit to the **test classpath**. These snippets use the latest published release;
 [Versions](versions.md) lists its supported scope and tested combinations.
 
 ## Spring Boot

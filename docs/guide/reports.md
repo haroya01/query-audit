@@ -53,9 +53,10 @@ contracts enforce query counts.
 ## Report formats
 
 !!! note "Version scope"
-    QueryAudit 0.6 uses report schema 1.6. The schema 1.7 finding-ID additions described here are
-    available in the development branch for the upcoming 0.7 release. QueryAudit 0.5 writes both
-    HTML and schema 1.0 JSON after a session with at least one completed audited result.
+    QueryAudit 0.6.1 and later write report schema 1.7, which adds the finding IDs described here.
+    Comparison targets (`--require-resolved`) need 0.7.0. QueryAudit 0.6.0 writes schema 1.6, and
+    0.5 writes both HTML and schema 1.0 JSON after a session with at least one completed audited
+    result.
 
 After each audited test method, QueryAudit prints its findings and adds the result to the suite
 summary. You can also select one suite-level JSON or HTML artifact for later review.
@@ -283,8 +284,8 @@ Finding IDs in this example illustrate the schema 1.7 format introduced for Quer
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. This development branch writes **1.7.0** for the upcoming QueryAudit
-0.7 release; the published QueryAudit 0.6 release writes schema 1.6. QueryAudit 0.5.x wrote schema 1.0
+of silently misparsing it. QueryAudit 0.6.1 and 0.7.0 write **1.7.0**; QueryAudit 0.6.0 writes
+schema 1.6. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
 infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, 1.2
 added stable test identities, 1.3 added query-evidence retention counts, and 1.4 added the report

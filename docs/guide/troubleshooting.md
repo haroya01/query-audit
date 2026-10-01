@@ -15,7 +15,7 @@ or [plain JUnit quick start](../getting-started/quickstart.md).
 | SQL ran, but the report says zero queries | Does the one-SELECT/zero-budget check fail? | [Trace the datasource and audit activation](#queryaudit-not-detecting-any-queries) |
 | A test passes after its Spring context is replaced | Does it use `@DirtiesContext` between methods? | Check the [known context-replacement gap](limitations.md) before trusting the result |
 | No audit with a custom or inherited annotation | Which artifact/version is loaded, and does a direct annotation activate capture? | Check [shared-policy checks](limitations.md#shared-annotation-policies), then rerun the zero-budget proof |
-| A budget fails unexpectedly | Which statements were captured during setup, the test, and teardown? | [Check the count boundary](#expectmaxquerycount-fails-unexpectedly) |
+| A budget fails unexpectedly | Which statements were captured during setup, the test, and teardown? | [Check the count boundary](#a-query-budget-fails-unexpectedly) |
 | A batched Hibernate fetch is reported as N+1 | How many SQL statements actually ran? | [Check the known batch false positive](#common-jpahibernate-issues) |
 | An expected finding is missing | Was SQL captured, and is the rule enabled in this profile? | [Check rule inputs](#why-didnt-queryaudit-detect-my-issue) |
 | No JSON/HTML file | Was that format selected, and did the test session finalize? | [Check report generation](#html-report-not-generated) |
@@ -202,26 +202,8 @@ Do not automatically regenerate it to make CI pass. See [contracts](contracts.md
 
 ## Parallel Capture Is Incomplete
 
-2. **Test ordering:** Tests run in a different order in CI, causing different
-   query patterns.
-
-3. **Baseline drift:** The `.query-audit-counts` baseline file is out of date. Regenerate it
-   locally and review the diff. With the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), use
-   `./gradlew test -PqueryAudit.counts.record=true`; with Maven, use
-   `mvn test -DqueryAudit.counts.record=true`.
-
-4. **Schema differences:** The CI database may have different indexes or table
-   definitions than your local environment.
-
-5. **Different Spring profiles:** CI may activate a different Spring profile
-   with different QueryAudit settings.
-
----
-
-## Parallel Capture Is Incomplete
-
-Current development source supports concurrent audited classes and methods. Older artifacts may
-still reject concurrent execution; check the installed version against this guide's source scope.
+Since 0.7.0, concurrent audited classes and methods each capture into their own session. QueryAudit
+0.6.x rejects concurrent audited methods; keep those versions on the same thread.
 
 `UNATTRIBUTED_QUERY` means JDBC work ran without an invocation binding while capture was active.
 Wrap executor tasks with `QueryCaptureSession.wrap` on the test thread and join them before the
