@@ -680,8 +680,11 @@ lost. If another query arrives, it is dropped, a warning is printed to stderr, a
 becomes `INCONCLUSIVE` with reason `QUERY_LIMIT_REACHED`. QueryAudit still analyzes the retained
 queries and preserves their partial findings and statistics, but it does not evaluate count-based
 contracts against incomplete data. This limits memory used by retained query records and keeps
-partial collection from producing a successful audit. Other allocations, such as Hibernate events
-and metadata, still contribute to heap usage.
+partial collection from producing a successful audit.
+
+The same limit bounds Hibernate lazy-load and explicit-load events per test. Events beyond it are
+dropped and the run becomes `INCONCLUSIVE` with `AUDIT_ANALYSIS_FAILED` and the detail
+`Query capture incomplete [LAZY_LOAD_LIMIT_REACHED]`. Metadata still contributes to heap usage.
 
 ```yaml
 query-audit:

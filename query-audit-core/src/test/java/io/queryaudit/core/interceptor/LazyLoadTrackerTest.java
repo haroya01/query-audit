@@ -12,6 +12,52 @@ class LazyLoadTrackerTest {
   // ====================================================================
 
   @Test
+  void stopsRecordingAtTheEventLimitAndCountsWhatItDropped() {
+    LazyLoadTracker tracker = new LazyLoadTracker(true, 3);
+    tracker.start();
+    for (int id = 0; id < 4; id++) {
+      tracker.recordProxyResolved("com.example.User", id);
+    }
+    tracker.recordExplicitLoad("com.example.Team", 1, "Service.load:1");
+
+    assertThat(tracker.getRecords()).hasSize(3);
+    assertThat(tracker.getExplicitLoads()).isEmpty();
+    assertThat(tracker.getDroppedEventCount()).isEqualTo(2);
+
+    tracker.start();
+    assertThat(tracker.getDroppedEventCount()).isZero();
+  }
+
+  @Test
+  void appendingEventsAllocatesLinearly() {
+    java.lang.management.ThreadMXBean threads =
+        java.lang.management.ManagementFactory.getThreadMXBean();
+    org.junit.jupiter.api.Assumptions.assumeTrue(
+        threads instanceof com.sun.management.ThreadMXBean bean
+            && bean.isThreadAllocatedMemorySupported());
+    com.sun.management.ThreadMXBean bean = (com.sun.management.ThreadMXBean) threads;
+    bean.setThreadAllocatedMemoryEnabled(true);
+
+    long small = allocatedWhileRecording(bean, 10_000);
+    long large = allocatedWhileRecording(bean, 20_000);
+
+    assertThat((double) large / small).isLessThan(3.0);
+  }
+
+  private static long allocatedWhileRecording(com.sun.management.ThreadMXBean bean, int events) {
+    LazyLoadTracker tracker = new LazyLoadTracker(true, events);
+    tracker.start();
+    long thread = Thread.currentThread().getId();
+    long before = bean.getThreadAllocatedBytes(thread);
+    for (int id = 0; id < events; id++) {
+      tracker.recordProxyResolved("com.example.User", id);
+    }
+    long allocated = bean.getThreadAllocatedBytes(thread) - before;
+    assertThat(tracker.getRecords()).hasSize(events);
+    return allocated;
+  }
+
+  @Test
   void deproxyClassName_hibernateProxy_strippedCorrectly() {
     String proxied = "com.example.User$HibernateProxy$abc123def";
     assertThat(LazyLoadTracker.deproxyClassName(proxied)).isEqualTo("com.example.User");
