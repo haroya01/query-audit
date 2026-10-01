@@ -58,7 +58,7 @@ class CustomFindingReporterTest {
     String detail = Files.readString(output.resolve("ExampleTest.html"));
     assertThat(index).contains("class=\"row-fail\"", "badge-error\">2</span>");
     assertThat(detail)
-        .contains("<details class=\"method method-error\">", "2 issues", "1 errors", "1 info")
+        .contains("class=\"method method-error\">", "2 issues", "1 errors", "1 info")
         .contains("acme:query/budget", "acme:query/info", "acme:query/accepted", "ACKNOWLEDGED")
         .contains("data-key=\"" + FindingId.of(report.getTestId(), ERROR) + "\"")
         .contains("&lt;script&gt;alert(&#39;" + SECRET + "&#39;)&lt;/script&gt;")

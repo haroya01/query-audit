@@ -715,6 +715,7 @@ public class HtmlReporter implements Reporter {
     // Flush before iterating
     flushSection(sb, writer);
 
+    Set<String> anchors = new HashSet<>();
     for (QueryAuditReport report : reports) {
       var findings = report.getFindings();
       boolean hasIssues = findings.hasConfirmed();
@@ -741,7 +742,16 @@ public class HtmlReporter implements Reporter {
         statusClass = "method-unverified";
       }
 
-      sb.append("<details class=\"method ").append(statusClass).append("\"");
+      String anchor = testAnchor(report.getTestName());
+      if (!anchors.add(anchor)) {
+        anchor = anchor + "-" + anchors.size();
+        anchors.add(anchor);
+      }
+      sb.append("<details id=\"")
+          .append(esc(anchor))
+          .append("\" class=\"method ")
+          .append(statusClass)
+          .append("\"");
       // All methods start collapsed — user expands what they need
       sb.append(">\n");
       sb.append("  <summary>\n");
@@ -1086,7 +1096,7 @@ public class HtmlReporter implements Reporter {
     if (hashIdx > 0 && hashIdx < qualifiedTest.length() - 1) {
       String className = qualifiedTest.substring(0, hashIdx);
       String testName = qualifiedTest.substring(hashIdx + 1);
-      String href = classFileName(className) + "#test-" + sanitizeAnchor(testName);
+      String href = classFileName(className) + "#" + testAnchor(testName);
       sb.append(indent)
           .append("<a class=\"affected-test-link\" href=\"")
           .append(esc(href))
@@ -1105,6 +1115,11 @@ public class HtmlReporter implements Reporter {
    * Converts a test name into a safe HTML anchor ID by replacing non-alphanumeric characters with
    * hyphens.
    */
+  static String testAnchor(String testName) {
+    String name = testName == null ? "unknown" : testName;
+    return "test-" + sanitizeAnchor(name) + "-" + Integer.toHexString(name.hashCode());
+  }
+
   private static String sanitizeAnchor(String name) {
     if (name == null) return "unknown";
     return name.replaceAll("[^a-zA-Z0-9_-]", "-");
