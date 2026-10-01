@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import javax.sql.DataSource;
@@ -34,7 +35,15 @@ import javax.sql.DataSource;
 class IndexMetadataCollector {
 
   record Result(
-      IndexMetadata metadata, String dialect, AuditCapability capability, String failure) {}
+      IndexMetadata metadata,
+      String dialect,
+      AuditCapability capability,
+      String failure,
+      DatabaseProviders.Diagnostic diagnostic) {
+    Result(IndexMetadata metadata, String dialect, AuditCapability capability, String failure) {
+      this(metadata, dialect, capability, failure, null);
+    }
+  }
 
   private final Iterable<IndexMetadataProvider> providers;
 
@@ -51,33 +60,62 @@ class IndexMetadataCollector {
   }
 
   Result collectWithCapabilities(DataSource dataSource) {
+    return collectWithCapabilities(dataSource, List.of());
+  }
+
+  Result collectWithCapabilities(
+      DataSource dataSource, List<IndexMetadataProvider> explicitProviders) {
+    return collectWithCapabilities(
+        dataSource, DatabaseProviders.anonymousRegistrations(explicitProviders));
+  }
+
+  Result collectWithCapabilities(
+      DataSource dataSource, Map<String, IndexMetadataProvider> explicitProviders) {
     String dialect = null;
     String source = "jdbc-metadata";
+    DatabaseProviders.Selected<IndexMetadataProvider> selected = null;
     try (Connection connection = dataSource.getConnection()) {
       String product = connection.getMetaData().getDatabaseProductName();
       if (product == null || product.isBlank()) {
         throw new IllegalStateException("JDBC metadata did not identify the database product");
       }
       dialect = product.toLowerCase(Locale.ROOT);
-      for (IndexMetadataProvider provider : providers) {
-        if (dialect.contains(provider.supportedDatabase().toLowerCase(Locale.ROOT))) {
-          source =
-              AuditRuntimeIdentity.hasKnownCapabilityInputs(provider.getClass())
-                  ? AuditRuntimeIdentity.implementation(provider.getClass())
-                  : AuditRuntimeIdentity.unverifiedImplementation(provider.getClass());
-          IndexMetadata metadata = provider.getIndexMetadata(connection);
-          if (metadata == null) {
-            throw new IllegalStateException("Index metadata provider returned null");
-          }
-          return new Result(
-              metadata,
-              dialect,
-              AuditCapability.available(
-                  source, AuditRuntimeIdentity.hasKnownCapabilityInputs(provider.getClass())),
-              null);
+      selected =
+          DatabaseProviders.selectWithIdentity(
+              dialect, explicitProviders, providers, IndexMetadataProvider::supportedDatabase);
+      IndexMetadataProvider provider = selected == null ? null : selected.provider();
+      if (provider != null) {
+        source =
+            AuditRuntimeIdentity.hasKnownCapabilityInputs(provider.getClass())
+                ? AuditRuntimeIdentity.implementation(provider.getClass())
+                : AuditRuntimeIdentity.unverifiedImplementation(provider.getClass());
+        IndexMetadata metadata = provider.getIndexMetadata(connection);
+        if (metadata == null) {
+          throw new IllegalStateException("Index metadata provider returned null");
         }
+        return new Result(
+            metadata,
+            dialect,
+            AuditCapability.available(
+                source, AuditRuntimeIdentity.hasKnownCapabilityInputs(provider.getClass())),
+            null);
       }
+    } catch (DatabaseProviders.SelectionException failure) {
+      return new Result(
+          null,
+          dialect,
+          AuditCapability.failed(source),
+          failure.getClass().getSimpleName(),
+          failure.diagnostic());
     } catch (Exception | LinkageError | ServiceConfigurationError failure) {
+      if (selected != null) {
+        return new Result(
+            null,
+            dialect,
+            AuditCapability.failed(source),
+            failure.getClass().getSimpleName(),
+            selected.executionFailure());
+      }
       return failed(dialect, source, failure);
     }
 

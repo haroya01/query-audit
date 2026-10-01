@@ -33,13 +33,10 @@ public final class ComparisonInputCompatibility {
       String previous = before.get(field);
       String current = after.get(field);
       boolean changed = !Objects.equals(previous, current);
-      boolean failedCapability =
-          field.endsWith(".state") && ("FAILED".equals(previous) || "FAILED".equals(current));
-      boolean incompleteInputs =
-          (field.equals("detectorInputsComplete") || field.endsWith(".inputsComplete"))
-              && ("false".equals(previous) || "false".equals(current));
-      if (changed || failedCapability || incompleteInputs) {
-        differences.add(new ComparisonInputDifference(testId, field, previous, current));
+      ComparisonInputDifference difference =
+          new ComparisonInputDifference(testId, field, previous, current);
+      if (changed || difference.kind() == ComparisonInputDifference.Kind.UNAVAILABLE) {
+        differences.add(difference);
       }
     }
     return List.copyOf(differences);

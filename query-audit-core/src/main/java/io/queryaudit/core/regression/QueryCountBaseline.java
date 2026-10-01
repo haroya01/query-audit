@@ -20,7 +20,7 @@ import java.util.TreeMap;
  * <h3>File format</h3>
  *
  * <pre>
- * # Query Guard Count Baseline
+ * # QueryAudit Count Baseline
  * # Format: identityType | identityValue | selectCount | insertCount | updateCount | deleteCount | totalCount
  * &#64;junit | [engine:junit-jupiter]/[class:com.example.RoomApiTest]/[method:testCreateRoom()] | 12 | 3 | 0 | 0 | 15
  * </pre>
@@ -282,7 +282,7 @@ public final class QueryCountBaseline {
    * @throws IOException if the file cannot be written
    */
   public static void save(Path file, Map<String, QueryCounts> counts) throws IOException {
-    save(file, counts, "Query Guard Count Baseline");
+    save(file, counts, "QueryAudit Count Baseline");
   }
 
   /**
@@ -311,29 +311,35 @@ public final class QueryCountBaseline {
       writer.newLine();
 
       for (Map.Entry<String, QueryCounts> entry : sorted.entrySet()) {
-        QueryCounts c = entry.getValue();
-        String[] keyParts = entry.getKey().split("\\|", 2);
-        if (keyParts.length < 2) {
+        String line = line(entry.getKey(), entry.getValue());
+        if (line == null) {
           continue;
         }
-        String identityType = keyParts[0].trim();
-        String identityValue = keyParts[1].trim();
-        if (JUNIT_IDENTITY_TYPE.equals(identityType)) {
-          identityValue = escapeJunitIdentity(identityValue);
-        }
-        writer.write(
-            String.format(
-                "%s | %s | %d | %d | %d | %d | %d",
-                identityType,
-                identityValue,
-                c.selectCount(),
-                c.insertCount(),
-                c.updateCount(),
-                c.deleteCount(),
-                c.totalCount()));
+        writer.write(line);
         writer.newLine();
       }
     }
+  }
+
+  public static String line(String key, QueryCounts counts) {
+    String[] keyParts = key.split("\\|", 2);
+    if (keyParts.length < 2) {
+      return null;
+    }
+    String identityType = keyParts[0].trim();
+    String identityValue = keyParts[1].trim();
+    if (JUNIT_IDENTITY_TYPE.equals(identityType)) {
+      identityValue = escapeJunitIdentity(identityValue);
+    }
+    return String.format(
+        "%s | %s | %d | %d | %d | %d | %d",
+        identityType,
+        identityValue,
+        counts.selectCount(),
+        counts.insertCount(),
+        counts.updateCount(),
+        counts.deleteCount(),
+        counts.totalCount());
   }
 
   private static String escapeJunitIdentity(String value) {

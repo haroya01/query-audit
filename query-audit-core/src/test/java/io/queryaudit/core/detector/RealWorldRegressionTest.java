@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.model.IndexInfo;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
@@ -44,7 +45,7 @@ class RealWorldRegressionTest {
   private static final IndexMetadata EMPTY_INDEX = new IndexMetadata(Map.of());
 
   private static QueryAuditAnalyzer defaultAnalyzer() {
-    return new QueryAuditAnalyzer(QueryAuditConfig.defaults(), Collections.emptyList());
+    return new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), Collections.emptyList());
   }
 
   // ═══════════════════════════════════════════════════════════════════

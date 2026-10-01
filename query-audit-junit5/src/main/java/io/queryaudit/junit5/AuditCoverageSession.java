@@ -42,7 +42,7 @@ final class AuditCoverageSession {
   }
 
   static AuditCoverageSession open(TestPlan testPlan) {
-    String configuredPath = System.getProperty(AuditCoverageManifest.PATH_PROPERTY);
+    String configuredPath = AuditCoverageManifest.configuredPath();
     Path manifest;
     AuditCoverageSession session;
     try {

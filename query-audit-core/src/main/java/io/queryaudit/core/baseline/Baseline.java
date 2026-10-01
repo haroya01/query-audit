@@ -1,5 +1,6 @@
 package io.queryaudit.core.baseline;
 
+import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.parser.SqlParser;
 import java.io.BufferedReader;
@@ -18,7 +19,7 @@ import java.util.List;
  * <h3>File format</h3>
  *
  * <pre>
- * # Query Guard Baseline — acknowledged issues
+ * # QueryAudit Baseline — acknowledged issues
  * # Format: issue-code | table | column | acknowledged-by | reason | query-pattern
  * missing-where-index | users | deleted_at | dev@example.com | Low cardinality | select id from users where deleted_at is null
  * </pre>
@@ -93,7 +94,7 @@ public final class Baseline {
   public static void save(Path baselineFile, List<BaselineEntry> entries) throws IOException {
     Files.createDirectories(baselineFile.getParent());
     try (BufferedWriter writer = Files.newBufferedWriter(baselineFile, StandardCharsets.UTF_8)) {
-      writer.write("# Query Guard Baseline — acknowledged issues");
+      writer.write("# QueryAudit Baseline — acknowledged issues");
       writer.newLine();
       writer.write(
           "# Format: issue-code | table | column | acknowledged-by | reason | query-pattern");
@@ -144,6 +145,25 @@ public final class Baseline {
     String column = issue.column();
     for (BaselineEntry entry : baseline) {
       if (entry.matches(code, table, column, issue.query())) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  /** Open-kind equivalent of {@link #isAcknowledged(List, Issue)}. */
+  public static boolean isFindingAcknowledged(List<BaselineEntry> baseline, Finding finding) {
+    return findFindingMatch(baseline, finding) != null;
+  }
+
+  /** Finds an exact kind/table/column/query-pattern baseline match without requiring an enum. */
+  public static BaselineEntry findFindingMatch(List<BaselineEntry> baseline, Finding finding) {
+    if (baseline == null || finding == null) {
+      return null;
+    }
+    for (BaselineEntry entry : baseline) {
+      if (entry.matches(
+          finding.kindId().value(), finding.table(), finding.column(), finding.query())) {
         return entry;
       }
     }

@@ -13,9 +13,9 @@ diagnostic, or CI comparison. This reference documents the published `0.6.0` ann
 |---|---|---|---|
 | `@QueryAudit` | Class / Method | Run the configured detection profile | Yes (configurable) |
 | `@EnableQueryInspector` | Class | Report findings without enforcing them | No finding failure; separate budget annotations still assert |
-| `@DetectNPlusOne` | Class / Method | N+1 detection only | Yes (on N+1 only) |
-| `@ExpectMaxQueryCount` | Method | Assert max query count | Yes (on count exceeded) |
-| `@ExpectQueries` | Method | Assert per-type query budgets (SELECT/INSERT/UPDATE/DELETE) | Yes (on budget exceeded) |
+| `@ExpectQueries` | Method | Assert query budgets per type and in total | Yes (on budget exceeded) |
+| `@DetectNPlusOne` | Class / Method | Deprecated since 0.7.0; use `@QueryAudit(failOn = N_PLUS_ONE)` | Yes (on N+1 only) |
+| `@ExpectMaxQueryCount` | Method | Deprecated since 0.7.0; use `@ExpectQueries(total = n)` | Yes (on count exceeded) |
 | `@QueryAuditExclude` | Class / Method | Opt a test out of auditing (the `mode: all` escape hatch) | No |
 
 ### Annotation Attributes at a Glance
@@ -26,6 +26,7 @@ diagnostic, or CI comparison. This reference documents the published `0.6.0` ann
 | `nPlusOneThreshold` | `@QueryAudit` | `int` | `-1` (use yml/default: 3) | Override N+1 threshold |
 | `suppress` | `@QueryAudit` | `String[]` | `{}` | Issue codes to suppress |
 | `failOn` | `@QueryAudit` | `IssueType[]` | `{}` (all confirmed) | Only fail on specific issue types |
+| `failOnKinds` | `@QueryAudit` | `String[]` | `{}` | Select built-in/custom kind codes; union with `failOn` |
 | `baselinePath` | `@QueryAudit` | `String` | `""` (default path) | Path to baseline file |
 | `autoOpenReport` | `@QueryAudit` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests |
 | `includeSetupQueries` | `@QueryAudit` | `boolean` | `false` | Include `@BeforeEach`/`@AfterEach` queries in analysis |
@@ -35,6 +36,12 @@ diagnostic, or CI comparison. This reference documents the published `0.6.0` ann
 | `insert` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum INSERT queries allowed |
 | `update` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum UPDATE queries allowed |
 | `delete` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum DELETE queries allowed |
+| `total` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum captured statements of any type |
+
+Choose how findings are treated with one class-level annotation: `@QueryAudit` fails the test on
+confirmed findings, and `@EnableQueryInspector` reports them without failing. Put query budgets on
+the method with `@ExpectQueries`. Under the default profile, the only built-in finding is a
+call-site N+1.
 
 !!! info "Why `BooleanOverride` instead of `boolean`?"
     Java annotation attributes cannot distinguish between "explicitly set to default" and
@@ -72,6 +79,7 @@ class OrderServiceTest {
 | `nPlusOneThreshold` | `int` | `-1` (use yml/default: 3) | Override N+1 threshold |
 | `suppress` | `String[]` | `{}` | Issue codes to suppress |
 | `failOn` | `IssueType[]` | `{}` (all confirmed) | Only fail on specific issue types |
+| `failOnKinds` | `String[]` | `{}` | Select namespaced custom or built-in kinds; both selection arrays empty means all confirmed findings |
 | `baselinePath` | `String` | `""` (default path) | Path to baseline file |
 | `autoOpenReport` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests |
 | `includeSetupQueries` | `boolean` | `false` | Include queries from `@BeforeEach`/`@AfterEach` lifecycle methods in analysis. Default analyzes only `@Test` body queries. |
@@ -226,6 +234,10 @@ class OrderServiceTest {
 
 ## @DetectNPlusOne
 
+!!! warning "Deprecated since 0.7.0"
+    N+1 is the default rule, so `@QueryAudit(failOn = IssueType.N_PLUS_ONE, nPlusOneThreshold = 2)`
+    does the same. `@DetectNPlusOne` keeps working.
+
 Focused annotation that **only** fails on N+1 patterns. All other detection rules still
 run and report, but won't cause a test failure.
 
@@ -310,6 +322,10 @@ for (order : orders)
 
 ## @ExpectMaxQueryCount
 
+!!! warning "Deprecated since 0.7.0"
+    Use `@ExpectQueries(total = 5)`, which reports the total with the other budgets.
+    `@ExpectMaxQueryCount` keeps working.
+
 Asserts that a test method does not exceed a specific number of total queries.
 All query types (SELECT, INSERT, UPDATE, DELETE) are counted.
 
@@ -390,6 +406,7 @@ class OrderServiceTest {
 | `insert` | `int` | `-1` (not verified) | Maximum INSERT queries allowed |
 | `update` | `int` | `-1` (not verified) | Maximum UPDATE queries allowed |
 | `delete` | `int` | `-1` (not verified) | Maximum DELETE queries allowed |
+| `total` | `int` | `-1` (not verified) | Maximum captured statements of any type |
 
 ### Failure Message
 
@@ -412,11 +429,12 @@ SELECT: executed 3, expected at most 2.
     contract -- useful for guarding query-only endpoints against accidental writes.
 
 !!! warning "Counts ALL queries"
-    Like `@ExpectMaxQueryCount`, budgets count queries from the whole test lifecycle,
-    including INSERTs from `@BeforeEach` data setup.
+    Budgets count queries from the whole test lifecycle, including INSERTs from `@BeforeEach`
+    data setup. To count one request or job only, use a
+    [scoped contract](contracts.md#contract-a-request-or-job).
 
-`@ExpectQueries` can be combined with `@ExpectMaxQueryCount`: the latter caps the total
-while the former constrains individual types.
+`total` caps every statement while the type attributes constrain individual types; both can be
+set on one annotation.
 
 ---
 
@@ -426,19 +444,18 @@ Annotations can be combined for fine-grained control:
 
 ```java
 @SpringBootTest
-@QueryAudit                    // Full analysis on all tests
-@DetectNPlusOne(threshold = 2) // Strict N+1 threshold
+@QueryAudit(nPlusOneThreshold = 2)  // Fail on N+1 from the second repetition
 class OrderServiceTest {
 
     @Test
-    @ExpectMaxQueryCount(10)   // Also enforce query count limit
+    @ExpectQueries(total = 10, update = 0)  // Also enforce budgets
     void createOrder() {
         orderService.createOrder(request);
     }
 
     @Test
     void findOrders() {
-        // Only @QueryAudit + @DetectNPlusOne apply here
+        // Only the class-level @QueryAudit applies here
         orderService.findAll();
     }
 }

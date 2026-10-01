@@ -1,6 +1,6 @@
 ---
-title: QueryAudit — query policies for JUnit 5
-description: Review query-count contracts across JUnit tests and compare CI runs with checks for missing audits and changed analysis settings.
+title: QueryAudit — catch N+1 queries before merge
+description: Find N+1 queries at their call site in JUnit 5 tests, lock the fixed query counts in contracts, and gate pull requests in CI.
 hide:
   - navigation
   - toc
@@ -8,61 +8,136 @@ hide:
 
 <div class="qa-hero">
   <div class="qa-hero__copy">
-    <p class="qa-eyebrow">QUERY POLICIES FOR JUNIT 5</p>
-    <h1>Keep query changes<br>under test.</h1>
+    <p class="qa-eyebrow">N+1 AND QUERY REGRESSIONS FOR JUNIT 5</p>
+    <h1>Catch N+1 queries<br>before merge.</h1>
     <p class="qa-hero__lead">
-      Review query-count contracts across your tests. Compare CI runs with checks
-      for missing audits and changed analysis settings.
+      QueryAudit reports an N+1 at the line that issues it, then locks the fixed
+      query counts into contracts that every pull request has to keep.
     </p>
     <div class="qa-hero__actions">
-      <a href="getting-started/quickstart/" class="md-button md-button--primary">Run the example →</a>
-      <a href="getting-started/installation/" class="md-button">Add to my tests</a>
+      <a href="getting-started/installation/" class="md-button md-button--primary">Add to my tests →</a>
+      <a href="getting-started/quickstart/" class="md-button">Run the example</a>
     </div>
     <p class="qa-hero__note">Java 17+ · JUnit 5 · Test dependencies only</p>
   </div>
-  <div class="qa-terminal" aria-label="An unexpected UPDATE fails a read-only query budget">
+  <div class="qa-terminal" aria-label="An N+1 fails a test at its call site, then the fixed test passes">
     <div class="qa-terminal__bar">
-      <span>A read path adds a write</span>
+      <span>A loop loads one customer per order</span>
       <span class="qa-terminal__dots" aria-hidden="true">● ● ●</span>
     </div>
-    <pre><code>@ExpectQueries(
-    select = 1,
-    insert = 0, update = 0, delete = 0)
+    <pre><code>@Test @QueryAudit
+void listsOrderSummaries() { … }
 
-<span class="qa-terminal__error">UPDATE: executed 1, expected at most 0.</span>
+<span class="qa-terminal__error">[ERROR] N+1 Query detected (table: customers)
+  The same SELECT ran 5 times from one call site
+  at OrderService.recentOrderSummaries:42</span>
 
-<span class="qa-terminal__muted">Remove the write. Run the test again.</span>
+<span class="qa-terminal__muted">Fetch the customers once. Run the test again.</span>
 
 <span class="qa-terminal__success">"outcome": "PASS"</span></code></pre>
-    <div class="qa-terminal__footer">Budget failure → passing JSON outcome</div>
+    <div class="qa-terminal__footer">N+1 at its call site → passing JSON outcome</div>
   </div>
 </div>
 
 <div class="qa-workflow-nav" markdown>
 
-[**01** Keep reads free of writes](#keep-reads-free-of-writes)
-[**02** Review count changes](#review-count-changes)
-[**03** Find the SQL and call site](#find-the-sql-and-call-site)
-[**04** Compare complete CI runs](#compare-complete-ci-runs)
+[**01** Find an N+1](#find-an-n1)
+[**02** Lock the fix](#lock-the-fix)
+[**03** Gate the pull request](#gate-the-pull-request)
+[**04** Used on a production service](#used-on-a-production-service)
 
 </div>
 
-## Keep reads free of writes
+## Find an N+1
 
-After [enabling capture](getting-started/installation.md), add a budget to your test:
+After [installing the starter](getting-started/installation.md), add `@QueryAudit` to a test that
+reads related data:
+
+```java
+@SpringBootTest
+@QueryAudit
+class OrderServiceTest {
+    @Autowired OrderService orderService;
+
+    @Test
+    void listsOrderSummaries() {
+        assertEquals(5, orderService.recentOrderSummaries().size());
+    }
+}
+```
+
+With no configuration, one rule runs: the same SELECT, three or more times, from one full
+application call stack. If `recentOrderSummaries()` loads each order's customer inside its loop,
+the test fails at that line:
+
+```text
+QueryAudit detected 1 issue(s) in listsOrderSummaries():
+
+  [ERROR] N+1 Query detected (table: customers)
+    Detail: The same SELECT ran 5 times from one call site
+    Suggestion: Load the rows once before the loop: JOIN FETCH, @EntityGraph, or one query with an IN list.
+    Call stack:
+      at com.example.order.OrderService.recentOrderSummaries:42
+      at com.example.order.OrderServiceTest.listsOrderSummaries:18
+```
+
+A batched `IN (?, ?, ...)` fetch is the fix, not the problem, so `@BatchSize` and batch fetching
+stay quiet. Hibernate lazy-load events add an INFO line that names the association to fetch.
+Use `@EnableQueryInspector` instead of `@QueryAudit` to survey an existing suite without failing it.
+
+[How N+1 detection works →](detections/n-plus-one.md)
+· [Read SQL and call sites](guide/reports.md)
+
+## Lock the fix
+
+**A budget** is a limit you write on the test. At most two SELECTs and no writes:
 
 ```java
 @Test
 @ExpectQueries(select = 2, insert = 0, update = 0, delete = 0)
-void loadsOrders() {
-    var orders = orderService.findRecentOrders();
-    assertEquals(3, orders.size());
+void listsOrderSummaries() {
+    assertEquals(5, orderService.recentOrderSummaries().size());
 }
 ```
 
-At most two SELECTs and no INSERT, UPDATE, or DELETE. Omitted fields are unchecked.
+If the loop comes back, the test fails even though the returned data is still correct:
 
-**Try the unexpected-write failure** with the published library and in-memory H2:
+```text
+SELECT: executed 6, expected at most 2.
+```
+
+**A contract** is a count QueryAudit records for you. `QueryContractScope` counts only the request
+or job you hand it, not fixture setup or assertions, and waits for the thread pools you name:
+
+```yaml
+query-audit:
+  contracts:
+    path: src/test/resources/query-contracts
+    await-executors: [taskExecutor]
+```
+
+```java
+@Autowired QueryContractScope contracts;
+
+@Test
+void listsLinks() throws Exception {
+    contracts.verify("link-list", () -> mockMvc.perform(get("/api/v1/links")))
+        .andExpect(status().isOk());
+}
+```
+
+Record once with `-DqueryAudit.contracts.record=true`, commit the file, and review every later
+change as one line in the pull request:
+
+```diff
+-@junit | link-list | 2 | 0 | 0 | 0 | 2
++@junit | link-list | 3 | 0 | 0 | 0 | 3
+```
+
+Without the re-record, the test fails with the delta and the SQL that grew. Whole test methods
+can keep contracts in the same file.
+
+**Try a budget failure** with the published library and in-memory H2:
 
 ```sh
 git clone https://github.com/haroya01/query-audit.git
@@ -74,94 +149,52 @@ cd query-audit
 UPDATE: executed 1, expected at most 0.
 ```
 
-Remove the write by rerunning without `-PextraWrite=true`: the test passes and the JSON
-outcome becomes `PASS`. Use `-PextraQuery=true` to try the extra-SELECT failure.
+Rerun without `-PextraWrite=true` and the test passes.
 
-[Copy the complete test and commands →](getting-started/quickstart.md)
+[Lock a fixed path →](guide/choose-your-workflow.md)
+· [Contracts](guide/contracts.md)
+· [Quick start](getting-started/quickstart.md)
 
-## Review count changes
+## Gate the pull request
 
-In your own Maven project with capture enabled, record SELECT/INSERT/UPDATE/DELETE counts
-for tests without an inline budget:
-
-```sh
-mvn test -DqueryAudit.contracts.record=true
-```
-
-Commit `.query-audit-contracts`. On the next test run, a changed count fails:
-
-```text
-QueryAudit: placeOrder() deviates from its recorded query contract (.query-audit-contracts).
-  INSERT: contract 1, executed 3 (+2)
-```
-
-For an intended change, re-record and review the contract diff with the code.
-The contract checks counts in both directions; keep ordinary assertions for results and affected rows.
-
-[Record contracts with Maven or Gradle →](guide/contracts.md)
-
-## Find the SQL and call site
-
-Select JSON in your Spring test configuration, then rerun the failing test:
-
-```yaml
-query-audit:
-  auto-open-report: false
-  report:
-    format: json
-```
-
-Inspect each captured statement and its application frames:
-
-```sh
-jq '.reports[].queries[] | {sql, stackTrace}' \
-  build/reports/query-audit/report.json
-```
-
-The example's unexpected write produces this evidence (excerpt; line numbers can change):
-
-```json
-{
-  "sql": "UPDATE orders SET status = ? WHERE id = ?",
-  "stackTrace": "example.audit.FirstAuditTest.writeOnReadPath:43\nexample.audit.FirstAuditTest.readsOnce:26"
-}
-```
-
-For the example, use `examples/first-audit/build/reports/query-audit/report.json`.
-
-[Read the example's SQL evidence →](getting-started/quickstart.md)
-· [Report fields](guide/reports.md)
-
-## Compare complete CI runs
-
-Save baseline and candidate reports, then compare with the matching core JAR:
+Save the JSON report from the base branch and from the pull request, then compare them with the
+matching core JAR:
 
 ```sh
 java -cp "$QUERY_AUDIT_CORE_JAR" \
   io.queryaudit.core.reporter.ReportComparator before.json after.json verdict.json
 ```
 
-Set `QUERY_AUDIT_CORE_JAR` to your downloaded `query-audit-core` JAR path.
-With an [expected-test manifest](guide/audit-coverage.md), CI can distinguish a fix from a missing test:
-
-| What changed? | Comparison result |
+| The pull request… | Result |
 | --- | --- |
-| A finding was fixed; the same tests ran with compatible inputs | `PASS`, with the finding in `resolved` if no other check fails |
-| A query budget or recorded contract failed | `FAIL` |
-| An expected test was skipped or lost its audit | `INCONCLUSIVE` |
-| A rule, threshold, or required analysis input changed | `INCONCLUSIVE` |
+| adds no confirmed finding and keeps every budget and contract | `PASS` |
+| breaks a budget or a contract | `FAIL` |
+| skips or loses a test listed in the [expected-test manifest](guide/audit-coverage.md) | `INCONCLUSIVE` |
+| changes rules, thresholds, or required analysis inputs | `INCONCLUSIVE` |
 
-Require both JUnit and the audit verdict to pass. Enforce counts with budgets or contracts;
-a count delta in the comparison is only a summary.
+Add `--require-resolved <findingId>` to prove that one specific finding is gone.
 
 [Set up the first CI check →](guide/first-ci-check.md)
 · [Compare two runs](guide/ci-cd.md)
-· [Input compatibility](guide/comparison-inputs.md)
+· [Comparison inputs](guide/comparison-inputs.md)
+
+## Used on a production service
+
+QueryAudit is dogfooded on [short-link](https://github.com/haroya01/short-link), a production
+URL shortener built with Spring Boot and MySQL. Its test suite was the acceptance test for 0.7.0:
+
+- On the same 45 audited tests, the default findings went from 142 under 0.6.0 to 2 under 0.7.0.
+  Both are real per-link lookups repeated inside bulk link creation, and 0.6.0 had reported
+  neither as a confirmed finding.
+- All 584 HTTP query contracts kept the same counts after the move from a hand-written helper to
+  `QueryContractScope`, which needs no internal QueryAudit class.
+- One injected extra SELECT in link creation failed 13 contracts across 8 test classes, and each
+  failure listed the repeated statement with its call site.
 
 ---
 
-**Need query advice?** N+1, SQL, and index findings provide supporting evidence.
-[Look up a finding](detections/overview.md).
+**Need more than N+1?** Index, `EXPLAIN`, and SQL style rules turn on with `profile: strict` or
+`enabled-rules`. [Optional rules](detections/overview.md)
 
 **Check your setup:** [Spring Boot](getting-started/spring-boot.md)
 · [Plain JUnit](getting-started/installation.md#plain-junit-5)

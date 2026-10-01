@@ -45,6 +45,7 @@ public class QueryAuditConfig {
   private final ReportRedaction reportRedaction;
   private final String reportOutputDir;
   private final String baselinePath;
+  private final String contractsPath;
   private final boolean autoOpenReport;
   private final int maxQueries;
   private final Set<String> disabledRules;
@@ -80,6 +81,7 @@ public class QueryAuditConfig {
     this.reportRedaction = builder.reportRedaction;
     this.reportOutputDir = builder.reportOutputDir;
     this.baselinePath = builder.baselinePath;
+    this.contractsPath = builder.contractsPath;
     this.autoOpenReport = builder.autoOpenReport;
     this.maxQueries = builder.maxQueries;
     this.disabledRules = Collections.unmodifiableSet(new HashSet<>(builder.disabledRules));
@@ -172,6 +174,10 @@ public class QueryAuditConfig {
     return baselinePath;
   }
 
+  public String getContractsPath() {
+    return contractsPath;
+  }
+
   public boolean isAutoOpenReport() {
     return autoOpenReport;
   }
@@ -191,11 +197,6 @@ public class QueryAuditConfig {
     return disabledRules;
   }
 
-  /**
-   * Returns true if the given rule code is disabled via configuration.
-   *
-   * @param ruleCode the issue type code (e.g., "select-all", "n-plus-one")
-   */
   /**
    * Returns whether the rule should not run, combining the profile with explicit overrides.
    * Precedence: {@code disabled-rules} wins over {@code enabled-rules}, which wins over the profile
@@ -419,6 +420,7 @@ public class QueryAuditConfig {
     private ReportRedaction reportRedaction = ReportRedaction.REDACTED;
     private String reportOutputDir = DEFAULT_REPORT_OUTPUT_DIR;
     private String baselinePath = null;
+    private String contractsPath = null;
     private boolean autoOpenReport = true;
     private int maxQueries = 10_000;
     private Set<String> disabledRules = new HashSet<>();
@@ -462,6 +464,7 @@ public class QueryAuditConfig {
       b.reportRedaction = source.reportRedaction;
       b.reportOutputDir = source.reportOutputDir;
       b.baselinePath = source.baselinePath;
+      b.contractsPath = source.contractsPath;
       b.autoOpenReport = source.autoOpenReport;
       b.maxQueries = source.maxQueries;
       b.disabledRules = new HashSet<>(source.disabledRules);
@@ -560,6 +563,11 @@ public class QueryAuditConfig {
 
     public Builder baselinePath(String baselinePath) {
       this.baselinePath = baselinePath;
+      return this;
+    }
+
+    public Builder contractsPath(String contractsPath) {
+      this.contractsPath = contractsPath;
       return this;
     }
 
@@ -710,8 +718,8 @@ public class QueryAuditConfig {
      * @since 0.5.0
      */
     /**
-     * Sets the rule profile tier. {@code null} leaves the current value unchanged.
-     * The initial value is {@link RuleProfile#RECOMMENDED}.
+     * Sets the rule profile tier. {@code null} leaves the current value unchanged. The initial
+     * value is {@link RuleProfile#RECOMMENDED}.
      *
      * @since 0.5.0
      */

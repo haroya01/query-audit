@@ -53,10 +53,10 @@ contracts enforce query counts.
 ## Report formats
 
 !!! note "Version scope"
-    This page documents QueryAudit 0.6 and JSON schema 1.6. The schema 1.7 finding-ID additions
-    described here are available in the development branch for the upcoming 0.7 release.
-    QueryAudit 0.5 writes both HTML and schema 1.0 JSON after a session with at least one completed
-    audited result; the differences are called out below.
+    QueryAudit 0.6.1 and later write report schema 1.7, which adds the finding IDs described here.
+    Comparison targets (`--require-resolved`) need 0.7.0. QueryAudit 0.6.0 writes schema 1.6, and
+    0.5 writes both HTML and schema 1.0 JSON after a session with at least one completed audited
+    result.
 
 After each audited test method, QueryAudit prints its findings and adds the result to the suite
 summary. You can also select one suite-level JSON or HTML artifact for later review.
@@ -163,9 +163,9 @@ The JUnit extension then writes one aggregate file to
 create HTML files.
 
 For plain JUnit, Maven can pass the test-JVM property directly with
-`mvn test -DqueryAudit.reportFormat=json`. Gradle users should add the
+`mvn test -DqueryAudit.report.format=json`. Gradle users should add the
 [project-property bridge](ci-cd.md#plain-junit-build-tool-setup) once, then run
-`./gradlew test -PqueryAuditReportFormat=json`.
+`./gradlew test -PqueryAudit.report.format=json`.
 
 ### Example Output
 
@@ -284,8 +284,8 @@ Finding IDs in this example illustrate the schema 1.7 format introduced for Quer
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. This development branch writes **1.7.0** for the upcoming QueryAudit
-0.7 release; the published QueryAudit 0.6 release writes schema 1.6. QueryAudit 0.5.x wrote schema 1.0
+of silently misparsing it. QueryAudit 0.6.1 and 0.7.0 write **1.7.0**; QueryAudit 0.6.0 writes
+schema 1.6. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
 infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, 1.2
 added stable test identities, 1.3 added query-evidence retention counts, and 1.4 added the report
@@ -305,7 +305,7 @@ The suite outcome uses one precedence rule everywhere: `INCONCLUSIVE > FAIL > PA
 | Outcome | Meaning |
 |---|---|
 | `PASS` | The reported audits completed and every configured policy and contract passed. A non-null `coverage` is also required to verify the expected-test manifest. |
-| `FAIL` | The audit completed, but `failOnDetection`, `@DetectNPlusOne`, `@ExpectQueries`, `@ExpectMaxQueryCount`, or a recorded query contract failed. |
+| `FAIL` | The audit completed, but `failOnDetection`, `@ExpectQueries`, a recorded query contract, or the deprecated `@DetectNPlusOne` or `@ExpectMaxQueryCount` failed. |
 | `INCONCLUSIVE` | Collection or a required input was incomplete, so the run cannot produce a trustworthy verdict. Any partial findings and statistics remain in `reports`. |
 
 Confirmed findings do not automatically mean `FAIL`. For example, a completed run with
@@ -471,8 +471,9 @@ comparison; inspect `persisting` when reviewing a particular fix.
   merely because it introduced no new finding.
 - **`verdict.json`**: `{outcome, incompleteReasons, newFindings, resolved, persisting, complete,
   missingTests, unexpectedTests, inputDifferences, findingIdentity, queryCountDelta,
-  executionTimeMsDelta}`. Finding entries carry `findingId` when it was present in their source
-  report, and `null` for legacy findings. Use the final `outcome` or process exit code as the gate.
+  executionTimeMsDelta, allTargetsResolved, noNewRegressions, comparisonComplete,
+  targetResolutions}`. Finding entries carry `findingId` when it was present in their source
+  report, and `null` for legacy findings.
 
 !!! warning "Java API compatibility in 0.6"
     `ReportComparator.Finding` and `ReportComparator.TestRef` now prepend `testId` to their record
@@ -482,7 +483,8 @@ comparison; inspect `persisting` when reviewing a particular fix.
     Generated `equals()`, `hashCode()`, and `toString()` methods now include `testId`.
 
 !!! warning "Java API compatibility in 0.7"
-    Finding identity adds components to `ReportComparator.Finding` and `ReportComparator.Verdict`.
+    Finding identity and target resolution add components to `ReportComparator.Finding` and
+    `ReportComparator.Verdict`, including the latter's `targetResolutions` list.
     Earlier constructor signatures remain available, but record patterns, reflection, and code
     relying on the canonical component lists must account for the new fields. Values constructed
     without identity metadata do not imply recorded finding IDs.
@@ -515,8 +517,8 @@ comparison; inspect `persisting` when reviewing a particular fix.
   to multiple stable IDs. Re-record archived baselines with QueryAudit 0.6 when a suite contains
   duplicate legacy identities. A display name changed before the first schema 1.2 run has no safe
   fallback and is reported as a missing old test plus a new test.
-- Only **confirmed** findings participate. INFO and acknowledged findings are not part of the
-  comparison's new-finding gate.
+- Only **confirmed** findings participate in the default finding delta and new-regression gate.
+  Explicit targets also check INFO and acknowledged findings, as described below.
 - Schema 1.1+ inputs must carry a valid outcome and a consistent reason list. A valid
   `INCONCLUSIVE` input keeps its partial delta but forces comparison exit code `2`. Legacy schema
   1.0 input is also inconclusive; unsupported major versions produce
@@ -541,10 +543,57 @@ its schema-version fields may be `null`. Legacy matching preserves access to old
 cannot provide the same identity guarantees as recorded IDs. The mode does not override outcome,
 coverage, input-compatibility, or redaction checks.
 
-The comparison command remains a no-new-regressions gate: an otherwise complete comparison can
-pass while an existing finding persists. Requiring selected IDs to be resolved is tracked in
-[#210](https://github.com/haroya01/query-audit/issues/210); `--require-resolved` is not implemented
-by this finding-ID change.
+### Require selected findings to be resolved
+
+Without targets, the comparison command remains a no-new-regressions gate: an otherwise complete
+comparison can pass while an existing finding persists. To verify a particular fix, copy its
+`findingId` from the baseline report and supply `--require-resolved`. Repeat the option to require
+more than one finding:
+
+```bash
+java -cp query-audit-core-<version>.jar \
+    io.queryaudit.core.reporter.ReportComparator before.json after.json verdict.json \
+    --require-resolved "$FIRST_FINDING_ID" \
+    --require-resolved "$SECOND_FINDING_ID"
+```
+
+Options may appear before or after the paths; `--require-resolved=<findingId>` is also accepted.
+Use `--` before positional paths that begin with `--`. Repeating the same ID selects it once.
+The Java API accepts the same IDs as a collection:
+
+```java
+var verdict = ReportComparator.compare(beforeJson, afterJson, List.of(firstId, secondId));
+```
+
+The verdict exposes three independent facts:
+
+| Field | Meaning |
+|-------|---------|
+| `allTargetsResolved` | Every requested ID is absent from all finding categories in its original audited test. True when no targets were requested. |
+| `noNewRegressions` | No new **confirmed** finding was observed. This can be true even when comparison is incomplete. |
+| `comparisonComplete` | Both inputs support a trustworthy comparison; identical to the existing `complete` field. |
+
+In target mode, all three must be true for exit `0`. Existing candidate policy failures still
+prevent success: a candidate with `outcome: FAIL` remains `FAIL` even when all three facts are true.
+Consumers must use the final `outcome` or process exit code, not one boolean in isolation.
+
+`targetResolutions` records each selected `findingId`, its baseline `testId`, and a status:
+
+- `RESOLVED`: the comparison is complete and the finding is absent from that test.
+- `PERSISTING`: it remains in `confirmedIssues`, `infoIssues`, or `acknowledgedIssues` of that test.
+- `INCOMPLETE`: the reports cannot prove resolution. Missing/skipped tests, coverage gaps, changed
+  comparison inputs, or unsupported schemas produce this status and exit `2`, not a successful fix.
+
+Targets can be selected from any of the baseline's three finding categories. Moving a target to
+INFO or acknowledging it is **not** a resolution. The ordinary `resolved`/`persisting` delta still
+describes confirmed findings only; `targetResolutions` is the stricter, all-category target result.
+Unselected existing findings do not fail the target gate, but new confirmed findings and existing
+candidate policy failures still fail the comparison.
+
+Both reports must record native IDs (schema 1.7 or later). Legacy input is inconclusive in target
+mode; the original no-target compatibility behavior is unchanged. A malformed ID, an ID absent
+from the baseline, or an ID ambiguous across baseline tests is an invalid request (exit `2`, no new
+verdict written). IDs remain scoped to their original test and do not authenticate report content.
 
 As a Gradle task in the consuming project:
 
@@ -589,9 +638,9 @@ query-audit:
 This selection writes the HTML index and per-class pages and does not create `report.json`.
 
 For plain JUnit, Maven can select the format with
-`mvn test -DqueryAudit.reportFormat=html`. Gradle users should use the
+`mvn test -DqueryAudit.report.format=html`. Gradle users should use the
 [project-property bridge](ci-cd.md#plain-junit-build-tool-setup) and run
-`./gradlew test -PqueryAuditReportFormat=html`.
+`./gradlew test -PqueryAudit.report.format=html`.
 
 Or via annotation:
 
@@ -600,7 +649,7 @@ Or via annotation:
 ```
 
 For plain JUnit, the equivalent test-JVM system property is
-`-Dqueryaudit.autoOpenReport=true`.
+`-DqueryAudit.autoOpenReport=true`.
 
 ### Example HTML Report Structure
 
@@ -630,7 +679,7 @@ contains its findings and the retained query timeline and patterns.
 
 ```
 ────────────────────────────────────────────────────────────────────────
-  QUERY GUARD REPORT
+  QUERYAUDIT REPORT
   Test: findRecentOrders_shouldUseIndex
 ────────────────────────────────────────────────────────────────────────
 ```
@@ -669,8 +718,10 @@ state, while others need application context before a change is justified.
     Set `report.show-info: false` in `application.yml` to hide this section if
     your tests use small datasets where these findings are not actionable.
 
-    In QueryAudit 0.6, the setting applies to console, HTML, and JSON output, including aggregate
-    summary counts. Keep it identical between comparison runs.
+    The setting applies to console, HTML, and GitHub Actions display, including their visible
+    summary counts. Canonical run JSON and safe sink summaries retain INFO findings so a hidden
+    `--require-resolved` target cannot be mistaken for a resolved finding. This intentionally
+    differs from older output behavior that discarded INFO before serialization.
     It does not disable INFO detectors or change test failure behavior. Confirmed and acknowledged
     findings, captured queries, query totals, timings, and index metadata remain available.
 
@@ -773,7 +824,7 @@ query-audit:
     redaction: full
 ```
 
-Plain JUnit uses `-DqueryAudit.reportRedaction=full`. Core callers can set
+Plain JUnit uses `-DqueryAudit.report.redaction=full`. Core callers can set
 `QueryAuditConfig.builder().reportRedaction(ReportRedaction.FULL)` when constructing a
 `JsonReporter`, or pass `ReportRedaction.FULL` to `JsonReporter.toRunEnvelopeJson`.
 All active contexts in one JUnit run must use the same mode. Unknown values fail configuration.

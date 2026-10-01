@@ -30,6 +30,7 @@ public final class ParserConsumer {
             .toList()
             .equals(List.of("id")),
         "Unsupported statements must retain the regex fallback");
+    ExtensionConsumer.verify();
     System.out.println(
         "Published core artifact supplies JSqlParser and preserves statement fallback");
   }

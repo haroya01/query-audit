@@ -4,6 +4,9 @@ plugins {
     id 'com.vanniktech.maven.publish' version '0.30.0' apply false
 }
 
+apply from: 'gradle/documentation-examples.gradle'
+apply from: 'gradle/public-api-compatibility.gradle'
+
 allprojects {
     group = property('group')
     version = property('version')

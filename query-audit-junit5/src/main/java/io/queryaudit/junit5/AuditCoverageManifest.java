@@ -13,13 +13,18 @@ import org.junit.platform.engine.UniqueId;
 final class AuditCoverageManifest {
 
   static final String DEFAULT_FILE_NAME = ".query-audit-tests";
-  static final String PATH_PROPERTY = "queryAudit.coverageManifest";
+  static final String PATH_PROPERTY = "queryAudit.coverage.manifest";
+  static final String LEGACY_PATH_PROPERTY = "queryAudit.coverageManifest";
 
   private AuditCoverageManifest() {}
 
   static boolean isConfigured() {
-    return System.getProperty(PATH_PROPERTY) != null
-        || !Files.notExists(Path.of(DEFAULT_FILE_NAME));
+    return configuredPath() != null || !Files.notExists(Path.of(DEFAULT_FILE_NAME));
+  }
+
+  static String configuredPath() {
+    String path = System.getProperty(PATH_PROPERTY);
+    return path != null ? path : System.getProperty(LEGACY_PATH_PROPERTY);
   }
 
   static Set<String> load(Path file) throws IOException {

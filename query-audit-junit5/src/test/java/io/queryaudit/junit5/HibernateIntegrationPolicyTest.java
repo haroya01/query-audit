@@ -25,24 +25,30 @@ class HibernateIntegrationPolicyTest {
   private final HibernateIntegration integration = new HibernateIntegration();
 
   @Test
-  void defaultPolicyKeepsHibernateDetectorSeverities() {
+  void defaultPolicyKeepsLazyLoadEvidenceAsAnInfoExplanation() {
     QueryAuditReport report = mergeAllFindings(analyzer(QueryAuditConfig.defaults()));
 
-    assertThat(report.getConfirmedIssues())
-        .singleElement()
-        .satisfies(
-            issue -> {
-              assertThat(issue.type()).isEqualTo(IssueType.N_PLUS_ONE);
-              assertThat(issue.severity()).isEqualTo(Severity.ERROR);
-            });
+    assertThat(report.getConfirmedIssues()).isEmpty();
     assertThat(report.getInfoIssues())
         .singleElement()
         .satisfies(
             issue -> {
-              assertThat(issue.type()).isEqualTo(IssueType.FIND_BY_ID_FOR_ASSOCIATION);
+              assertThat(issue.type()).isEqualTo(IssueType.N_PLUS_ONE);
               assertThat(issue.severity()).isEqualTo(Severity.INFO);
             });
     assertThat(report.getAcknowledgedIssues()).isEmpty();
+  }
+
+  @Test
+  void strictPolicyAddsTheFindByIdAdvice() {
+    QueryAuditReport report =
+        mergeAllFindings(
+            analyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build()));
+
+    assertThat(report.getConfirmedIssues()).isEmpty();
+    assertThat(report.getInfoIssues())
+        .extracting(Issue::type)
+        .containsExactly(IssueType.N_PLUS_ONE, IssueType.FIND_BY_ID_FOR_ASSOCIATION);
   }
 
   @Test
@@ -65,6 +71,7 @@ class HibernateIntegrationPolicyTest {
   void severityOverridesReclassifyBothHibernateFindings() {
     QueryAuditConfig config =
         QueryAuditConfig.builder()
+            .ruleProfile(RuleProfile.STRICT)
             .addSeverityOverride("n-plus-one", Severity.INFO)
             .addSeverityOverride("find-by-id-for-association", Severity.ERROR)
             .build();
@@ -92,7 +99,7 @@ class HibernateIntegrationPolicyTest {
   void baselineMovesHibernateFindingsToAcknowledged() {
     QueryAuditAnalyzer analyzer =
         new QueryAuditAnalyzer(
-            QueryAuditConfig.defaults(),
+            QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(),
             List.of(
                 new BaselineEntry(
                     "n-plus-one",
@@ -134,15 +141,15 @@ class HibernateIntegrationPolicyTest {
   }
 
   @Test
-  void minimalProfileKeepsNPlusOneAndRemovesFindByIdFinding() {
+  void minimalProfileKeepsNPlusOneExplanationAndRemovesFindByIdFinding() {
     QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.MINIMAL).build();
 
     QueryAuditReport report = mergeAllFindings(analyzer(config));
 
-    assertThat(report.getConfirmedIssues())
+    assertThat(report.getConfirmedIssues()).isEmpty();
+    assertThat(report.getInfoIssues())
         .extracting(Issue::type)
         .containsExactly(IssueType.N_PLUS_ONE);
-    assertThat(report.getInfoIssues()).isEmpty();
     assertThat(report.getAcknowledgedIssues()).isEmpty();
   }
 

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Academic benchmark test that reproduces SQL anti-patterns cataloged in published research papers
- * and measures Query Guard's detection accuracy.
+ * and measures QueryAudit's detection accuracy.
  *
  * <h2>References</h2>
  *

@@ -19,10 +19,10 @@ one known query, verify capture, and promote the checks you trust into contracts
 | Several Spring `DataSource` beans | The extension resolves one source by type | Make the audited source unambiguous, normally with `@Primary`, and ensure the code under test uses it. Wrapping every bean does not mean every source is audited |
 | An existing datasource-proxy | The starter can use a query-aware source without adding another wrapper | Set `query-audit.wrap-data-source.enabled=false` only when that proxy is already present; see [Spring setup](../getting-started/spring-boot.md) |
 | Dynamic tests from `@TestFactory` | There is no supported per-child audit boundary | Use ordinary or parameterized tests for audited cases, or exclude the factory |
-| Concurrent or asynchronous work | `0.6.0` rejects concurrent audited methods; asynchronous attribution is not a supported contract | Run audited methods on the same thread and keep the audited SQL on that execution path; see [execution settings](troubleshooting.md#parallel-capture-is-incomplete) |
+| Concurrent or asynchronous work | Since 0.7.0 each concurrent audited method captures into its own session. SQL from an executor task that is not wrapped makes the audit `INCONCLUSIVE` | Wrap executor tasks with `QueryCaptureSession.wrap`, or count a request and its background work with a [scoped contract](contracts.md#contract-a-request-or-job); see [parallel capture](troubleshooting.md#parallel-capture-is-incomplete) |
 
-The default `recommended` profile excludes the three built-in EXPLAIN rules (`full-scan`,
-`filesort`, and `temporary-table`). If you enable a broader profile but intentionally exclude
+The default `recommended` profile runs no EXPLAIN rule. `strict` adds the three built-in EXPLAIN
+rules (`full-scan`, `filesort`, and `temporary-table`). If you enable it but intentionally exclude
 EXPLAIN, keep these rules disabled in both comparison runs. The resulting contract covers the
 remaining enabled checks, not execution-plan verification. An unexpected `INCONCLUSIVE` needs
 investigation; treating it as `PASS` removes that distinction.
@@ -33,16 +33,13 @@ the budget.
 
 ## Reported cases to check
 
-The following issues were reproduced on the integration checkout `34d6e27`, whose Gradle version
-is `0.6.0`. That checkout contains changes after the published release. These reports do **not**
-establish that the same behavior was reproduced against the Maven Central artifact. Use each
-issue's version and reproduction details when checking your setup; these links do not imply that a
-fix is included in `0.6.0`.
+The following issues were reproduced on `0.6.0` source and remain open in 0.7.0. These links do
+not claim that 0.7.0 still shows each behavior or that it fixes it. Use each issue's reproduction
+details when checking your setup.
 
 | Workflow | Reported behavior | Check for your setup |
 |---|---|---|
-| Spring context replacement | Capture can remain attached to an old context ([#287](https://github.com/haroya01/query-audit/issues/287)) | Use a stable context for the initial audit. If context replacement is required, verify capture after every replacement before trusting a zero-query result |
-| Hibernate batch loading or large lazy-load fixtures | A batch fetch can be reported as N+1, and lazy-event recording has excessive allocation ([#289](https://github.com/haroya01/query-audit/issues/289), [#295](https://github.com/haroya01/query-audit/issues/295)) | Start with bounded fixtures and inspect actual SQL counts. Validate batch-fetch findings before making them fatal |
+| Large lazy-load fixtures | Lazy-event recording has excessive allocation ([#295](https://github.com/haroya01/query-audit/issues/295)) | Start with bounded fixtures and inspect actual SQL counts |
 | SQL safety and result-size findings | Some literal/comment keywords, clause boundaries, and inferred row bounds can cause misses or false positives ([#288](https://github.com/haroya01/query-audit/issues/288), [#291](https://github.com/haroya01/query-audit/issues/291), [#292](https://github.com/haroya01/query-audit/issues/292)) | Add a known violating control for the SQL shape you gate. Use explicit write budgets where the contract forbids writes, and assert affected/result rows separately |
 | Joined-query EXPLAIN analysis | MySQL may omit later plan rows; PostgreSQL may attribute a nested node to the wrong table ([#293](https://github.com/haroya01/query-audit/issues/293), [#294](https://github.com/haroya01/query-audit/issues/294)) | Inspect the complete native plan before acting on an index or scan finding |
 | CI comparison and HTML review | HTML can omit an incomplete verdict, INFO visibility can invalidate comparisons, and method links may not target the right section ([#296](https://github.com/haroya01/query-audit/issues/296), [#297](https://github.com/haroya01/query-audit/issues/297), [#298](https://github.com/haroya01/query-audit/issues/298)) | Gate on the canonical JSON verdict and verify expected coverage; keep comparison settings identical. Open the class page directly for human review |
@@ -52,9 +49,8 @@ fix is included in `0.6.0`.
 
 Use direct `@EnableQueryInspector` / `@QueryAudit` and budget annotations for the first audit.
 A composed/inherited activation gap was reported in
-[#290](https://github.com/haroya01/query-audit/issues/290) on the integration checkout described
-above. It has not been reproduced here against the published artifact, and these docs do not
-claim a shipped fix. Before sharing policies through custom annotations or inheritance, require
+[#290](https://github.com/haroya01/query-audit/issues/290) against `0.6.0` source. These docs do
+not claim a shipped fix. Before sharing policies through custom annotations or inheritance, require
 an intentional budget failure through the exact declaration your tests will use.
 
 ## Reports and shared CI logs

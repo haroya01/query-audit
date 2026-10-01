@@ -27,9 +27,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 @DisplayName("QueryAuditExtension — truncated query capture (issue #186)")
+@ResourceLock(Resources.SYSTEM_PROPERTIES)
 class QueryAuditExtensionTruncatedCaptureTest {
 
   private static final ExtensionContext.Namespace NAMESPACE =
@@ -42,9 +45,19 @@ class QueryAuditExtensionTruncatedCaptureTest {
     HtmlReportAggregator.getInstance().reset();
   }
 
+  private String previousProfile;
+
+  @BeforeEach
+  void useEveryRule() {
+    previousProfile = System.getProperty("queryAudit.profile");
+    System.setProperty("queryAudit.profile", "strict");
+  }
+
   @AfterEach
   void tearDown() {
     HtmlReportAggregator.getInstance().reset();
+    if (previousProfile == null) System.clearProperty("queryAudit.profile");
+    else System.setProperty("queryAudit.profile", previousProfile);
   }
 
   @Test

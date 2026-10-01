@@ -26,7 +26,7 @@ Run the suite once in record mode. The Gradle command assumes the
 === "Gradle"
 
     ```bash
-    ./gradlew test -PqueryAuditContractsRecord=true
+    ./gradlew test -PqueryAudit.contracts.record=true
     ```
 
 === "Maven"
@@ -74,9 +74,9 @@ The frame can identify a JDBC proxy; inspect `reports[].queries[].stackTrace` in
 [JSON report](reports.md#read-a-policy-failure) for available application callers.
 
 The final line names the underlying test-JVM property. Gradle projects using the bridge rerun with
-`-PqueryAuditContractsRecord=true`; Maven projects use the `-D` form shown in the diagnostic.
+`-PqueryAudit.contracts.record=true`; Maven projects use the `-D` form shown in the diagnostic.
 
-Failures from `@ExpectMaxQueryCount`, `@ExpectQueries`, and snapshot contracts are test assertions
+Failures from `@ExpectQueries`, the deprecated `@ExpectMaxQueryCount`, and snapshot contracts are test assertions
 rather than findings. Rule profiles, `disabled-rules`, `suppress-patterns`, severity overrides, and
 the issue baseline do not change their result. Update the declared budget or re-record the contract
 when the count change is intentional.
@@ -107,7 +107,7 @@ Re-record and review the diff:
 === "Gradle"
 
     ```bash
-    ./gradlew test -PqueryAuditContractsRecord=true
+    ./gradlew test -PqueryAudit.contracts.record=true
     git diff .query-audit-contracts
     ```
 
@@ -141,13 +141,82 @@ cannot be linked to its old row safely, so re-record the complete suite once whe
 
 ## Configuration
 
-| Test-JVM system property | Gradle project property | Description |
-|---|---|---|
-| `queryAudit.contracts.record` | `queryAuditContractsRecord` | Set to `true` to record or refresh contracts instead of enforcing them |
-| `queryAudit.contractsPath` | `queryAuditContractsPath` | Override the contracts file location |
+| Setting | Description |
+|---|---|
+| `query-audit.contracts.path` / `queryAudit.contracts.path` | One contracts file, or a directory whose `*.contracts` files and `.query-audit-contracts` are all read. Default: `.query-audit-contracts` in the working directory |
+| `queryAudit.contracts.record` | Command-line flag. Set to `true` to record or refresh contracts instead of enforcing them |
 
-The Gradle names use the [shared property bridge](ci-cd.md#plain-junit-build-tool-setup). Maven users pass the
-test-JVM property with `-D`, for example `-DqueryAudit.contractsPath=config/query-contracts`.
+Test methods and [scoped contracts](#contract-a-request-or-job) share this store and its format.
+Recording updates an entry in the file that already contains it and writes new entries to the
+configured file, or to `.query-audit-contracts` inside the configured directory. Failures name the
+file that holds the contract. Setting names follow [one rule](configuration.md#setting-names).
+
+## Contract a request or job
+
+A test method often mixes fixture setup, the request under test, and database assertions.
+`QueryContractScope` (0.7.0) counts only the work you give it. The Spring Boot starter provides
+it as a bean that uses the configured contracts:
+
+```yaml
+query-audit:
+  contracts:
+    path: src/test/resources/query-contracts
+    await-executors: [taskExecutor]
+```
+
+```java
+@SpringBootTest
+@EnableQueryInspector
+class LinkApiTest {
+    @Autowired QueryContractScope contracts;
+
+    @Test
+    void listsLinks() throws Exception {
+        contracts.verify("link-list", () -> mockMvc.perform(get("/api/v1/links")))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void signsUp() throws Exception {
+        try (var journey = contracts.open("signup-journey")) {
+            mockMvc.perform(post("/api/v1/signup").content(body)).andExpect(status().isCreated());
+            mockMvc.perform(get("/api/v1/me")).andExpect(status().isOk());
+        }
+    }
+}
+```
+
+`verify` returns the work's result. `open` covers several requests and verifies when the block
+closes; a failure inside the block stays the primary exception. `capture` and
+`verify(captured)` split the two steps when a test needs `queries()` or `counts()` first. Without
+Spring, create one with `QueryContractScope.of(interceptor, path)` and the interceptor you hooked
+into the DataSource.
+
+`await-executors` names the thread pools that requests hand work to. The scope waits until those
+pools are idle before it stops counting, and fails after 30 seconds with the busy pool's name.
+`awaitingCompletion(Runnable)` supplies your own wait instead.
+
+Scoped IDs use the same line format as test methods:
+
+```text
+@junit | link-list | 2 | 0 | 0 | 0 | 2
+```
+
+| Situation | Result |
+|---|---|
+| Counts match | passes and returns the work's result |
+| Counts differ in either direction | `AssertionError` with the delta, the SQL of the grown types, and the contract file |
+| No entry for the scope ID | `AssertionError` with the measured line to add |
+| The same ID in two files | `IllegalStateException` |
+| The capture reached `max-queries` | `AssertionError`; a truncated capture cannot verify a contract |
+| A scope is still open | `IllegalStateException` naming the open scope |
+
+Test methods without a recorded contract pass, because contracts apply to every audited test
+automatically. A scope without a contract fails, because the test asked for one.
+
+A scope counts SQL from every thread that uses the audited DataSource while it is open, and that
+SQL does not make a surrounding `@QueryAudit` or `@EnableQueryInspector` audit incomplete. Run
+scoped tests sequentially against an isolated database and keep schedulers off.
 
 ## Contracts vs. related features
 
@@ -155,5 +224,6 @@ test-JVM property with `-D`, for example `-DqueryAudit.contractsPath=config/quer
 |---|---|---|---|
 | **Contracts** | every recorded test | any count deviation, both directions | re-record, review file diff |
 | [`@ExpectQueries`](annotations.md#expectqueries) | one method | budget exceeded | edit the annotation |
-| Count baseline (`queryAudit.updateBaseline`) | tests with a recorded baseline | threshold-based regression finding, subject to finding policy | update baseline |
+| [`QueryContractScope`](#contract-a-request-or-job) | one request, job, or journey | any count deviation, missing contract | re-record, review file diff |
+| Count baseline (`queryAudit.counts.record`), deprecated since 0.7.0 | tests with a recorded baseline | threshold-based regression finding, subject to finding policy | update baseline; use contracts instead |
 | [Issue baseline](suppressing.md) | findings | new findings | acknowledge |

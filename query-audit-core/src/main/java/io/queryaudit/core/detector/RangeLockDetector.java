@@ -6,6 +6,7 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
+import io.queryaudit.core.parser.SqlTableReferences;
 import io.queryaudit.core.parser.WhereColumnReference;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -70,7 +71,7 @@ public class RangeLockDetector implements DetectionRule {
         continue; // No WHERE clause -- ForUpdateWithoutIndexDetector handles this
       }
 
-      Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
+      Map<String, String> aliasToTable = SqlTableReferences.resolveAliases(sql);
 
       for (WhereColumnReference col : whereColumns) {
         String operator = col.operator() != null ? col.operator().trim().toUpperCase() : "";

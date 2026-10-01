@@ -5,6 +5,7 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.parser.EnhancedSqlParser;
+import io.queryaudit.core.parser.SqlTableReferences;
 import io.queryaudit.core.parser.WhereColumnReference;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,7 +50,7 @@ public class RedundantFilterDetector implements DetectionRule {
       }
 
       // Build alias-to-table mapping for correct table resolution
-      Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
+      Map<String, String> aliasToTable = SqlTableReferences.resolveAliases(sql);
 
       List<WhereColumnReference> whereColumns =
           EnhancedSqlParser.extractWhereColumnsWithOperators(sql);

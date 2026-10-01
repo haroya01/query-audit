@@ -7,6 +7,7 @@ import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
 import io.queryaudit.core.parser.EnhancedSqlParser;
+import io.queryaudit.core.parser.SqlTableReferences;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -76,7 +77,7 @@ public class ForUpdateWithoutIndexDetector implements DetectionRule {
         continue;
       }
 
-      Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
+      Map<String, String> aliasToTable = SqlTableReferences.resolveAliases(sql);
 
       for (ColumnReference col : whereColumns) {
         String table = resolveTable(col.tableOrAlias(), aliasToTable);

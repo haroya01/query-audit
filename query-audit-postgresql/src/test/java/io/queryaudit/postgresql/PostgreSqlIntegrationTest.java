@@ -3,6 +3,7 @@ package io.queryaudit.postgresql;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.MissingIndexDetector;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.model.IndexInfo;
@@ -209,7 +210,9 @@ class PostgreSqlIntegrationTest {
   @Test
   @DisplayName("QueryAuditAnalyzer detects missing index on unindexed column via real metadata")
   void analyzerDetectsMissingIndex() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer =
+        new QueryAuditAnalyzer(
+            QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
     List<QueryRecord> queries =
         List.of(
             new QueryRecord(

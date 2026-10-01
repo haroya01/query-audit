@@ -61,14 +61,20 @@ class RuleProfileTest {
     }
 
     @Test
-    @DisplayName("RECOMMENDED drops the opinionated set but keeps high-precision rules")
-    void recommendedDropsOpinionated() {
-      assertThat(RuleProfile.RECOMMENDED.includes("force-index-hint")).isFalse();
-      assertThat(RuleProfile.RECOMMENDED.includes("offset-pagination")).isFalse();
-      assertThat(RuleProfile.RECOMMENDED.includes("like-leading-wildcard")).isFalse();
+    @DisplayName("RECOMMENDED runs only the call-site N+1 rule among built-in rules")
+    void recommendedIsNPlusOneOnly() {
       assertThat(RuleProfile.RECOMMENDED.includes("n-plus-one")).isTrue();
-      assertThat(RuleProfile.RECOMMENDED.includes("missing-where-index")).isTrue();
-      assertThat(RuleProfile.RECOMMENDED.includes("update-without-where")).isTrue();
+      assertThat(RuleProfile.RECOMMENDED.includes("n-plus-one-suspect")).isFalse();
+      assertThat(RuleProfile.RECOMMENDED.includes("missing-where-index")).isFalse();
+      assertThat(RuleProfile.RECOMMENDED.includes("update-without-where")).isFalse();
+      assertThat(RuleProfile.RECOMMENDED.includes("force-index-hint")).isFalse();
+    }
+
+    @Test
+    @DisplayName("RECOMMENDED never filters custom finding kinds")
+    void recommendedKeepsCustomKinds() {
+      assertThat(RuleProfile.RECOMMENDED.includes("shop:budget")).isTrue();
+      assertThat(RuleProfile.MINIMAL.includes("shop:budget")).isFalse();
     }
 
     @Test
@@ -102,7 +108,7 @@ class RuleProfileTest {
       assertThat(config.isRuleExcluded("force-index-hint")).isFalse();
       // profile decides the rest
       assertThat(config.isRuleExcluded("offset-pagination")).isTrue();
-      assertThat(config.isRuleExcluded("missing-where-index")).isFalse();
+      assertThat(config.isRuleExcluded("missing-where-index")).isTrue();
     }
 
     @Test

@@ -56,7 +56,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void analyzeReturnsCleanReportForGoodQueries() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
 
     List<QueryRecord> queries =
         List.of(record("SELECT id, name FROM users WHERE id = 1 ORDER BY id LIMIT 10"));
@@ -73,7 +73,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void suppressPatternsWork() {
-    QueryAuditConfig config = QueryAuditConfig.builder().addSuppressPattern("select-all").build();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSuppressPattern("select-all").build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
 
     List<QueryRecord> queries = List.of(record("SELECT * FROM users WHERE id = 1"));
@@ -87,7 +87,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void suppressQueriesWork() {
-    QueryAuditConfig config = QueryAuditConfig.builder().addSuppressQuery("SELECT 1").build();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSuppressQuery("SELECT 1").build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
 
     // Create queries where "SELECT 1" should be filtered out before detection
@@ -107,7 +107,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void disabledConfigReturnsEmptyReport() {
-    QueryAuditConfig config = QueryAuditConfig.builder().enabled(false).build();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).enabled(false).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
 
     List<QueryRecord> queries =
@@ -124,7 +124,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void emptyQueriesReturnsEmptyReport() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
 
     QueryAuditReport report = analyzer.analyze("emptyTest", List.of(), EMPTY_INDEX);
 
@@ -134,7 +134,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void nullQueriesReturnsEmptyReport() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
 
     QueryAuditReport report = analyzer.analyze("nullTest", null, EMPTY_INDEX);
 
@@ -144,7 +144,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void reportContainsExecutionTime() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer();
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build());
     List<QueryRecord> queries = List.of(record("SELECT id FROM users WHERE id = 1"));
 
     QueryAuditReport report = analyzer.analyze("timeTest", queries, EMPTY_INDEX);
@@ -155,7 +155,7 @@ class QueryAuditAnalyzerTest {
   @Test
   void suppressPatternWithTableAndColumn() {
     QueryAuditConfig config =
-        QueryAuditConfig.builder().addSuppressPattern("where-function:orders.created_at").build();
+        QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).addSuppressPattern("where-function:orders.created_at").build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config);
 
     List<QueryRecord> queries =
@@ -180,7 +180,7 @@ class QueryAuditAnalyzerTest {
   void constructorWithNullBaselinePath_usesDefaultBaseline() {
     // When baselinePath is null, the analyzer should load from the default file
     // (which doesn't exist, so baseline is empty)
-    QueryAuditConfig config = QueryAuditConfig.defaults();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, (Path) null);
 
     // Baseline should be empty since default file doesn't exist
@@ -190,7 +190,7 @@ class QueryAuditAnalyzerTest {
   @Test
   void constructorWithExplicitBaselinePath_usesProvidedPath() {
     // When baselinePath is non-null but points to a non-existent file, baseline is empty
-    QueryAuditConfig config = QueryAuditConfig.defaults();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
     QueryAuditAnalyzer analyzer =
         new QueryAuditAnalyzer(config, Paths.get("/tmp/nonexistent-baseline-file-xyz"));
 
@@ -203,7 +203,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void fourArgAnalyze_disabledConfig_returnsEmptyReport() {
-    QueryAuditConfig config = QueryAuditConfig.builder().enabled(false).build();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).enabled(false).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
 
     List<QueryRecord> queries =
@@ -225,7 +225,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void fourArgAnalyze_nullQueries_returnsEmptyReport() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     QueryAuditReport report = analyzer.analyze("TestClass", "nullTest", null, EMPTY_INDEX);
 
@@ -240,7 +240,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void fourArgAnalyze_disabledConfig_withNonNullQueries_preservesQueries() {
-    QueryAuditConfig config = QueryAuditConfig.builder().enabled(false).build();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).enabled(false).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
 
     List<QueryRecord> queries = List.of(record("SELECT 1"));
@@ -253,7 +253,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void fourArgAnalyze_disabledConfig_withNullQueries_returnsEmptyQueries() {
-    QueryAuditConfig config = QueryAuditConfig.builder().enabled(false).build();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).enabled(false).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
 
     QueryAuditReport report = analyzer.analyze("TC", "test", null, EMPTY_INDEX);
@@ -274,7 +274,7 @@ class QueryAuditAnalyzerTest {
         List.of(
             new BaselineEntry(
                 "select-all", null, null, "SELECT * FROM users WHERE id = ?", "dev", "acceptable"));
-    QueryAuditConfig config = QueryAuditConfig.defaults();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, baseline);
 
     List<QueryRecord> queries = List.of(record("SELECT * FROM users WHERE id = 1"));
@@ -292,7 +292,7 @@ class QueryAuditAnalyzerTest {
   @Test
   void noBaseline_allIssuesAreNonAcknowledged() {
     // Empty baseline means nothing is acknowledged
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     List<QueryRecord> queries = List.of(record("SELECT * FROM users WHERE id = 1"));
 
@@ -311,7 +311,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void infoVsConfirmedIssues_correctlySplit() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     // SELECT * triggers WARNING-severity issue (SELECT_ALL)
     // Repeated identical queries trigger INFO-severity N+1
@@ -341,7 +341,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void uniquePatternCount_excludesNullNormalizedSql() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     // Create a record with null SQL to get null normalizedSql
     QueryRecord nullSqlRecord =
@@ -358,7 +358,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void uniquePatternCount_allNullNormalizedSql_zeroPatterns() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     QueryRecord nullSqlRecord1 =
         new QueryRecord(null, null, 1000L, System.currentTimeMillis(), "", 0);
@@ -378,7 +378,7 @@ class QueryAuditAnalyzerTest {
 
   @Test
   void fourArgAnalyze_emptyQueries_returnsEmptyReport() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     QueryAuditReport report = analyzer.analyze("TestClass", "emptyTest", List.of(), EMPTY_INDEX);
 
@@ -407,7 +407,7 @@ class QueryAuditAnalyzerTest {
       // Write a valid baseline entry
       Files.writeString(baselineFile, "select-all | | | tester | acceptable\n");
 
-      QueryAuditConfig config = QueryAuditConfig.defaults();
+      QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
       QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, baselineFile);
 
       // Baseline should have the entry we wrote
@@ -424,7 +424,7 @@ class QueryAuditAnalyzerTest {
   @Test
   void constructorWithNullBaselinePathUsesDefault_killsLine76() {
     // When baselinePath is null, should use default file name (which doesn't exist in test)
-    QueryAuditConfig config = QueryAuditConfig.defaults();
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, (Path) null);
 
     // Default baseline file doesn't exist -> baseline should be empty
@@ -438,7 +438,7 @@ class QueryAuditAnalyzerTest {
    */
   @Test
   void fourArgAnalyze_enabledConfig_producesIssues_killsLine131() {
-    QueryAuditConfig config = QueryAuditConfig.defaults(); // enabled by default
+    QueryAuditConfig config = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(); // enabled by default
     QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(config, List.of());
 
     List<QueryRecord> queries = List.of(record("SELECT * FROM users WHERE id = 1"));
@@ -457,7 +457,7 @@ class QueryAuditAnalyzerTest {
    */
   @Test
   void fourArgAnalyze_nonEmptyQueries_runsAnalysis_killsLine131() {
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
 
     List<QueryRecord> queries =
         List.of(
@@ -480,7 +480,7 @@ class QueryAuditAnalyzerTest {
   void getBaselineReturnsNonEmptyWhenBaselineProvided_killsLine239() {
     List<BaselineEntry> baseline =
         List.of(new BaselineEntry("select-all", null, null, null, "dev", "test"));
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), baseline);
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), baseline);
 
     List<BaselineEntry> result = analyzer.getBaseline();
 

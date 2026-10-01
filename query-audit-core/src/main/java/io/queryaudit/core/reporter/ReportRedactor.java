@@ -1,6 +1,7 @@
 package io.queryaudit.core.reporter;
 
 import io.queryaudit.core.config.ReportRedaction;
+import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import java.util.LinkedHashSet;
@@ -155,6 +156,27 @@ final class ReportRedactor {
     return mode == ReportRedaction.FULL || value == null
         ? value
         : "Details omitted by report redaction";
+  }
+
+  Finding finding(Finding finding) {
+    if (mode == ReportRedaction.FULL) {
+      return finding;
+    }
+    return finding
+        .toIssue()
+        .map(this::issue)
+        .map(Finding::fromIssue)
+        .orElseGet(
+            () ->
+                new Finding(
+                    finding.kindId(),
+                    finding.severity(),
+                    sql(finding.query()),
+                    sql(finding.table()),
+                    sql(finding.column()),
+                    diagnostic(finding.detail()),
+                    diagnostic(finding.suggestion()),
+                    sourceLocation(finding.sourceLocation())));
   }
 
   String sourceLocation(String value) {

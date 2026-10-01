@@ -1,23 +1,36 @@
 package io.queryaudit.spring;
 
+import io.queryaudit.core.analyzer.ExplainAnalyzer;
+import io.queryaudit.core.analyzer.IndexMetadataProvider;
 import io.queryaudit.core.config.AuditMode;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.config.ReportRedaction;
 import io.queryaudit.core.config.RuleProfile;
+import io.queryaudit.core.contract.QueryContractScope;
+import io.queryaudit.core.detector.DetectionRule;
+import io.queryaudit.core.extension.AuditExtensions;
+import io.queryaudit.core.extension.AuditRule;
 import io.queryaudit.core.interceptor.DataSourceProxyFactory;
 import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.Severity;
+import io.queryaudit.core.reporter.delivery.AuditReportSink;
+import io.queryaudit.core.reporter.delivery.ReportSinkRegistration;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import javax.sql.DataSource;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -40,6 +53,7 @@ public class QueryAuditAutoConfiguration {
   private static final Log logger = LogFactory.getLog(QueryAuditAutoConfiguration.class);
 
   @Bean(name = {"queryAuditConfig", "queryGuardConfig"})
+  @ConditionalOnMissingBean(QueryAuditConfig.class)
   public QueryAuditConfig queryAuditConfig(QueryAuditProperties properties) {
     Map<String, Severity> severityOverrides = new HashMap<>();
     for (Map.Entry<String, String> entry : properties.getSeverityOverrides().entrySet()) {
@@ -63,6 +77,7 @@ public class QueryAuditAutoConfiguration {
             .reportRedaction(ReportRedaction.parse(properties.getReport().getRedaction()))
             .reportOutputDir(properties.getReport().getOutputDir())
             .baselinePath(properties.getBaselinePath())
+            .contractsPath(properties.getContracts().getPath())
             .autoOpenReport(properties.isAutoOpenReport())
             .maxQueries(properties.getMaxQueries())
             .disabledRules(new HashSet<>(properties.getDisabledRules()))
@@ -90,10 +105,65 @@ public class QueryAuditAutoConfiguration {
   }
 
   @Bean(name = {"queryAuditInterceptor", "queryGuardInterceptor"})
+  @ConditionalOnMissingBean(QueryInterceptor.class)
   public QueryInterceptor queryAuditInterceptor(QueryAuditConfig config) {
     QueryInterceptor interceptor = new QueryInterceptor();
     interceptor.setMaxQueries(config.getMaxQueries());
     return interceptor;
+  }
+
+  @Bean
+  @ConditionalOnMissingBean(QueryContractScope.class)
+  public QueryContractScope queryContractScope(
+      QueryInterceptor interceptor,
+      QueryAuditProperties properties,
+      ListableBeanFactory beanFactory) {
+    QueryContractScope scope =
+        QueryContractScope.of(interceptor, Path.of(properties.getContracts().getPath()));
+    List<String> executors = properties.getContracts().getAwaitExecutors();
+    return executors.isEmpty()
+        ? scope
+        : scope.awaitingCompletion(new ExecutorIdleAwaiter(beanFactory, executors));
+  }
+
+  /**
+   * Collects user extension beans without replacing built-in rules or ServiceLoader providers. Bean
+   * names define stable registration IDs and alphabetical execution order within each SPI. Spring
+   * aliases are not separate registrations; deliberately distinct bean names are. A bean
+   * implementing multiple SPIs is registered once in each supported role.
+   *
+   * <p>A user-supplied catalog replaces this bean collection step, giving programmatic registration
+   * the same meaning in Spring and plain JUnit. Registered beans remain owned by Spring.
+   */
+  @Bean
+  @ConditionalOnMissingBean(AuditExtensions.class)
+  public AuditExtensions queryAuditExtensions(ListableBeanFactory beanFactory) {
+    AuditExtensions.Builder builder = AuditExtensions.builder();
+    new TreeMap<>(beanFactory.getBeansOfType(DetectionRule.class))
+        .forEach((name, rule) -> builder.rule("rule:" + name, rule));
+    new TreeMap<>(beanFactory.getBeansOfType(AuditRule.class))
+        .forEach((name, rule) -> builder.auditRule("audit-rule:" + name, rule));
+    new TreeMap<>(beanFactory.getBeansOfType(IndexMetadataProvider.class))
+        .forEach(
+            (name, provider) -> builder.indexMetadataProvider("index-metadata:" + name, provider));
+    new TreeMap<>(beanFactory.getBeansOfType(ExplainAnalyzer.class))
+        .forEach((name, analyzer) -> builder.explainAnalyzer("explain:" + name, analyzer));
+    Map<String, ReportSinkRegistration> registrations =
+        new TreeMap<>(beanFactory.getBeansOfType(ReportSinkRegistration.class));
+    registrations.forEach(
+        (name, registration) ->
+            builder.reportSink(registration.id(), registration.required(), registration.sink()));
+    new TreeMap<>(beanFactory.getBeansOfType(AuditReportSink.class))
+        .forEach(
+            (name, sink) -> {
+              boolean explicitlyRegistered =
+                  registrations.values().stream()
+                      .anyMatch(registration -> registration.sink() == sink);
+              if (!explicitlyRegistered) {
+                builder.reportSink("report-sink:" + name, false, sink);
+              }
+            });
+    return builder.build();
   }
 
   /**

@@ -8,6 +8,7 @@ import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.ColumnReference;
 import io.queryaudit.core.parser.EnhancedSqlParser;
 import io.queryaudit.core.parser.SqlParser;
+import io.queryaudit.core.parser.SqlTableReferences;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -167,7 +168,7 @@ public class ReadModifyWriteDetector implements DetectionRule {
     if (whereColumns.isEmpty()) {
       return;
     }
-    Map<String, String> aliasToTable = MissingIndexDetector.resolveAliases(sql);
+    Map<String, String> aliasToTable = SqlTableReferences.resolveAliases(sql);
     String table = resolveTable(whereColumns.get(0).tableOrAlias(), aliasToTable);
     if (table == null) {
       return;

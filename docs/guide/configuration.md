@@ -34,9 +34,11 @@ All properties are optional. The table below lists every supported key under the
 | Property | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Master switch for the entire auto-configuration. When `false`, the `QueryInterceptor` bean and the wrapping `BeanPostProcessor` are both skipped — the `@QueryAudit` annotation will not work either. Use `wrap-data-source.enabled: false` instead if you want to keep the interceptor active but skip the auto-wrap. |
-| `profile` | `String` | `"recommended"` | Rule tier: `strict` (all rules), `recommended` (opinionated rules off), or `minimal` (safety-critical only). See [Rule Profiles](#rule-profiles). |
+| `profile` | `String` | `"recommended"` | Rule tier: `recommended` (call-site N+1 only), `minimal` (N+1, index, and write safety), or `strict` (all rules). See [Rule Profiles](#rule-profiles). |
 | `enabled-rules` | `List<String>` | `[]` | Rule codes to run even when the profile tier excludes them. `disabled-rules` still wins. |
 | `mode` | `String` | `"annotated"` | Which tests the JUnit extension audits: `annotated` (opt-in via `@QueryAudit`) or `all` (every test, opt-out via `@QueryAuditExclude`). `all` additionally requires JUnit extension autodetection — see [Audit Coverage Mode](#audit-coverage-mode). |
+| `contracts.path` | `String` | `".query-audit-contracts"` | Query contracts for test methods and `QueryContractScope`: one file, or a directory whose `*.contracts` files are all read. See [contracts](contracts.md). |
+| `contracts.await-executors` | `List<String>` | `[]` | Bean names of `ThreadPoolTaskExecutor` or `ThreadPoolExecutor` pools that the injected `QueryContractScope` waits for before it closes. |
 | `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
 | `fail-on-detection` | `boolean` | `true` | Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`. |
 | `count-instead-of-exists.enabled` | `boolean` | `false` | Enable the `count-instead-of-exists` INFO detector. Off by default because it can fire on legitimate aggregate counts. |
@@ -53,7 +55,7 @@ All properties are optional. The table below lists every supported key under the
 | `max-queries` | `int` | `10000` | Maximum number of queries retained per test. If additional queries are dropped, the audit fails as incomplete. |
 | `report.format` | `String` | `"console"` | Suite artifact: `console` writes no file, `json` writes `report.json`, and `html` writes the browser report. Per-test console diagnostics remain available for every selection. |
 | `report.output-dir` | `String` | `"build/reports/query-audit"` | Directory used by the selected JSON or HTML report. |
-| `report.show-info` | `boolean` | `true` | Whether unacknowledged INFO findings appear in console, HTML, and JSON output. Visible summary counts follow this setting; analysis and query statistics are unchanged. Keep the setting identical in comparison runs. |
+| `report.show-info` | `boolean` | `true` | Whether unacknowledged INFO findings appear in console, HTML, and GitHub Actions display. Canonical run JSON and sink summaries retain them for trustworthy comparisons; analysis and query statistics are unchanged. |
 | `disabled-rules` | `List<String>` | `[]` | Rule codes to completely disable. |
 | `severity-overrides` | `Map<String,String>` | `{}` | Override severity per rule code (e.g., `select-all: WARNING`). |
 | `large-in-list.threshold` | `int` | `100` | Number of values in IN clause before flagging. |
@@ -115,35 +117,48 @@ query-audit:
 
 ## Rule Profiles
 
-Since 0.6.0, omitted or blank profile settings select `recommended`. It keeps the general
-detection rules while excluding context-dependent advice. Choose `strict` to run every rule
-or `minimal` to start with a smaller set:
+Since 0.7.0, omitted or blank profile settings select `recommended`, which runs only the
+call-site N+1 rule among built-in rules. Choose `minimal` or `strict` to add index, write, and
+SQL style checks:
 
 | Profile | What runs | Use it for |
 |---|---|---|
-| `strict` | Every rule — the default before 0.6.0 | Maximum coverage, mature suppression setup |
-| `recommended` (default) | Everything except the rules listed below | First adoption, day-to-day CI |
-| `minimal` | Selected safety and cost findings (`n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query`) | Review a smaller set of findings before choosing what to enforce |
+| `recommended` (default) | `n-plus-one`: the same SELECT repeated from one full application call stack | First adoption, day-to-day CI |
+| `minimal` | `n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query` | Adding index and write-safety review |
+| `strict` | Every rule | Maximum coverage, mature suppression setup |
 
 ```yaml
 query-audit:
   profile: recommended
   enabled-rules:
-    - force-index-hint   # re-activate a rule the profile excludes
+    - update-without-where   # add one rule to the profile
 ```
 
 Precedence: `disabled-rules` > `enabled-rules` > profile tier.
 
-The `recommended` exclusions are rules that legitimately fire on correct SQL — index hints,
-offset pagination at small scale, leading LIKE wildcards, EXPLAIN advisories
-(`full-scan`/`filesort`/`temporary-table`), and style opinions such as `or-abuse` or
-`regexp-usage`. The full list is in the migration note below. The
-tier assignment is v1 and will be revised as per-rule false-positive statistics accumulate —
-[false-positive reports](https://github.com/haroya01/query-audit/issues) directly shape it.
+`recommended` and `minimal` are allow-lists over built-in rules, so a new built-in rule stays
+off until it is added explicitly. `recommended` never filters custom finding kinds from
+`AuditRule` extensions. Legacy `DetectionRule` extensions report built-in issue types and follow
+the profile like built-in rules; enable their codes with `enabled-rules`. External rules
+registered via `ServiceLoader` without a rule code are never filtered by profiles.
 
-`recommended` is deny-list based: a newly added rule joins it automatically unless flagged as
-opinionated. External rules registered via `ServiceLoader` without a rule code are never
-filtered by profiles.
+The N+1 rule groups captured SELECT statements by normalized SQL and the full application call
+stack, ignoring proxy, reflection, and framework frames. Three executions from one call site
+report a confirmed `n-plus-one` finding; `n-plus-one.threshold` changes the count. A query with
+a multi-placeholder `IN` list is treated as a batched fetch and never counted. Hibernate
+lazy-load events are reported as INFO `n-plus-one` findings that name the association; they
+explain a finding but never confirm one on their own.
+
+### Migrating from 0.6.x to 0.7.0
+
+If you did not configure a profile, upgrading reduces the active built-in rules to
+`n-plus-one`. Set `profile: strict` to keep every rule, or list the rules you enforce in
+`enabled-rules`. Hibernate lazy-load N+1 findings move from ERROR to INFO; the confirmed finding
+now comes from repeated SQL at one call site, so one batch fetch no longer fails a test.
+
+Setting names now follow [one rule](#setting-names). The earlier system property names keep
+working, so existing builds need no change; the Gradle bridge in the CI guide forwards the new
+names without a per-setting map.
 
 ### Migrating from 0.5.x to 0.6.0
 
@@ -222,7 +237,7 @@ Two switches are required:
 
    For plain JUnit, set the same value in the test JVM. With the
    [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), run
-   `./gradlew test -PqueryAuditMode=all`; with Maven, run
+   `./gradlew test -PqueryAudit.mode=all`; with Maven, run
    `mvn test -DqueryAudit.mode=all`. The system property wins over the yml value.
 
 Enabling autodetection alone does **not** widen coverage: in the default `annotated` mode the
@@ -339,7 +354,7 @@ Copy-paste these presets for typical use cases.
     ```
 
     !!! tip
-        Consider using `@DetectNPlusOne` annotation instead for a cleaner approach.
+        The default `recommended` profile already runs only the N+1 rule.
 
 ### Recommended Threshold Values
 
@@ -477,33 +492,54 @@ QueryAuditConfig config = QueryAuditConfig.builder()
 
 ---
 
-## Test-JVM System Properties
+## Setting names
 
-QueryAudit reads these values from the JVM that runs the tests. Maven passes user properties from
-`-D` to its test process. Gradle's forked `Test` workers do not inherit command-line system
-properties by default; add the [Gradle property bridge](ci-cd.md#plain-junit-build-tool-setup), then use the
-corresponding `-P` property below.
+Every setting has one name. In `application.yml` it is a kebab-case path under `query-audit`.
+As a system property, Maven `-D`, or Gradle `-P` it is the same path in camelCase under
+`queryAudit`:
 
-| Test-JVM system property | Gradle project property | Description |
+```text
+query-audit.report.output-dir   <->   queryAudit.report.outputDir
+```
+
+Spring Boot binds either form, so a system property overrides `application.yml`. Plain JUnit
+projects without Spring read the system properties below. Gradle forwards them to test workers
+through the [property bridge](ci-cd.md#plain-junit-build-tool-setup).
+
+Configuration can live in `application.yml` or on the command line. Actions that change files
+for one run, such as recording, are command-line flags only.
+
+| Setting | Kind | Earlier names, still accepted |
 |---|---|---|
-| `queryAudit.mode` | `queryAuditMode` | Set to `all` to audit every test regardless of annotations — see [Audit Coverage Mode](#audit-coverage-mode) |
-| `queryAudit.updateBaseline` | `queryAuditUpdateBaseline` | Set to `true` to update the query-count baseline after the test run |
-| `queryAudit.contracts.record` | `queryAuditContractsRecord` | Set to `true` to record or refresh [query snapshot contracts](contracts.md) instead of enforcing them |
-| `queryAudit.contractsPath` | `queryAuditContractsPath` | Override the contracts file location |
-| `queryAudit.countBaselinePath` | `queryAuditCountBaselinePath` | Override the query-count baseline file location |
-| `queryAudit.reportFormat` | `queryAuditReportFormat` | Select the suite artifact for plain JUnit: `console`, `json`, or `html` |
-| `queryaudit.autoOpenReport` | `queryAuditAutoOpenReport` | Set to `true` to open the selected HTML report in a browser |
+| `queryAudit.profile` | configuration | |
+| `queryAudit.mode` | configuration | `queryGuard.mode` |
+| `queryAudit.failOnDetection` | configuration | |
+| `queryAudit.baselinePath` | configuration | |
+| `queryAudit.report.format` | configuration | `queryAudit.reportFormat`, `queryGuard.reportFormat` |
+| `queryAudit.report.outputDir` | configuration | `queryAudit.reportOutputDir` |
+| `queryAudit.report.redaction` | configuration | `queryAudit.reportRedaction` |
+| `queryAudit.autoOpenReport` | configuration | `queryaudit.autoOpenReport`, env `QUERYGUARD_AUTO_OPEN_REPORT` |
+| `queryAudit.contracts.path` | configuration | `queryAudit.contractsPath`, `queryGuard.contractsPath` |
+| `queryAudit.contracts.record` | action | `queryGuard.contracts.record` |
+| `queryAudit.coverage.manifest` | configuration, command line only | `queryAudit.coverageManifest` |
+| `queryAudit.counts.path` | configuration, deprecated | `queryAudit.countBaselinePath`, `queryGuard.countBaselinePath` |
+| `queryAudit.counts.record` | action, deprecated | `queryAudit.updateBaseline`, `queryGuard.updateBaseline` |
+
+`queryAudit.coverage.manifest` is read before any Spring context starts, so it has no
+`application.yml` form. The environment variable `QUERYAUDIT_AUTO_OPEN_REPORT` matches
+`queryAudit.autoOpenReport`. Count baselines are deprecated since 0.7.0; use
+[query contracts](contracts.md) instead.
 
 === "Gradle"
 
     ```bash
-    ./gradlew test -PqueryAuditUpdateBaseline=true
+    ./gradlew test -PqueryAudit.contracts.record=true
     ```
 
 === "Maven"
 
     ```bash
-    mvn test -DqueryAudit.updateBaseline=true
+    mvn test -DqueryAudit.contracts.record=true
     ```
 
 ---
@@ -675,5 +711,5 @@ SQL values, comments, raw diagnostic prose, and framework/absolute-path stack de
 and GitHub Actions output. It does not change findings or enforcement. Use `full` only for
 local debugging; see [machine report redaction](reports.md#machine-report-redaction).
 
-The plain JUnit equivalent is `-DqueryAudit.reportRedaction=full`. Core callers use
+The plain JUnit equivalent is `-DqueryAudit.report.redaction=full`. Core callers use
 `QueryAuditConfig.builder().reportRedaction(ReportRedaction.FULL)` with `JsonReporter`.

@@ -1,10 +1,12 @@
 package io.queryaudit.core.provenance;
 
+import io.queryaudit.core.extension.RuleDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.Properties;
 
 /**
@@ -53,6 +55,22 @@ public final class AuditRuntimeIdentity {
     } catch (IllegalStateException unavailableBytes) {
       return type.getName().split("/", 2)[0] + "@unverified";
     }
+  }
+
+  /**
+   * Fingerprints the declared rule inputs without publishing settings or claiming that hidden
+   * dependencies have been verified. Sinks are deliberately outside this analysis identity.
+   */
+  public static String ruleImplementation(Class<?> type, RuleDescriptor descriptor) {
+    return "audit-rule:"
+        + CanonicalFingerprint.of(
+            Map.of(
+                "implementation", unverifiedImplementation(type),
+                "id", descriptor.id().value(),
+                "version", descriptor.version(),
+                "kinds",
+                    descriptor.findingKinds().stream().map(kind -> kind.value()).sorted().toList(),
+                "settings", descriptor.effectiveSettings()));
   }
 
   /** Identifies the loaded implementation, including custom detectors without manifest metadata. */

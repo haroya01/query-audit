@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.queryaudit.core.analyzer.IndexMetadataProvider;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.detector.RepositoryReturnType;
 import io.queryaudit.core.model.AuditOutcome;
@@ -35,12 +36,14 @@ class UnverifiedCapabilityInputsTest {
     QueryAuditAnalyzer before =
         new QueryAuditAnalyzer(
             QueryAuditConfig.builder()
+                .ruleProfile(RuleProfile.STRICT)
                 .repositoryReturnTypeResolver(stack -> RepositoryReturnType.UNKNOWN)
                 .build(),
             List.of());
     QueryAuditAnalyzer after =
         new QueryAuditAnalyzer(
             QueryAuditConfig.builder()
+                .ruleProfile(RuleProfile.STRICT)
                 .repositoryReturnTypeResolver(stack -> RepositoryReturnType.SINGLE_ENTITY)
                 .build(),
             List.of());
@@ -66,7 +69,7 @@ class UnverifiedCapabilityInputsTest {
     IndexMetadataCollector.Result after =
         new IndexMetadataCollector(List.of(new ConfiguredProvider(true)))
             .collectWithCapabilities(dataSource);
-    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of());
+    QueryAuditAnalyzer analyzer = new QueryAuditAnalyzer(QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build(), List.of());
     assertThat(findings(analyzer, before.metadata())).isEqualTo(1);
     assertThat(findings(analyzer, after.metadata())).isZero();
     ComparisonInputs previous =

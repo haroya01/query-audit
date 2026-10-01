@@ -2,16 +2,17 @@ package io.queryaudit.core.reporter;
 
 import io.queryaudit.core.baseline.Baseline;
 import io.queryaudit.core.baseline.BaselineEntry;
+import io.queryaudit.core.extension.FindingKindId;
+import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.Issue;
-import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
 import io.queryaudit.core.parser.EnhancedSqlParser;
-import io.queryaudit.core.ranking.ImpactScorer;
 import io.queryaudit.core.ranking.RankedIssue;
 import java.io.PrintStream;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,54 +62,49 @@ public class ConsoleReporter implements Reporter {
   public void report(QueryAuditReport report) {
     printHeader(report);
 
-    List<Issue> errors = report.getErrors();
-    List<Issue> warnings = report.getWarnings();
-    List<Issue> infoIssues = report.getInfoIssues();
-    int confirmedCount =
-        report.getConfirmedIssues() != null ? report.getConfirmedIssues().size() : 0;
-    int infoCount = infoIssues != null ? infoIssues.size() : 0;
+    var findings = report.getFindings();
+    int confirmedCount = findings.confirmed().size();
+    int infoCount = findings.informational().size();
     int passedCount = report.getTotalQueryCount() - confirmedCount - infoCount;
     if (passedCount < 0) {
       passedCount = 0;
     }
 
     // Top issues by impact (within this single test)
-    printTopIssues(report);
+    printTopIssues(findings.confirmed());
 
     // Confirmed section — grouped by issue type, sorted by severity
-    if (!errors.isEmpty() || !warnings.isEmpty()) {
+    if (!findings.confirmed().isEmpty()) {
       out.println();
       out.println(color(BOLD, "--- CONFIRMED (sorted by priority) ---"));
       out.println();
 
-      // Group by IssueType, keep severity order (errors first)
-      Map<IssueType, List<Issue>> grouped = new LinkedHashMap<>();
-      for (Issue issue : errors) {
-        grouped.computeIfAbsent(issue.type(), k -> new ArrayList<>()).add(issue);
-      }
-      for (Issue issue : warnings) {
-        grouped.computeIfAbsent(issue.type(), k -> new ArrayList<>()).add(issue);
-      }
+      // Group every kind together, keeping severity order (errors first).
+      Map<FindingKindId, List<Finding>> grouped = new LinkedHashMap<>();
+      findings.confirmed().stream()
+          .sorted(Comparator.comparing(Finding::severity))
+          .forEach(
+              finding ->
+                  grouped.computeIfAbsent(finding.kindId(), key -> new ArrayList<>()).add(finding));
 
-      for (Map.Entry<IssueType, List<Issue>> entry : grouped.entrySet()) {
-        List<Issue> group = entry.getValue();
+      for (List<Finding> group : grouped.values()) {
         if (group.size() == 1) {
-          printIssue(group.get(0));
+          printFinding(report.getTestId(), group.get(0), false);
         } else {
           // Print group header with count
-          Issue first = group.get(0);
+          Finding first = group.get(0);
           String severityColor = colorForSeverity(first.severity());
           String tag = "[" + first.severity().name() + "]";
           out.println(
               "  "
                   + color(severityColor, BOLD, tag)
                   + " "
-                  + color(severityColor, first.type().getDescription())
+                  + color(severityColor, LegacyFindingPresentation.description(first))
                   + color(DIM, " (" + group.size() + " occurrences)"));
           // Print first one in full, rest as compact
-          printIssue(group.get(0));
+          printFinding(report.getTestId(), group.get(0), false);
           for (int i = 1; i < group.size() && i < 3; i++) {
-            printIssueCompact(group.get(i));
+            printFindingCompact(report.getTestId(), group.get(i));
           }
           if (group.size() > 3) {
             out.println("    " + color(DIM, "... and " + (group.size() - 3) + " more"));
@@ -119,26 +115,25 @@ public class ConsoleReporter implements Reporter {
     }
 
     // Info section
-    if (infoIssues != null && !infoIssues.isEmpty()) {
+    if (!findings.informational().isEmpty()) {
       out.println();
       out.println(color(BOLD, "--- INFO (may vary with data volume) ---"));
       out.println();
 
-      for (Issue issue : infoIssues) {
-        printIssue(issue);
+      for (Finding finding : findings.informational()) {
+        printFinding(report.getTestId(), finding, false);
       }
     }
 
     // Acknowledged section
-    List<Issue> acknowledgedIssues = report.getAcknowledgedIssues();
-    int acknowledgedCount = acknowledgedIssues.size();
-    if (!acknowledgedIssues.isEmpty()) {
+    int acknowledgedCount = findings.acknowledged().size();
+    if (!findings.acknowledged().isEmpty()) {
       out.println();
       out.println(color(GREEN, BOLD, "--- ACKNOWLEDGED (reviewed, no action needed) ---"));
       out.println();
 
-      for (Issue issue : acknowledgedIssues) {
-        printAcknowledgedIssue(issue);
+      for (Finding finding : findings.acknowledged()) {
+        printFinding(report.getTestId(), finding, true);
       }
     }
 
@@ -163,20 +158,15 @@ public class ConsoleReporter implements Reporter {
   private void printHeader(QueryAuditReport report) {
     out.println();
     out.println(color(BOLD, DIVIDER));
-    out.println(color(BOLD, "  QUERY GUARD REPORT"));
+    out.println(color(BOLD, "  QUERYAUDIT REPORT"));
     if (report.getTestName() != null && !report.getTestName().isBlank()) {
       out.println(color(DIM, "  Test: " + report.getTestName()));
     }
     out.println(color(BOLD, DIVIDER));
   }
 
-  private void printTopIssues(QueryAuditReport report) {
-    List<Issue> confirmed = report.getConfirmedIssues();
-    if (confirmed == null || confirmed.isEmpty()) {
-      return;
-    }
-
-    List<RankedIssue> ranked = ImpactScorer.rank(confirmed);
+  private void printTopIssues(List<Finding> confirmed) {
+    List<RankedIssue> ranked = LegacyFindingPresentation.rankBuiltIns(confirmed);
     if (ranked.isEmpty()) {
       return;
     }
@@ -224,15 +214,16 @@ public class ConsoleReporter implements Reporter {
     }
   }
 
-  private void printIssue(Issue issue) {
-    String severityColor = colorForSeverity(issue.severity());
-    String tag = "[" + issue.severity().name() + "]";
+  private void printFinding(String testId, Finding issue, boolean acknowledged) {
+    String severityColor = acknowledged ? GREEN : colorForSeverity(issue.severity());
+    String tag = acknowledged ? "[\u2713]" : "[" + issue.severity().name() + "]";
 
     out.println(
         "  "
             + color(severityColor, BOLD, tag)
             + " "
-            + color(severityColor, issue.type().getDescription()));
+            + color(severityColor, LegacyFindingPresentation.description(issue)));
+    out.println("    ID:     " + FindingId.of(testId, issue));
 
     if (issue.query() != null && !issue.query().isBlank()) {
       out.println("    Query:  " + color(DIM, truncate(issue.query())));
@@ -258,23 +249,7 @@ public class ConsoleReporter implements Reporter {
       out.println("    Fix:    " + color(severityColor, issue.suggestion()));
     }
 
-    out.println();
-  }
-
-  private void printAcknowledgedIssue(Issue issue) {
-    String tag = "[\u2713]"; // checkmark
-    out.println("  " + color(GREEN, BOLD, tag) + " " + color(GREEN, issue.type().getDescription()));
-
-    if (issue.table() != null && !issue.table().isBlank()) {
-      String location = issue.table();
-      if (issue.column() != null && !issue.column().isBlank()) {
-        location += "." + issue.column();
-      }
-      out.println("    Target: " + location);
-    }
-
-    // Look up reason and acknowledgedBy from baseline
-    BaselineEntry match = Baseline.findMatch(baseline, issue);
+    BaselineEntry match = acknowledged ? Baseline.findFindingMatch(baseline, issue) : null;
     if (match != null) {
       if (match.reason() != null && !match.reason().isBlank()) {
         out.println("    Reason: " + color(DIM, match.reason()));
@@ -287,7 +262,7 @@ public class ConsoleReporter implements Reporter {
     out.println();
   }
 
-  private void printIssueCompact(Issue issue) {
+  private void printFindingCompact(String testId, Finding issue) {
     String severityColor = colorForSeverity(issue.severity());
     StringBuilder sb = new StringBuilder("    ");
     if (issue.table() != null) {
@@ -299,6 +274,7 @@ public class ConsoleReporter implements Reporter {
       sb.append(color(DIM, "— " + issue.detail()));
     }
     out.println(sb);
+    out.println("    ID:     " + FindingId.of(testId, issue));
   }
 
   private void printQueryPatterns(QueryAuditReport report) {
@@ -378,8 +354,8 @@ public class ConsoleReporter implements Reporter {
 
     StringBuilder counts = new StringBuilder("  ");
     if (confirmedCount > 0) {
-      int errorCount = report.getErrors().size();
-      int warnCount = report.getWarnings().size();
+      long errorCount = report.getFindings().errors().size();
+      long warnCount = report.getFindings().warnings().size();
       if (errorCount > 0) {
         counts.append(color(RED, errorCount + " error" + (errorCount != 1 ? "s" : "")));
       }

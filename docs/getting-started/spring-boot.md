@@ -6,7 +6,7 @@ description: Add a query policy to a Spring Boot test, verify a failure, and ins
 # Spring Boot read-path policy
 
 Use your existing database test to enforce a SELECT limit and zero INSERT/UPDATE/DELETEs.
-The starter wraps the Spring `DataSource`; these snippets use published `0.6.0`.
+The starter wraps the Spring `DataSource`; these snippets use the latest published release.
 
 ## Add the starter
 

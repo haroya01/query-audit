@@ -25,9 +25,16 @@ public @interface QueryAudit {
   String[] suppress() default {};
 
   /**
-   * Issue types that should cause the test to fail. Defaults to all confirmed issues when empty.
+   * Legacy issue types that should cause the test to fail. Combined with {@link #failOnKinds()};
+   * when both selections are empty, all confirmed findings can fail.
    */
   IssueType[] failOn() default {};
+
+  /**
+   * Built-in or namespaced custom finding kinds that should fail the test. Combined with {@link
+   * #failOn()}; when both selections are empty, all confirmed findings can fail.
+   */
+  String[] failOnKinds() default {};
 
   /** N+1 detection threshold. A value of {@code -1} means use the default. */
   int nPlusOneThreshold() default -1;

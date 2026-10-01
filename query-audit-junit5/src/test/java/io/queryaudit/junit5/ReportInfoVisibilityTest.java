@@ -47,7 +47,7 @@ class ReportInfoVisibilityTest {
 
   @ParameterizedTest(name = "{0}")
   @MethodSource("visibilitySettings")
-  void showInfoControlsEveryGeneratedFormat(
+  void explicitDisplayProjectionControlsStandaloneRenderers(
       String settingName, QueryAuditConfig config, boolean expectInfo) throws Exception {
     QueryAuditReport analysisReport = reportWithInfo();
 

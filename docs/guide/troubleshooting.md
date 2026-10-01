@@ -15,7 +15,7 @@ or [plain JUnit quick start](../getting-started/quickstart.md).
 | SQL ran, but the report says zero queries | Does the one-SELECT/zero-budget check fail? | [Trace the datasource and audit activation](#queryaudit-not-detecting-any-queries) |
 | A test passes after its Spring context is replaced | Does it use `@DirtiesContext` between methods? | Check the [known context-replacement gap](limitations.md) before trusting the result |
 | No audit with a custom or inherited annotation | Which artifact/version is loaded, and does a direct annotation activate capture? | Check [shared-policy checks](limitations.md#shared-annotation-policies), then rerun the zero-budget proof |
-| A budget fails unexpectedly | Which statements were captured during setup, the test, and teardown? | [Check the count boundary](#expectmaxquerycount-fails-unexpectedly) |
+| A budget fails unexpectedly | Which statements were captured during setup, the test, and teardown? | [Check the count boundary](#a-query-budget-fails-unexpectedly) |
 | A batched Hibernate fetch is reported as N+1 | How many SQL statements actually ran? | [Check the known batch false positive](#common-jpahibernate-issues) |
 | An expected finding is missing | Was SQL captured, and is the rule enabled in this profile? | [Check rule inputs](#why-didnt-queryaudit-detect-my-issue) |
 | No JSON/HTML file | Was that format selected, and did the test session finalize? | [Check report generation](#html-report-not-generated) |
@@ -112,11 +112,12 @@ when a flush actually sends SQL: a queued entity change is not yet a JDBC statem
 inside the audited test when that write is part of the intended contract. Check the installed
 [version](../getting-started/versions.md) and [counting rules](contracts.md) before adjusting a budget.
 
-## @ExpectMaxQueryCount Fails Unexpectedly
+## A Query Budget Fails Unexpectedly
 
-`@ExpectMaxQueryCount` limits the total captured query count, including reads and writes.
-`@ExpectQueries` lets you limit each type separately. Both count all captured per-test setup,
-test-body, and teardown statements. `includeSetupQueries` filters detector analysis inputs only;
+`@ExpectQueries(total = n)` limits every captured statement, and the type attributes limit each
+type separately. The deprecated `@ExpectMaxQueryCount` behaves like `total`. Budgets count all
+captured per-test setup, test-body, and teardown statements. A
+[scoped contract](contracts.md#contract-a-request-or-job) counts one request or job only. `includeSetupQueries` filters detector analysis inputs only;
 it does not remove statements from the raw report or either query budget.
 
 Read the failure's statement list first. Look for implicit ORM loads, explicit flushes, application
@@ -201,16 +202,19 @@ Do not automatically regenerate it to make CI pass. See [contracts](contracts.md
 
 ## Parallel Capture Is Incomplete
 
-Published `0.6.0` rejects concurrent audited methods. Keep audited tests on the same thread;
-add this to `src/test/resources/junit-platform.properties`:
+Since 0.7.0, concurrent audited classes and methods each capture into their own session. QueryAudit
+0.6.x rejects concurrent audited methods; keep those versions on the same thread.
 
-```properties
-junit.jupiter.execution.parallel.enabled=false
-```
+`UNATTRIBUTED_QUERY` means JDBC work ran without an invocation binding while capture was active.
+Wrap executor tasks with `QueryCaptureSession.wrap` on the test thread and join them before the
+test returns. `QUERY_STILL_RUNNING`, `ASYNC_WORK_STILL_RUNNING` or `WORK_AFTER_CAPTURE` mean work
+outlived its capture boundary. They are incomplete evidence, not a clean audit. See
+[Parallel capture](extensions.md#parallel-capture) for a complete example and lifecycle boundaries.
 
-Remove explicit `@Execution(CONCURRENT)` from audited classes and methods, or replace it with
-`@Execution(SAME_THREAD)`. Keep audited SQL on the test execution path: this release does not
-provide a supported asynchronous attribution API.
+Use a separate EntityManager/transaction per test and keep custom extensions thread-safe. Avoid
+`@DirtiesContext` or application shutdown in one class while another uses that shared context.
+Normal rollback/connection release after analysis is supported. `@TestFactory` dynamic-child
+capture remains a separate unsupported lifecycle, not a parallel scheduling restriction.
 
 `@TestFactory` dynamic children also lack a per-child audit boundary. Use ordinary `@Test` or
 `@ParameterizedTest` methods for audited cases, or exclude the factory. See

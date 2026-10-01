@@ -1,4 +1,4 @@
-package io.queryaudit.core.reporter;
+package io.queryaudit.core.identity;
 
 import java.util.Locale;
 import java.util.Set;
