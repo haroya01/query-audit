@@ -3,7 +3,7 @@
 Auditing annotations register `QueryAuditExtension` automatically. `@QueryAuditExclude` is the
 opt-out marker; it does not activate auditing on its own. Start with
 [Lock a Fixed Path](choose-your-workflow.md) to choose between a budget and a contract. This
-reference documents the published `0.7.0` annotation API.
+reference documents the published `0.7.1` annotation API.
 
 ---
 
