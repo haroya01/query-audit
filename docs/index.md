@@ -183,11 +183,11 @@ Add `--require-resolved <findingId>` to prove that one specific finding is gone.
 ## Used on a production service
 
 QueryAudit is dogfooded on [short-link](https://github.com/haroya01/short-link), a production
-URL shortener built with Spring Boot and MySQL. Its test suite was the acceptance test for 0.7.0:
+URL shortener built with Spring Boot and MySQL. Its test suite is the acceptance test for 0.7:
 
-- On the same 45 audited tests, the default findings went from 142 under 0.6.0 to 2 under 0.7.0.
-  Both are real per-link lookups repeated inside bulk link creation, and 0.6.0 had reported
-  neither as a confirmed finding.
+- On the same 45 audited tests, the default confirmed findings went from 142 under 0.6.0 to one
+  N+1: bulk link creation looks up each new code with `findByShortCode`. The same loop repeats
+  `countByUserId` for one user, which is reported as INFO. 0.6.0 had reported neither.
 - All 584 HTTP query contracts kept the same counts after the move from a hand-written helper to
   `QueryContractScope`, which needs no internal QueryAudit class.
 - One injected extra SELECT in link creation failed 13 contracts across 8 test classes, and each
