@@ -5,10 +5,11 @@ description: Check the published library's capabilities, upgrade notes, report s
 
 # Versions and compatibility
 
-These guides describe **published QueryAudit `0.7.0`**. Keep every QueryAudit module on the same
-version. The release code is tagged [`v0.7.0`](https://github.com/haroya01/query-audit/tree/v0.7.0).
+These guides describe **published QueryAudit `0.7.1`**. Keep every QueryAudit module on the same
+version. The release code is tagged [`v0.7.1`](https://github.com/haroya01/query-audit/tree/v0.7.1).
+`0.7.0` was tagged but not published to Maven Central; `0.7.1` is the first 0.7 release there.
 
-## What you can use in 0.7.0
+## What you can use in 0.7.1
 
 | Capability | Start here |
 | --- | --- |
@@ -22,13 +23,13 @@ version. The release code is tagged [`v0.7.0`](https://github.com/haroya01/query
 | Mutable static `DataSource` capture in plain JUnit | [Plain JUnit setup](installation.md#plain-junit-5) |
 | Optional index, `EXPLAIN`, and SQL style rules | [Optional rules](../detections/overview.md) |
 
-The [JSON reporter](https://github.com/haroya01/query-audit/blob/v0.7.0/query-audit-core/src/main/java/io/queryaudit/core/reporter/JsonReporter.java)
+The [JSON reporter](https://github.com/haroya01/query-audit/blob/v0.7.1/query-audit-core/src/main/java/io/queryaudit/core/reporter/JsonReporter.java)
 writes schema **`1.7.0`**, the same schema as `0.6.1`. Keep the report reader and library versions
 aligned.
 
 ## Upgrading from 0.6
 
-| Change in 0.7.0 | What to do |
+| Change in 0.7 | What to do |
 | --- | --- |
 | The default `recommended` profile runs only call-site N+1 among built-in rules. In 0.6 it ran most rules | To keep the 0.6 coverage, set `profile: strict` or list rule codes in `enabled-rules`. See [rule profiles](../guide/configuration.md#rule-profiles) |
 | Hibernate lazy-load N+1 evidence is INFO; one batch fetch no longer fails | Rely on the call-site finding to fail a test. See [N+1 detection](../detections/n-plus-one.md) |
@@ -41,12 +42,12 @@ aligned.
 | `ReportComparator.Finding` and `ReportComparator.Verdict` add record components | Earlier constructors remain. See [Java API compatibility](../guide/reports.md#delta-verdict-compare-two-runs) |
 
 The active rules changed, so a 0.6 report is not a valid comparison baseline. Record a new
-baseline report with 0.7.0 before comparing runs in CI.
+baseline report with 0.7.1 before comparing runs in CI.
 
 ## Tested combinations
 
-The release's [CI workflow](https://github.com/haroya01/query-audit/blob/v0.7.0/.github/workflows/ci.yml)
-and [starter test configuration](https://github.com/haroya01/query-audit/blob/v0.7.0/query-audit-spring-boot-starter/build.gradle)
+The release's [CI workflow](https://github.com/haroya01/query-audit/blob/v0.7.1/.github/workflows/ci.yml)
+and [starter test configuration](https://github.com/haroya01/query-audit/blob/v0.7.1/query-audit-spring-boot-starter/build.gradle)
 define this matrix. Entries identify the configured checks; they do not establish compatibility
 with every intermediate framework or database version.
 
