@@ -1,6 +1,7 @@
 package io.queryaudit.consumer;
 
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.extension.AuditExtensions;
 import io.queryaudit.core.extension.AuditRule;
@@ -59,6 +60,7 @@ public final class ExtensionConsumer {
             .build();
     QueryAuditConfig config =
         QueryAuditConfig.builder()
+            .ruleProfile(RuleProfile.STRICT)
             .slowQueryWarningMs(1)
             .slowQueryErrorMs(2)
             .disabledRules(Set.of("slow-query"))
