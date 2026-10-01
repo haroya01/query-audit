@@ -480,7 +480,7 @@ Columns that likely have few distinct values receive special treatment:
 
 ### 3. Unique/Primary Key Short-Circuit
 
-QueryAudit `0.6.0` skips other suggestions when it recognizes an equality predicate on a column
+QueryAudit skips other suggestions when it recognizes an equality predicate on a column
 reported as part of a **unique or primary key** index on the same table:
 
 - All other missing WHERE index warnings for that table are **skipped**

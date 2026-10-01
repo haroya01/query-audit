@@ -14,7 +14,7 @@ thresholds below configure supporting analysis; they do not change explicit quer
 snapshot count contracts.
 
 !!! note "Version scope"
-    This reference documents QueryAudit `0.6.0`. Check [Versions and compatibility](../getting-started/versions.md)
+    This reference documents QueryAudit `0.7.1`. Check [Versions and compatibility](../getting-started/versions.md)
     for the published dependency and tested framework/database combinations.
 
 QueryAudit can be configured at three levels. When multiple levels conflict, the
@@ -151,12 +151,17 @@ reported as INFO, which does not fail the test. Hibernate
 lazy-load events are reported as INFO `n-plus-one` findings that name the association; they
 explain a finding but never confirm one on their own.
 
-### Migrating from 0.6.x to 0.7.0
+### Migrating from 0.6.x to 0.7
 
 If you did not configure a profile, upgrading reduces the active built-in rules to
 `n-plus-one`. Set `profile: strict` to keep every rule, or list the rules you enforce in
 `enabled-rules`. Hibernate lazy-load N+1 findings move from ERROR to INFO; the confirmed finding
-now comes from repeated SQL at one call site, so one batch fetch no longer fails a test.
+now comes from a SELECT repeated with different values at one call site, so one batch fetch no
+longer fails a test.
+
+SQL from other threads still counts toward a test that runs alone, as in 0.6. During parallel
+audits it makes the run `INCONCLUSIVE`. Name the pools that tests hand work to in
+[`await-executors`](#background-work) so each test waits for its own background work.
 
 Setting names now follow [one rule](#setting-names). The earlier system property names keep
 working, so existing builds need no change; the Gradle bridge in the CI guide forwards the new

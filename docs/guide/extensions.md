@@ -593,8 +593,8 @@ public final class AuditedAsyncWork {
 }
 ```
 
-Unwrapped worker SQL observed while capture is active makes affected audits INCONCLUSIVE instead
-of silently passing. Still-running SQL/tasks or late SQL observed before finalization also produce
+Unwrapped worker SQL counts toward an audit that runs alone. While several audits are active it
+cannot be assigned, so it makes the affected audits INCONCLUSIVE instead of silently passing. Still-running SQL/tasks or late SQL observed before finalization also produce
 safe reason codes tied to the invocation ID. Ordinary transaction rollback/connection cleanup after
 analysis is allowed. Finish all work within the test lifecycle: no finalized report can be revised
 by an unobserved future job after its hooks and root have closed. Preemptive timeout threads require

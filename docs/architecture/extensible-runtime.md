@@ -73,8 +73,8 @@ Source listeners route callbacks to the bound invocation, pin SQL ownership at e
 and retain ordinary standalone `start`/`stop` behavior outside scoped capture. Shared DataSource
 registrations use copy-on-write listener lists; shared Hibernate registries have one leased listener
 and lazy-event router. Neither cleanup can detach another active owner's hooks.
-Explicit `QueryCaptureSession.wrap` propagates executor work; unowned/unfinished work observed
-within the capture lifecycle fails completeness. See the [parallel contract](../guide/extensions.md#parallel-capture).
+Explicit `QueryCaptureSession.wrap` propagates executor work. Unowned work is adopted by the only
+active capture; with several active captures, and for unfinished work, it fails completeness. See the [parallel contract](../guide/extensions.md#parallel-capture).
 
 ## 3. Open findings and host policy
 
