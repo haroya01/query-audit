@@ -138,15 +138,29 @@ class ParallelAsyncCaptureLauncherTest {
   }
 
   @Test
-  void unwrappedWorkerSqlMakesTheAuditInconclusiveWithSafeIdentity(@TempDir Path output)
+  void unwrappedWorkerSqlDuringParallelAuditsIsInconclusiveWithSafeIdentity(@TempDir Path output)
       throws Exception {
     TestExecutionSummary summary = launch(output, UnwrappedFixture.class);
-    assertSucceeded(summary, 1);
+    assertSucceeded(summary, 2);
     String id = testId(UnwrappedFixture.class, "unwrapped");
-    assertEvidence(output, Map.of(id, List.of("SELECT 3301")), "INCONCLUSIVE");
+    String sibling = testId(UnwrappedFixture.class, "overlaps");
+    assertEvidence(
+        output,
+        Map.of(id, List.of("SELECT 3301"), sibling, List.of("SELECT 3302")),
+        "INCONCLUSIVE");
     assertIncompleteReason(output, id, "UNATTRIBUTED_QUERY");
+    assertIncompleteReason(output, sibling, "UNATTRIBUTED_QUERY");
     assertThat(scenario.workerThreads).hasSize(1);
     assertThat(Files.readString(output.resolve("report.json"))).doesNotContain(PRIVATE_WORKER_SQL);
+  }
+
+  @Test
+  void unwrappedWorkerSqlCountsTowardTheOnlyRunningAudit(@TempDir Path output) throws Exception {
+    TestExecutionSummary summary = launch(output, SoleUnwrappedFixture.class);
+    assertSucceeded(summary, 1);
+    String id = testId(SoleUnwrappedFixture.class, "unwrapped");
+    assertEvidence(output, Map.of(id, List.of("SELECT 3401", "SELECT 3402")), "PASS");
+    assertThat(scenario.workerThreads).hasSize(1);
   }
 
   @Test
@@ -463,6 +477,7 @@ class ParallelAsyncCaptureLauncherTest {
     @Test
     @DisplayName("private-worker-name")
     void unwrapped() throws Exception {
+      scenario.testsOverlap.await(10, TimeUnit.SECONDS);
       execute("SELECT 3301");
       scenario
           .executor
@@ -471,6 +486,32 @@ class ParallelAsyncCaptureLauncherTest {
                   () -> {
                     scenario.workerThreads.add(Thread.currentThread());
                     execute(PRIVATE_WORKER_SQL);
+                    return null;
+                  })
+          .get(10, TimeUnit.SECONDS);
+      scenario.testsOverlap.await(10, TimeUnit.SECONDS);
+    }
+
+    @Test
+    void overlaps() throws Exception {
+      scenario.testsOverlap.await(10, TimeUnit.SECONDS);
+      execute("SELECT 3302");
+      scenario.testsOverlap.await(10, TimeUnit.SECONDS);
+    }
+  }
+
+  @EnabledIfSystemProperty(named = ENABLED, matches = "true")
+  static class SoleUnwrappedFixture extends FixtureBase {
+    @Test
+    void unwrapped() throws Exception {
+      execute("SELECT 3401");
+      scenario
+          .executor
+          .submit(
+              (Callable<Void>)
+                  () -> {
+                    scenario.workerThreads.add(Thread.currentThread());
+                    execute("SELECT 3402");
                     return null;
                   })
           .get(10, TimeUnit.SECONDS);

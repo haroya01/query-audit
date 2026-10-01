@@ -7,6 +7,10 @@ import io.queryaudit.core.parser.SqlParser;
  * text, execution time, timestamp, stack trace, and a hash of the full call stack used for N+1
  * detection grouping.
  *
+ * <p>{@code parameterHash} identifies the bound values without retaining them, so repeated
+ * executions with the same values can be told apart from executions that load different rows. It is
+ * {@code 0} when the values are unknown.
+ *
  * @author haroya
  * @since 0.2.0
  */
@@ -17,7 +21,19 @@ public record QueryRecord(
     long timestamp,
     String stackTrace,
     int fullStackHash,
-    LifecyclePhase phase) {
+    LifecyclePhase phase,
+    int parameterHash) {
+
+  public QueryRecord(
+      String sql,
+      String normalizedSql,
+      long executionTimeNanos,
+      long timestamp,
+      String stackTrace,
+      int fullStackHash,
+      LifecyclePhase phase) {
+    this(sql, normalizedSql, executionTimeNanos, timestamp, stackTrace, fullStackHash, phase, 0);
+  }
 
   public QueryRecord(String sql, long executionTimeNanos, long timestamp, String stackTrace) {
     this(

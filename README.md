@@ -11,8 +11,8 @@ QueryAudit watches the SQL your existing database tests run. It reports an N+1 a
 issues it. Once you fix a path, it records that path's query counts as a contract, so a later
 change that adds a query fails the pull request instead of reaching production.
 
-1. **Find** an N+1. With no configuration, one rule runs: the same SELECT, three or more times,
-   from one call site.
+1. **Find** an N+1. With no configuration, one rule runs: the same SELECT with different values,
+   three or more times, from one call site.
 2. **Lock** the fix. Put a budget on a test, or record the query counts of a test, an HTTP
    request, or a job in a contract file.
 3. **Gate** the pull request. CI compares two runs and reports `PASS`, `FAIL`, or `INCONCLUSIVE`.
@@ -62,7 +62,9 @@ QueryAudit detected 1 issue(s) in listsOrderSummaries():
 ```
 
 A batched `IN (?, ?, ...)` fetch is the fix, not the problem, so `@BatchSize` and batch fetching
-stay quiet. When Hibernate is present, its lazy-load events add an INFO line that names the
+stay quiet. Paging through results with `OFFSET`, or repeating a lookup with the same values, is not
+an N+1 either. SQL that a request runs on a server thread, as with `RANDOM_PORT` tests, counts
+toward the test. When Hibernate is present, its lazy-load events add an INFO line that names the
 association to fetch. To survey an existing suite without failing it, use `@EnableQueryInspector`
 instead of `@QueryAudit`.
 

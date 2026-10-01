@@ -7,6 +7,7 @@ import com.jayway.jsonpath.JsonPath;
 import io.queryaudit.core.reporter.HtmlReportAggregator;
 import io.queryaudit.junit5.EnableQueryInspector;
 import io.queryaudit.junit5.ExpectQueries;
+import io.queryaudit.junit5.QueryAudit;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -62,10 +63,24 @@ class SpringBackgroundThreadsTest {
   }
 
   @Test
-  void serverThreadSqlIsInconclusiveWithoutNamedPools(@TempDir Path directory) throws Exception {
+  void serverThreadSqlCountsWithoutConfiguration(@TempDir Path directory) throws Exception {
     Map<String, Object> report = passingRun(directory, ServerWithoutPoolsFixture.class);
 
-    assertThat(report.get("outcome")).isEqualTo("INCONCLUSIVE");
+    assertThat(report.get("outcome")).isEqualTo("PASS");
+    assertThat(JsonPath.<Integer>read(report, "$.reports[0].summary.totalQueries")).isEqualTo(1);
+  }
+
+  @Test
+  void anNPlusOneInsideAServerRequestFailsTheTest(@TempDir Path directory) {
+    SummaryGeneratingListener listener = launch(directory, ServerNPlusOneFixture.class);
+
+    assertThat(listener.getSummary().getFailures())
+        .singleElement()
+        .satisfies(
+            failure ->
+                assertThat(failure.getException())
+                    .hasMessageContaining("N+1 Query detected")
+                    .hasMessageContaining(ReadController.class.getName() + ".customers:"));
   }
 
   @Test
@@ -77,6 +92,13 @@ class SpringBackgroundThreadsTest {
   }
 
   private static Map<String, Object> passingRun(Path directory, Class<?> fixture) throws Exception {
+    SummaryGeneratingListener listener = launch(directory, fixture);
+    assertThat(listener.getSummary().getFailures()).isEmpty();
+    assertThat(listener.getSummary().getTestsSucceededCount()).isEqualTo(1);
+    return JsonPath.parse(Files.readString(directory.resolve("report.json"))).json();
+  }
+
+  private static SummaryGeneratingListener launch(Path directory, Class<?> fixture) {
     Map<String, String> saved = new HashMap<>();
     List<String> keys =
         List.of(
@@ -99,9 +121,7 @@ class SpringBackgroundThreadsTest {
                   .configurationParameter("junit.jupiter.execution.parallel.enabled", "false")
                   .build(),
               listener);
-      assertThat(listener.getSummary().getFailures()).isEmpty();
-      assertThat(listener.getSummary().getTestsSucceededCount()).isEqualTo(1);
-      return JsonPath.parse(Files.readString(directory.resolve("report.json"))).json();
+      return listener;
     } finally {
       saved.forEach(
           (key, value) -> {
@@ -168,10 +188,26 @@ class SpringBackgroundThreadsTest {
     }
   }
 
+  @SpringBootTest(classes = App.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+  @QueryAudit
+  @EnabledIfSystemProperty(named = ENABLED, matches = "true")
+  static class ServerNPlusOneFixture {
+    @LocalServerPort int port;
+
+    @Test
+    void listsCustomers() throws Exception {
+      assertThat(get(port, "/customers")).isEqualTo("15");
+    }
+  }
+
   private static String get(int port) throws Exception {
+    return get(port, "/read");
+  }
+
+  private static String get(int port, String path) throws Exception {
     return HttpClient.newHttpClient()
         .send(
-            HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/read")).build(),
+            HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).build(),
             HttpResponse.BodyHandlers.ofString())
         .body();
   }
@@ -203,6 +239,15 @@ class SpringBackgroundThreadsTest {
     @GetMapping("/read")
     int read() {
       return jdbc.queryForObject("SELECT 4", Integer.class);
+    }
+
+    @GetMapping("/customers")
+    int customers() {
+      int sum = 0;
+      for (int id = 1; id <= 5; id++) {
+        sum += jdbc.queryForObject("SELECT CAST(? AS INT)", Integer.class, id);
+      }
+      return sum;
     }
   }
 

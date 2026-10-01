@@ -60,9 +60,19 @@ built-in rule in the default `recommended` profile. Neither `EXPLAIN` nor Hibern
    call stack. Proxy, reflection, CGLIB, and framework frames are ignored, so the same repository
    method called from two different places forms two groups.
 
-3. **Count** -- A group with **>= threshold** SELECT statements (default: 3) produces an ERROR
-   `n-plus-one` finding. A statement with a multi-placeholder `IN (?, ?, ...)` list is a batched
-   fetch and is never counted, so `@BatchSize` and batch fetching do not fail a test.
+3. **Count** -- A group with **>= threshold** SELECT statements (default: 3) that bind different
+   values produces an ERROR `n-plus-one` finding. Three things are not counted:
+
+    - A statement with a multi-placeholder `IN (?, ?, ...)` list is a batched fetch, so
+      `@BatchSize` and batch fetching do not fail a test.
+    - A statement that pages with `OFFSET` (`LIMIT ? OFFSET ?`, `OFFSET ? ROWS`, `LIMIT ?, ?`)
+      reads the next page, not the next row's association.
+    - A group whose executions all bind the same values repeats one lookup, such as a test that
+      sends the same request in a loop or a page loop's count query. QueryAudit compares a hash of
+      the bound values and does not keep the values.
+
+   Keyset pagination (`WHERE id > ? ORDER BY id LIMIT ?`) binds a new value on each page and is
+   reported. Suppress `n-plus-one` for that test when the loop is intended.
 
 Hibernate lazy-load events are recorded when the integration is active. They produce INFO
 `n-plus-one` findings that name the collection or proxy and suggest the fetch to add. They

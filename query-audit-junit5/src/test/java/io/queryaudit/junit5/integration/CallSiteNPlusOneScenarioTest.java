@@ -147,8 +147,13 @@ class CallSiteNPlusOneScenarioTest {
   }
 
   @Test
-  void aPagingLoopIsReportedLikeAnyRepeatedQuery() {
-    assertThat(confirmed.get("pagedLoop()")).containsExactly("n-plus-one", "n-plus-one");
+  void aPagingLoopIsNotAnNPlusOne() {
+    assertClean("pagedLoop()");
+  }
+
+  @Test
+  void loadingTheSameRowRepeatedlyIsNotAnNPlusOne() {
+    assertClean("sameRowFiveTimes()");
   }
 
   private void assertNPlusOne(String method) {
@@ -257,6 +262,13 @@ class CallSiteNPlusOneScenarioTest {
     void pagedLoop() {
       for (int page = 0; page < 5; page++) {
         memberRepository.findAll(PageRequest.of(page, 3));
+      }
+    }
+
+    @Test
+    void sameRowFiveTimes() {
+      for (int i = 0; i < 5; i++) {
+        teamRepository.findById(teamIds.get(0));
       }
     }
 

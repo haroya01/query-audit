@@ -12,8 +12,13 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class CallSiteNPlusOneDetector implements DetectionRule {
+  private static final Pattern OFFSET_PAGE =
+      Pattern.compile(
+          "\\boffset\\s+(?:\\?|\\d+)|\\blimit\\s+(?:\\?|\\d+)\\s*,\\s*(?:\\?|\\d+)",
+          Pattern.CASE_INSENSITIVE);
   private final int threshold;
 
   public CallSiteNPlusOneDetector(int threshold) {
@@ -35,7 +40,7 @@ public class CallSiteNPlusOneDetector implements DetectionRule {
     for (QueryRecord query : queries) {
       if (query.normalizedSql() == null || query.stackTrace() == null) continue;
       if (query.stackTrace().isEmpty() || !SqlParser.isSelectQuery(query.sql())) continue;
-      if (hasBatchedInList(query.sql())) continue;
+      if (hasBatchedInList(query.sql()) || pagesWithOffset(query.normalizedSql())) continue;
       byCallSite
           .computeIfAbsent(
               new CallSite(query.normalizedSql(), query.fullStackHash(), query.stackTrace()),
@@ -46,7 +51,7 @@ public class CallSiteNPlusOneDetector implements DetectionRule {
     List<Issue> issues = new ArrayList<>();
     for (Map.Entry<CallSite, List<QueryRecord>> entry : byCallSite.entrySet()) {
       List<QueryRecord> repeated = entry.getValue();
-      if (repeated.size() < threshold) continue;
+      if (repeated.size() < threshold || !loadsDifferentRows(repeated)) continue;
       QueryRecord first = repeated.get(0);
       String table =
           EnhancedSqlParser.extractTableNames(first.normalizedSql()).stream()
@@ -59,8 +64,7 @@ public class CallSiteNPlusOneDetector implements DetectionRule {
               first.sql(),
               table,
               null,
-              String.format(
-                  "The same SELECT ran %d times from one call site", repeated.size()),
+              String.format("The same SELECT ran %d times from one call site", repeated.size()),
               "Load the rows once before the loop: JOIN FETCH, @EntityGraph, or one query with"
                   + " an IN list.",
               first.stackTrace()));
@@ -93,6 +97,20 @@ public class CallSiteNPlusOneDetector implements DetectionRule {
         }
       }
     }
+  }
+
+  // An N+1 loads a different row on each pass. The same values every time is a repeated request or
+  // count, not a per-row lookup. Records built without values (parameterHash 0) keep counting.
+  static boolean loadsDifferentRows(List<QueryRecord> repeated) {
+    int first = repeated.get(0).parameterHash();
+    for (QueryRecord query : repeated) {
+      if (query.parameterHash() == 0 || query.parameterHash() != first) return true;
+    }
+    return false;
+  }
+
+  static boolean pagesWithOffset(String normalizedSql) {
+    return OFFSET_PAGE.matcher(normalizedSql).find();
   }
 
   private static int skipWhitespace(String text, int index) {

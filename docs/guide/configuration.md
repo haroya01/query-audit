@@ -123,7 +123,7 @@ SQL style checks:
 
 | Profile | What runs | Use it for |
 |---|---|---|
-| `recommended` (default) | `n-plus-one`: the same SELECT repeated from one full application call stack | First adoption, day-to-day CI |
+| `recommended` (default) | `n-plus-one`: the same SELECT with different values repeated from one full application call stack | First adoption, day-to-day CI |
 | `minimal` | `n-plus-one`, `missing-where-index`, `missing-join-index`, `cartesian-join`, `update-without-where`, `unbounded-result-set`, `slow-query` | Adding index and write-safety review |
 | `strict` | Every rule | Maximum coverage, mature suppression setup |
 
@@ -143,9 +143,10 @@ the profile like built-in rules; enable their codes with `enabled-rules`. Extern
 registered via `ServiceLoader` without a rule code are never filtered by profiles.
 
 The N+1 rule groups captured SELECT statements by normalized SQL and the full application call
-stack, ignoring proxy, reflection, and framework frames. Three executions from one call site
-report a confirmed `n-plus-one` finding; `n-plus-one.threshold` changes the count. A query with
-a multi-placeholder `IN` list is treated as a batched fetch and never counted. Hibernate
+stack, ignoring proxy, reflection, and framework frames. Three executions from one call site that
+bind different values report a confirmed `n-plus-one` finding; `n-plus-one.threshold` changes the
+count. A query with a multi-placeholder `IN` list is a batched fetch, a query with `OFFSET` reads
+the next page, and executions that all bind the same values repeat one lookup; none of them count. Hibernate
 lazy-load events are reported as INFO `n-plus-one` findings that name the association; they
 explain a finding but never confirm one on their own.
 
@@ -259,32 +260,33 @@ Coverage first, cleanup incrementally — the audit becomes a ratchet instead of
 
 ## Background Work
 
-Each audited test captures the SQL that runs on its own thread. Work that the test hands to a
-thread pool, such as an `@Async` method or an `@Async` event listener, runs on another thread. In
-0.7.0 that SQL makes the run `INCONCLUSIVE` unless QueryAudit can tell which test it belongs to.
+Each audited test captures the SQL that runs on its own thread. Some SQL runs on another thread:
+an `@Async` method, an `@Async` event listener, or a request that a `RANDOM_PORT` server handles.
+QueryAudit treats it in two steps.
 
-Name the pools in `await-executors`:
+- **Count:** while the test is the only audit running, SQL and Hibernate lazy loads from other
+  threads count toward it. When several audits run in parallel, that SQL cannot be assigned to one
+  of them and makes the run `INCONCLUSIVE`.
+- **Wait:** work handed to a thread pool can still be running when the test method returns. Name
+  those pools in `await-executors`, and QueryAudit waits until they are idle before it moves to the
+  teardown phase. Their SQL then counts in the test phase, where budgets, contracts, and findings
+  see it. After 30 seconds the test fails with the busy pool's name.
 
 ```yaml
 query-audit:
   await-executors: [taskExecutor, webhookExecutor]
 ```
 
-With pools named, the Spring Boot starter changes two things for every audited test method:
-
-- **Wait:** when the test method returns, QueryAudit waits until the named pools are idle, then
-  moves to the teardown phase. Background SQL therefore counts in the test phase, where budgets,
-  contracts, and findings see it. After 30 seconds the test fails with the busy pool's name.
-- **Count:** while the test is the only audit running, SQL and Hibernate lazy loads from threads
-  without a capture binding count toward it instead of making the run `INCONCLUSIVE`.
-
+Without the wait, background SQL can land in teardown, after the audit ends, or in the next test.
 `QueryContractScope` waits for the same pools; see
 [contract a request or job](contracts.md#contract-a-request-or-job).
 
-Counting covers every thread, not only the named pools, so run audited tests sequentially and keep
-schedulers off during tests. When several audits run in parallel, off-thread SQL cannot be assigned
-to one of them and still makes the run `INCONCLUSIVE`. Without Spring, wrap the tasks with
-`QueryCaptureSession.wrap`; see [parallel capture](troubleshooting.md#parallel-capture-is-incomplete).
+Counting covers every thread, not only the named pools, so keep schedulers off during tests.
+`await-executors` accepts `ThreadPoolTaskExecutor` and `ThreadPoolExecutor` beans. With
+`spring.threads.virtual.enabled`, Spring runs `@Async` work on a `SimpleAsyncTaskExecutor`, which
+cannot be awaited; define a `ThreadPoolTaskExecutor` for tests or wait for the work in the test.
+Without Spring, wrap the tasks with `QueryCaptureSession.wrap`; see
+[parallel capture](troubleshooting.md#parallel-capture-is-incomplete).
 
 ---
 

@@ -66,8 +66,8 @@ class OrderServiceTest {
 }
 ```
 
-With no configuration, one rule runs: the same SELECT, three or more times, from one full
-application call stack. If `recentOrderSummaries()` loads each order's customer inside its loop,
+With no configuration, one rule runs: the same SELECT with different values, three or more times,
+from one full application call stack. If `recentOrderSummaries()` loads each order's customer inside its loop,
 the test fails at that line:
 
 ```text
@@ -82,7 +82,8 @@ QueryAudit detected 1 issue(s) in listsOrderSummaries():
 ```
 
 A batched `IN (?, ?, ...)` fetch is the fix, not the problem, so `@BatchSize` and batch fetching
-stay quiet. Hibernate lazy-load events add an INFO line that names the association to fetch.
+stay quiet. Paging with `OFFSET` and repeating a lookup with the same values are not N+1s either.
+Hibernate lazy-load events add an INFO line that names the association to fetch.
 Use `@EnableQueryInspector` instead of `@QueryAudit` to survey an existing suite without failing it.
 
 [How N+1 detection works →](detections/n-plus-one.md)

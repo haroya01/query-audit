@@ -15,7 +15,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class CallSiteNPlusOneDetectorTest {
-  private static final String LOOP = "com.example.OrderService.load:42\ncom.example.OrderService.list:17";
+  private static final String LOOP =
+      "com.example.OrderService.load:42\ncom.example.OrderService.list:17";
   private static final String OTHER = "com.example.OrderService.detail:88";
   private final CallSiteNPlusOneDetector detector = new CallSiteNPlusOneDetector(3);
 
@@ -25,13 +26,16 @@ class CallSiteNPlusOneDetectorTest {
         detector.evaluate(
             repeat("SELECT * FROM customers WHERE id = 1", LOOP, 7, 4), emptyMetadata());
 
-    assertThat(issues).singleElement().satisfies(issue -> {
-      assertThat(issue.type()).isEqualTo(IssueType.N_PLUS_ONE);
-      assertThat(issue.severity()).isEqualTo(Severity.ERROR);
-      assertThat(issue.table()).isEqualTo("customers");
-      assertThat(issue.detail()).contains("4 times");
-      assertThat(issue.sourceLocation()).isEqualTo(LOOP);
-    });
+    assertThat(issues)
+        .singleElement()
+        .satisfies(
+            issue -> {
+              assertThat(issue.type()).isEqualTo(IssueType.N_PLUS_ONE);
+              assertThat(issue.severity()).isEqualTo(Severity.ERROR);
+              assertThat(issue.table()).isEqualTo("customers");
+              assertThat(issue.detail()).contains("4 times");
+              assertThat(issue.sourceLocation()).isEqualTo(LOOP);
+            });
   }
 
   @Test
@@ -109,6 +113,71 @@ class CallSiteNPlusOneDetectorTest {
     sql.append(')');
 
     assertThat(CallSiteNPlusOneDetector.hasBatchedInList(sql.toString())).isTrue();
+  }
+
+  @Test
+  void reportsALoopThatBindsDifferentValues() {
+    assertThat(
+            detector.evaluate(
+                withValues("SELECT * FROM customers WHERE id = ?", 11, 12, 13, 11),
+                emptyMetadata()))
+        .singleElement()
+        .satisfies(issue -> assertThat(issue.type()).isEqualTo(IssueType.N_PLUS_ONE));
+  }
+
+  @Test
+  void ignoresTheSameValuesRepeated() {
+    assertThat(
+            detector.evaluate(
+                withValues("SELECT * FROM links WHERE code = ?", 21, 21, 21, 21), emptyMetadata()))
+        .isEmpty();
+    assertThat(
+            detector.evaluate(withValues("SELECT count(*) FROM members", 5, 5, 5), emptyMetadata()))
+        .isEmpty();
+  }
+
+  @Test
+  void treatsUnknownValuesAsDifferent() {
+    assertThat(
+            detector.evaluate(
+                withValues("SELECT * FROM customers WHERE id = ?", 21, 0, 21), emptyMetadata()))
+        .hasSize(1);
+  }
+
+  @Test
+  void ignoresOffsetPagesButNotSingleRowLimits() {
+    for (String paged :
+        List.of(
+            "SELECT * FROM members ORDER BY id OFFSET ? ROWS FETCH FIRST ? ROWS ONLY",
+            "SELECT * FROM members ORDER BY id LIMIT ? OFFSET ?",
+            "SELECT * FROM members ORDER BY id LIMIT ?, ?",
+            "SELECT * FROM members ORDER BY id LIMIT 3 OFFSET 6")) {
+      assertThat(detector.evaluate(withValues(paged, 1, 2, 3, 4), emptyMetadata()))
+          .as(paged)
+          .isEmpty();
+    }
+    assertThat(
+            detector.evaluate(
+                withValues("SELECT * FROM members WHERE team_id = ? LIMIT ?", 1, 2, 3),
+                emptyMetadata()))
+        .hasSize(1);
+  }
+
+  private static List<QueryRecord> withValues(String sql, int... parameterHashes) {
+    List<QueryRecord> records = new ArrayList<>();
+    for (int i = 0; i < parameterHashes.length; i++) {
+      records.add(
+          new QueryRecord(
+              sql,
+              SqlParser.normalize(sql),
+              1_000L,
+              i,
+              LOOP,
+              7,
+              LifecyclePhase.TEST,
+              parameterHashes[i]));
+    }
+    return records;
   }
 
   private static List<QueryRecord> repeat(String sql, String stack, int fullStackHash, int count) {
