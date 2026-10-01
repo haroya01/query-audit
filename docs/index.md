@@ -82,7 +82,8 @@ QueryAudit detected 1 issue(s) in listsOrderSummaries():
 ```
 
 A batched `IN (?, ?, ...)` fetch is the fix, not the problem, so `@BatchSize` and batch fetching
-stay quiet. Paging with `OFFSET` and repeating a lookup with the same values are not N+1s either.
+stay quiet. Paging with `OFFSET` is not an N+1, and repeating a lookup with the same values is
+reported as INFO without failing the test.
 Hibernate lazy-load events add an INFO line that names the association to fetch.
 Use `@EnableQueryInspector` instead of `@QueryAudit` to survey an existing suite without failing it.
 

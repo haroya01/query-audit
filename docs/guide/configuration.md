@@ -145,8 +145,9 @@ registered via `ServiceLoader` without a rule code are never filtered by profile
 The N+1 rule groups captured SELECT statements by normalized SQL and the full application call
 stack, ignoring proxy, reflection, and framework frames. Three executions from one call site that
 bind different values report a confirmed `n-plus-one` finding; `n-plus-one.threshold` changes the
-count. A query with a multi-placeholder `IN` list is a batched fetch, a query with `OFFSET` reads
-the next page, and executions that all bind the same values repeat one lookup; none of them count. Hibernate
+count. A query with a multi-placeholder `IN` list is a batched fetch and a query with `OFFSET` reads
+the next page; neither counts. Executions that all bind the same values repeat one lookup and are
+reported as INFO, which does not fail the test. Hibernate
 lazy-load events are reported as INFO `n-plus-one` findings that name the association; they
 explain a finding but never confirm one on their own.
 

@@ -126,14 +126,21 @@ class CallSiteNPlusOneDetectorTest {
   }
 
   @Test
-  void ignoresTheSameValuesRepeated() {
+  void reportsTheSameValuesRepeatedAsInfo() {
     assertThat(
             detector.evaluate(
                 withValues("SELECT * FROM links WHERE code = ?", 21, 21, 21, 21), emptyMetadata()))
-        .isEmpty();
+        .singleElement()
+        .satisfies(
+            issue -> {
+              assertThat(issue.type()).isEqualTo(IssueType.N_PLUS_ONE);
+              assertThat(issue.severity()).isEqualTo(Severity.INFO);
+              assertThat(issue.detail()).contains("same values ran 4 times");
+            });
     assertThat(
             detector.evaluate(withValues("SELECT count(*) FROM members", 5, 5, 5), emptyMetadata()))
-        .isEmpty();
+        .singleElement()
+        .satisfies(issue -> assertThat(issue.severity()).isEqualTo(Severity.INFO));
   }
 
   @Test

@@ -51,22 +51,30 @@ public class CallSiteNPlusOneDetector implements DetectionRule {
     List<Issue> issues = new ArrayList<>();
     for (Map.Entry<CallSite, List<QueryRecord>> entry : byCallSite.entrySet()) {
       List<QueryRecord> repeated = entry.getValue();
-      if (repeated.size() < threshold || !loadsDifferentRows(repeated)) continue;
+      if (repeated.size() < threshold) continue;
       QueryRecord first = repeated.get(0);
       String table =
           EnhancedSqlParser.extractTableNames(first.normalizedSql()).stream()
               .findFirst()
               .orElse(null);
+      boolean perRow = loadsDifferentRows(repeated);
       issues.add(
           new Issue(
               IssueType.N_PLUS_ONE,
-              Severity.ERROR,
+              perRow ? Severity.ERROR : Severity.INFO,
               first.sql(),
               table,
               null,
-              String.format("The same SELECT ran %d times from one call site", repeated.size()),
-              "Load the rows once before the loop: JOIN FETCH, @EntityGraph, or one query with"
-                  + " an IN list.",
+              perRow
+                  ? String.format(
+                      "The same SELECT ran %d times from one call site", repeated.size())
+                  : String.format(
+                      "The same SELECT with the same values ran %d times from one call site",
+                      repeated.size()),
+              perRow
+                  ? "Load the rows once before the loop: JOIN FETCH, @EntityGraph, or one query"
+                      + " with an IN list."
+                  : "If this repeats inside one operation, run it once and reuse the result.",
               first.stackTrace()));
     }
     return issues;
@@ -99,8 +107,8 @@ public class CallSiteNPlusOneDetector implements DetectionRule {
     }
   }
 
-  // An N+1 loads a different row on each pass. The same values every time is a repeated request or
-  // count, not a per-row lookup. Records built without values (parameterHash 0) keep counting.
+  // An N+1 loads a different row on each pass. The same values every time repeats one lookup, which
+  // is reported as INFO. Records built without values (parameterHash 0) count as different rows.
   static boolean loadsDifferentRows(List<QueryRecord> repeated) {
     int first = repeated.get(0).parameterHash();
     for (QueryRecord query : repeated) {

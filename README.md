@@ -62,8 +62,8 @@ QueryAudit detected 1 issue(s) in listsOrderSummaries():
 ```
 
 A batched `IN (?, ?, ...)` fetch is the fix, not the problem, so `@BatchSize` and batch fetching
-stay quiet. Paging through results with `OFFSET`, or repeating a lookup with the same values, is not
-an N+1 either. SQL that a request runs on a server thread, as with `RANDOM_PORT` tests, counts
+stay quiet. Paging through results with `OFFSET` is not an N+1 either, and repeating a lookup with
+the same values is reported as INFO without failing the test. SQL that a request runs on a server thread, as with `RANDOM_PORT` tests, counts
 toward the test. When Hibernate is present, its lazy-load events add an INFO line that names the
 association to fetch. To survey an existing suite without failing it, use `@EnableQueryInspector`
 instead of `@QueryAudit`.
