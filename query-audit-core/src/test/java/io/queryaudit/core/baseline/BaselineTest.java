@@ -39,6 +39,19 @@ class BaselineTest {
   }
 
   @Test
+  void savesToAFileNameWithoutADirectory() throws Exception {
+    Path relative = Path.of("baseline-" + System.nanoTime() + ".tmp");
+    try {
+      Baseline.save(relative, List.of());
+
+      assertThat(relative).exists();
+      assertThat(Baseline.load(relative)).isEmpty();
+    } finally {
+      Files.deleteIfExists(relative);
+    }
+  }
+
+  @Test
   void sameRuleAndTableDoNotAcknowledgeDifferentQueryPattern() {
     BaselineEntry entry =
         new BaselineEntry(

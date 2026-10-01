@@ -94,16 +94,19 @@ class AuditAssertionsTest {
             String.join(
                 "\n",
                 "shop.CustomerRepository.findById:12",
+                "java.util.ArrayList.forEach:1511",
                 "shop.OrderService.describe:40",
                 "shop.OrderService.list:31",
+                "jdk.proxy2.$Proxy81.list:-1",
                 "shop.OrderController.list:18",
                 "shop.OrderControllerTest.lists:22",
+                "worker.org.gradle.process.internal.worker.GradleWorkerMain.run:69",
                 "shop.Unshown.frame:1"));
 
     assertThat(AuditAssertions.findingsFailureMessage("lists", List.of(nPlusOne)))
         .contains(
             "Call stack:", "at shop.OrderService.list:31", "at shop.OrderControllerTest.lists:22")
-        .doesNotContain("shop.Unshown.frame");
+        .doesNotContain("shop.Unshown.frame", "java.util", "jdk.proxy", "worker.org.gradle");
   }
 
   @Test

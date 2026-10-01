@@ -1,7 +1,7 @@
 package io.queryaudit.core.interceptor;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Tracks lazy loading events for N+1 detection and explicit PK loads for findById-for-association
@@ -60,18 +60,23 @@ public class LazyLoadTracker {
       long timestamp,
       String stackTrace) {}
 
-  private final CopyOnWriteArrayList<LazyLoadRecord> records = new CopyOnWriteArrayList<>();
-  private final CopyOnWriteArrayList<ExplicitLoadRecord> explicitLoads =
-      new CopyOnWriteArrayList<>();
+  private static final int DEFAULT_MAX_EVENTS = 10_000;
+
+  private final Object lock = new Object();
+  private final List<LazyLoadRecord> records = new ArrayList<>();
+  private final List<ExplicitLoadRecord> explicitLoads = new ArrayList<>();
   private volatile boolean active = false;
   private final boolean captureLeaf;
+  private final int maxEvents;
+  private int droppedEvents;
 
   public LazyLoadTracker() {
-    this(false);
+    this(false, DEFAULT_MAX_EVENTS);
   }
 
-  LazyLoadTracker(boolean captureLeaf) {
+  LazyLoadTracker(boolean captureLeaf, int maxEvents) {
     this.captureLeaf = captureLeaf;
+    this.maxEvents = maxEvents;
   }
 
   // ── Collection initialization (recorded via HibernateLazyLoadListener) ────
@@ -86,7 +91,8 @@ public class LazyLoadTracker {
       return;
     if (!active) return;
 
-    records.add(
+    append(
+        records,
         new LazyLoadRecord(
             collectionRole != null ? collectionRole : "unknown",
             ownerEntity,
@@ -104,7 +110,8 @@ public class LazyLoadTracker {
     if (!active) return;
 
     String deproxied = deproxyClassName(entityName);
-    records.add(
+    append(
+        records,
         new LazyLoadRecord(
             PROXY_ROLE_PREFIX + deproxied,
             deproxied,
@@ -121,7 +128,8 @@ public class LazyLoadTracker {
             this, tracker -> tracker.recordExplicitLoad(entityName, id, stackTrace))) return;
     if (!active) return;
 
-    explicitLoads.add(
+    append(
+        explicitLoads,
         new ExplicitLoadRecord(
             deproxyClassName(entityName),
             id != null ? id.toString() : "null",
@@ -221,9 +229,18 @@ public class LazyLoadTracker {
 
   // ── Lifecycle ────────────────────────────────────────────────────
 
+  private <T> void append(List<T> events, T event) {
+    synchronized (lock) {
+      if (records.size() + explicitLoads.size() >= maxEvents) {
+        droppedEvents++;
+        return;
+      }
+      events.add(event);
+    }
+  }
+
   public void start() {
-    records.clear();
-    explicitLoads.clear();
+    clear();
     active = true;
   }
 
@@ -232,16 +249,30 @@ public class LazyLoadTracker {
   }
 
   public void clear() {
-    records.clear();
-    explicitLoads.clear();
+    synchronized (lock) {
+      records.clear();
+      explicitLoads.clear();
+      droppedEvents = 0;
+    }
   }
 
   public List<LazyLoadRecord> getRecords() {
-    return List.copyOf(records);
+    synchronized (lock) {
+      return List.copyOf(records);
+    }
   }
 
   public List<ExplicitLoadRecord> getExplicitLoads() {
-    return List.copyOf(explicitLoads);
+    synchronized (lock) {
+      return List.copyOf(explicitLoads);
+    }
+  }
+
+  /** Returns how many events were not recorded because the capture limit was reached. */
+  public int getDroppedEventCount() {
+    synchronized (lock) {
+      return droppedEvents;
+    }
   }
 
   public boolean isActive() {
