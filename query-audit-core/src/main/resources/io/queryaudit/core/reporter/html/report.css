@@ -125,6 +125,10 @@ td.center { text-align: center; }
     color: var(--color-info);
     border: 1px solid #93c5fd;
 }
+.summary-bar .stat.unverified {
+    color: var(--color-text-secondary);
+    border: 1px dashed var(--color-border);
+}
 .summary-bar .stat.ok {
     background: #f0fdf4;
     color: var(--color-ok);
@@ -244,6 +248,7 @@ td.center { text-align: center; }
 }
 .row-fail { }
 .row-pass { background: rgba(25, 135, 84, 0.04); }
+.row-unverified { }
 @media (prefers-color-scheme: dark) {
     .row-pass { background: rgba(25, 135, 84, 0.08); }
 }
@@ -258,6 +263,7 @@ td.center { text-align: center; }
 .status-dot.error-dot { background: var(--color-error); }
 .status-dot.warning-dot { background: var(--color-warning); }
 .status-dot.ok-dot { background: var(--color-ok); }
+.status-dot.unverified-dot { background: transparent; border: 2px solid var(--color-text-secondary); }
 
 /* Status indicators (for method cards) */
 .status-indicator {
@@ -270,6 +276,24 @@ td.center { text-align: center; }
 .status-indicator.error-dot { background: var(--color-error); }
 .status-indicator.warning-dot { background: var(--color-warning); }
 .status-indicator.ok-dot { background: var(--color-ok); }
+.status-indicator.unverified-dot { background: transparent; border: 2px solid var(--color-text-secondary); }
+
+/* Run outcome */
+.outcome {
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem;
+    border-left: 4px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-card);
+    box-shadow: var(--shadow-sm);
+}
+.outcome h2 { font-size: 1.1rem; margin-bottom: 0.25rem; }
+.outcome p { color: var(--color-text-secondary); }
+.outcome-pass { border-left-color: var(--color-ok); }
+.outcome-fail { border-left-color: var(--color-error); }
+.outcome-inconclusive { border-left-color: var(--color-warning); }
+.outcome-reasons { margin: 0.5rem 0 0 1.25rem; }
+.outcome-reasons code { font-family: var(--font-mono); font-size: 0.85em; }
 
 /* ===== Badges ===== */
 .badge {
@@ -301,6 +325,7 @@ td.center { text-align: center; }
 .method.method-error { border-left-color: var(--color-error); }
 .method.method-warning { border-left-color: var(--color-warning); }
 .method.method-ok { border-left-color: var(--color-ok); }
+.method.method-unverified { border-left-color: var(--color-border); }
 .method > summary {
     padding: 0.85rem 1.25rem;
     cursor: pointer;

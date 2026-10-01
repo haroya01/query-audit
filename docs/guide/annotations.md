@@ -1,9 +1,9 @@
 # Annotations Guide
 
 Auditing annotations register `QueryAuditExtension` automatically. `@QueryAuditExclude` is the
-opt-out marker; it does not activate auditing on its own. Start with the
-[workflow recipes](choose-your-workflow.md) to choose a write budget, count contract, failure
-diagnostic, or CI comparison. This reference documents the published `0.6.0` annotation API.
+opt-out marker; it does not activate auditing on its own. Start with
+[Lock a Fixed Path](choose-your-workflow.md) to choose between a budget and a contract. This
+reference documents the published `0.7.0` annotation API.
 
 ---
 
@@ -460,6 +460,40 @@ class OrderServiceTest {
     }
 }
 ```
+
+## Composed and Inherited Annotations
+
+QueryAudit finds its annotations where JUnit finds the extension, so a shared test annotation or
+an audited base class turns auditing on for every test that uses it:
+
+```java
+@Target(ElementType.TYPE)
+@Retention(RetentionPolicy.RUNTIME)
+@SpringBootTest
+@QueryAudit
+public @interface AuditedIntegrationTest {}
+
+@AuditedIntegrationTest
+class OrderServiceTest { ... }
+
+@QueryAudit
+abstract class AuditedTestBase { ... }
+
+class PaymentServiceTest extends AuditedTestBase { ... }
+```
+
+| Declared on | Applies |
+|---|---|
+| The test method, directly or through a composed annotation | First |
+| The test class, directly, through a composed annotation, or through an implemented interface | Next |
+| A superclass, nearest first | Next |
+| An enclosing class, then its superclasses | Last |
+
+The nearest declaration wins, so `@QueryAudit(nPlusOneThreshold = 4)` on a subclass replaces the
+settings of an audited base class. `@QueryAuditExclude` is the exception: on the method, the
+class, a superclass, or an enclosing class, it excludes the test even when a nearer declaration
+enables auditing. `@ExpectQueries` and `@ExpectMaxQueryCount` target methods only, so put them on
+each test method.
 
 ---
 

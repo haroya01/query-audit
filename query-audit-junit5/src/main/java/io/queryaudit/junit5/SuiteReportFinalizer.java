@@ -169,7 +169,7 @@ class SuiteReportFinalizer implements ExtensionContext.Store.CloseableResource {
           new HtmlReporter()
               .writeToFile(
                   outputDirectory,
-                  reports,
+                  runResult,
                   ImpactScorer.rank(
                       reports.stream()
                           .filter(report -> report.getConfirmedIssues() != null)

@@ -616,6 +616,9 @@ runtime dependencies; keep the generated directory together so those links conti
 
 ### Features
 
+- **Run outcome** -- `index.html` opens with the same `PASS`, `FAIL`, or `INCONCLUSIVE` outcome and
+  incomplete reasons as the console and JSON. Only a passing run marks a class without findings as
+  clean; otherwise its status stays neutral and the class page repeats the outcome
 - **Class overview** -- Compare test, issue, query, duration, and status counts by class
 - **Prioritized findings** -- Review cross-test deduplication and the highest-impact findings first
 - **Method drill-down** -- Expand a test method to inspect findings, fixes, and captured query detail

@@ -42,16 +42,16 @@ details when checking your setup.
 | Large lazy-load fixtures | Lazy-event recording has excessive allocation ([#295](https://github.com/haroya01/query-audit/issues/295)) | Start with bounded fixtures and inspect actual SQL counts |
 | SQL safety and result-size findings | Some literal/comment keywords, clause boundaries, and inferred row bounds can cause misses or false positives ([#288](https://github.com/haroya01/query-audit/issues/288), [#291](https://github.com/haroya01/query-audit/issues/291), [#292](https://github.com/haroya01/query-audit/issues/292)) | Add a known violating control for the SQL shape you gate. Use explicit write budgets where the contract forbids writes, and assert affected/result rows separately |
 | Joined-query EXPLAIN analysis | MySQL may omit later plan rows; PostgreSQL may attribute a nested node to the wrong table ([#293](https://github.com/haroya01/query-audit/issues/293), [#294](https://github.com/haroya01/query-audit/issues/294)) | Inspect the complete native plan before acting on an index or scan finding |
-| CI comparison and HTML review | HTML can omit an incomplete verdict, INFO visibility can invalidate comparisons, and method links may not target the right section ([#296](https://github.com/haroya01/query-audit/issues/296), [#297](https://github.com/haroya01/query-audit/issues/297), [#298](https://github.com/haroya01/query-audit/issues/298)) | Gate on the canonical JSON verdict and verify expected coverage; keep comparison settings identical. Open the class page directly for human review |
+| CI comparison and HTML review | INFO visibility can invalidate comparisons, and method links may not target the right section ([#297](https://github.com/haroya01/query-audit/issues/297), [#298](https://github.com/haroya01/query-audit/issues/298)) | Gate on the canonical JSON verdict and verify expected coverage; keep comparison settings identical. Open the class page directly for human review |
 | Saving a finding baseline through the core API | A filename-only relative save path can fail ([#299](https://github.com/haroya01/query-audit/issues/299)) | Supply an absolute path or an explicit parent directory |
 
 ## Shared annotation policies
 
-Use direct `@EnableQueryInspector` / `@QueryAudit` and budget annotations for the first audit.
-A composed/inherited activation gap was reported in
-[#290](https://github.com/haroya01/query-audit/issues/290) against `0.6.0` source. These docs do
-not claim a shipped fix. Before sharing policies through custom annotations or inheritance, require
-an intentional budget failure through the exact declaration your tests will use.
+Since 0.7.0, composed annotations and audited base classes activate QueryAudit with the same
+precedence JUnit uses to register it; see
+[composed and inherited annotations](annotations.md#composed-and-inherited-annotations). In 0.6.x
+those declarations registered the extension but left the test unaudited. Before relying on a shared
+declaration, require one intentional budget failure through it.
 
 ## Reports and shared CI logs
 
