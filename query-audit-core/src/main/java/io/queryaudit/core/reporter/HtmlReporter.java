@@ -3,6 +3,9 @@ package io.queryaudit.core.reporter;
 import io.queryaudit.core.baseline.Baseline;
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.dedup.DeduplicatedIssue;
+import io.queryaudit.core.model.AuditIncompleteReason;
+import io.queryaudit.core.model.AuditOutcome;
+import io.queryaudit.core.model.AuditRunResult;
 import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
@@ -21,7 +24,9 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -100,6 +105,37 @@ public class HtmlReporter implements Reporter {
       List<RankedIssue> rankedIssues,
       List<DeduplicatedIssue> deduplicatedIssues)
       throws IOException {
+    write(outputDir, reports, rankedIssues, deduplicatedIssues, null);
+  }
+
+  /**
+   * Generates the multi-page HTML report for a finished audit run. The pages show the run's
+   * canonical outcome and incomplete reasons, and only a passing run marks finding-free classes as
+   * clean.
+   *
+   * @param outputDir directory where HTML files will be written
+   * @param run the finished run whose reports and outcome are rendered
+   * @param rankedIssues globally ranked issues (may be empty)
+   * @param deduplicatedIssues cross-test deduplicated issues (may be empty)
+   * @throws IOException if files cannot be written
+   */
+  public void writeToFile(
+      Path outputDir,
+      AuditRunResult run,
+      List<RankedIssue> rankedIssues,
+      List<DeduplicatedIssue> deduplicatedIssues)
+      throws IOException {
+    Objects.requireNonNull(run, "run");
+    write(outputDir, run.reports(), rankedIssues, deduplicatedIssues, run);
+  }
+
+  private void write(
+      Path outputDir,
+      List<QueryAuditReport> reports,
+      List<RankedIssue> rankedIssues,
+      List<DeduplicatedIssue> deduplicatedIssues,
+      AuditRunResult run)
+      throws IOException {
     Files.createDirectories(outputDir);
 
     List<DeduplicatedIssue> dedup = deduplicatedIssues != null ? deduplicatedIssues : List.of();
@@ -114,7 +150,7 @@ public class HtmlReporter implements Reporter {
     // Write index.html using buffered streaming to avoid OOM from one giant string
     try (BufferedWriter writer =
         Files.newBufferedWriter(outputDir.resolve("index.html"), StandardCharsets.UTF_8)) {
-      writeIndexHtml(writer, byClass, rankedIssues, dedup);
+      writeIndexHtml(writer, byClass, rankedIssues, dedup, run);
     }
 
     // Write one {ClassName}.html per class using buffered streaming
@@ -124,9 +160,49 @@ public class HtmlReporter implements Reporter {
       try (BufferedWriter writer =
           Files.newBufferedWriter(
               outputDir.resolve(classFileName(className)), StandardCharsets.UTF_8)) {
-        writeClassHtml(writer, className, classReports);
+        writeClassHtml(writer, className, classReports, run);
       }
     }
+  }
+
+  private static boolean cleanStatusAllowed(AuditRunResult run) {
+    return run == null || run.outcome() == AuditOutcome.PASS;
+  }
+
+  private static void appendOutcome(StringBuilder sb, AuditRunResult run) {
+    String outcome = run.outcome().name();
+    sb.append("<section class=\"outcome outcome-")
+        .append(outcome.toLowerCase(Locale.ROOT))
+        .append("\" data-outcome=\"")
+        .append(outcome)
+        .append("\">\n");
+    sb.append("  <h2>Outcome: ").append(outcome).append("</h2>\n");
+    sb.append("  <p>").append(esc(outcomeSummary(run.outcome()))).append("</p>\n");
+    if (!run.incompleteReasons().isEmpty()) {
+      sb.append("  <ul class=\"outcome-reasons\">\n");
+      for (AuditIncompleteReason reason : run.incompleteReasons()) {
+        sb.append("    <li><code>").append(esc(reason.code().name())).append("</code>");
+        if (reason.detail() != null) {
+          sb.append(" ").append(esc(reason.detail()));
+        }
+        sb.append("</li>\n");
+      }
+      sb.append("  </ul>\n");
+    }
+    sb.append("</section>\n");
+  }
+
+  private static String outcomeSummary(AuditOutcome outcome) {
+    return switch (outcome) {
+      case PASS ->
+          "Every audited test completed, and no budget, contract, or enforced finding failed.";
+      case FAIL ->
+          "At least one budget, contract, or enforced finding failed. The failing tests report the"
+              + " details.";
+      case INCONCLUSIVE ->
+          "The audit could not produce a trustworthy verdict. A class without findings is not"
+              + " verified clean.";
+    };
   }
 
   /** Returns a safe file name for a class page. */
@@ -142,7 +218,8 @@ public class HtmlReporter implements Reporter {
       BufferedWriter writer,
       Map<String, List<QueryAuditReport>> byClass,
       List<RankedIssue> rankedIssues,
-      List<DeduplicatedIssue> deduplicatedIssues)
+      List<DeduplicatedIssue> deduplicatedIssues,
+      AuditRunResult run)
       throws IOException {
     String timestamp = LocalDateTime.now().format(TIMESTAMP_FMT);
 
@@ -175,9 +252,12 @@ public class HtmlReporter implements Reporter {
 
     sb.append("<main class=\"container\">\n");
 
+    if (run != null) {
+      appendOutcome(sb, run);
+    }
     // Index page: classes table only. No summary bar (info is in the table).
     // Issues are visible inside each class > method detail page.
-    appendClassesTable(sb, byClass);
+    appendClassesTable(sb, byClass, cleanStatusAllowed(run));
     flushSection(sb, writer);
 
     // Unique Issues Summary (deduplicated cross-test view)
@@ -208,7 +288,10 @@ public class HtmlReporter implements Reporter {
   // =========================================================================
 
   private void writeClassHtml(
-      BufferedWriter writer, String className, List<QueryAuditReport> classReports)
+      BufferedWriter writer,
+      String className,
+      List<QueryAuditReport> classReports,
+      AuditRunResult run)
       throws IOException {
     // Class-level stats
     int totalTests = classReports.size();
@@ -258,6 +341,9 @@ public class HtmlReporter implements Reporter {
     sb.append("<div class=\"breadcrumb\">\n");
     sb.append("  <a href=\"index.html\">&larr; Back to Overview</a>\n");
     sb.append("</div>\n");
+    if (!cleanStatusAllowed(run)) {
+      appendOutcome(sb, run);
+    }
 
     // Class summary bar
     sb.append("<div class=\"summary-bar\">\n");
@@ -273,7 +359,10 @@ public class HtmlReporter implements Reporter {
       sb.append("  <div class=\"stat info\">").append(totalInfos).append(" info</div>\n");
     }
     if (totalErrors == 0 && totalWarnings == 0) {
-      sb.append("  <div class=\"stat ok\">all clean</div>\n");
+      sb.append(
+          cleanStatusAllowed(run)
+              ? "  <div class=\"stat ok\">no findings</div>\n"
+              : "  <div class=\"stat unverified\">no findings</div>\n");
     }
     sb.append(
         "  <div class=\"stat ok class-reviewed-status\" style=\"display:none\">all"
@@ -282,7 +371,7 @@ public class HtmlReporter implements Reporter {
     flushSection(sb, writer);
 
     // Methods as collapsible cards
-    appendMethodCards(sb, writer, classReports);
+    appendMethodCards(sb, writer, classReports, cleanStatusAllowed(run));
 
     sb.append("</main>\n");
 
@@ -518,7 +607,8 @@ public class HtmlReporter implements Reporter {
   // Class-level cards (for index.html)
   // =========================================================================
 
-  private void appendClassesTable(StringBuilder sb, Map<String, List<QueryAuditReport>> byClass) {
+  private void appendClassesTable(
+      StringBuilder sb, Map<String, List<QueryAuditReport>> byClass, boolean cleanStatusAllowed) {
     sb.append("<section class=\"section\">\n");
     sb.append("  <h2>Classes</h2>\n");
     sb.append("  <div class=\"table-wrapper\">\n");
@@ -565,7 +655,7 @@ public class HtmlReporter implements Reporter {
 
       String classHash = LegacyFindingPresentation.htmlReviewHash(classReports);
       sb.append("    <tr class=\"")
-          .append(hasIssues ? "row-fail" : "row-pass")
+          .append(hasIssues ? "row-fail" : cleanStatusAllowed ? "row-pass" : "row-unverified")
           .append("\" data-class=\"")
           .append(esc(className))
           .append("\" data-hash=\"")
@@ -590,8 +680,10 @@ public class HtmlReporter implements Reporter {
       sb.append("      <td>");
       if (hasIssues) {
         sb.append("<span class=\"status-dot error-dot\"></span>");
-      } else {
+      } else if (cleanStatusAllowed) {
         sb.append("<span class=\"status-dot ok-dot\"></span>");
+      } else {
+        sb.append("<span class=\"status-dot unverified-dot\"></span>");
       }
       sb.append("</td>\n");
       sb.append("    </tr>\n");
@@ -609,7 +701,11 @@ public class HtmlReporter implements Reporter {
 
   /** Renders method cards for the class detail page. All methods start collapsed. */
   private void appendMethodCards(
-      StringBuilder sb, BufferedWriter writer, List<QueryAuditReport> reports) throws IOException {
+      StringBuilder sb,
+      BufferedWriter writer,
+      List<QueryAuditReport> reports,
+      boolean cleanStatusAllowed)
+      throws IOException {
     if (reports.isEmpty()) {
       sb.append("<p class=\"empty-message\">No test reports collected.</p>\n");
       flushSection(sb, writer);
@@ -637,9 +733,12 @@ public class HtmlReporter implements Reporter {
       } else if (warningCount > 0) {
         statusDot = "<span class=\"status-indicator warning-dot\"></span>";
         statusClass = "method-warning";
-      } else {
+      } else if (cleanStatusAllowed) {
         statusDot = "<span class=\"status-indicator ok-dot\"></span>";
         statusClass = "method-ok";
+      } else {
+        statusDot = "<span class=\"status-indicator unverified-dot\"></span>";
+        statusClass = "method-unverified";
       }
 
       sb.append("<details class=\"method ").append(statusClass).append("\"");
@@ -700,7 +799,7 @@ public class HtmlReporter implements Reporter {
 
       // No issues message
       if (!hasIssues && findings.acknowledged().isEmpty() && infoCount == 0) {
-        sb.append("  <p class=\"no-issues\">No issues detected. All queries look good.</p>\n");
+        sb.append("  <p class=\"no-issues\">No findings for this test.</p>\n");
       }
 
       sb.append("</details>\n");
