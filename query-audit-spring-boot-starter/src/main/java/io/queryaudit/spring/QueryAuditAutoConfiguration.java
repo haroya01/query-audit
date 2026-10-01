@@ -112,15 +112,6 @@ public class QueryAuditAutoConfiguration {
     return interceptor;
   }
 
-  /**
-   * Collects user extension beans without replacing built-in rules or ServiceLoader providers. Bean
-   * names define stable registration IDs and alphabetical execution order within each SPI. Spring
-   * aliases are not separate registrations; deliberately distinct bean names are. A bean
-   * implementing multiple SPIs is registered once in each supported role.
-   *
-   * <p>A user-supplied catalog replaces this bean collection step, giving programmatic registration
-   * the same meaning in Spring and plain JUnit. Registered beans remain owned by Spring.
-   */
   @Bean
   @ConditionalOnMissingBean(QueryContractScope.class)
   public QueryContractScope queryContractScope(
@@ -135,6 +126,15 @@ public class QueryAuditAutoConfiguration {
         : scope.awaitingCompletion(new ExecutorIdleAwaiter(beanFactory, executors));
   }
 
+  /**
+   * Collects user extension beans without replacing built-in rules or ServiceLoader providers. Bean
+   * names define stable registration IDs and alphabetical execution order within each SPI. Spring
+   * aliases are not separate registrations; deliberately distinct bean names are. A bean
+   * implementing multiple SPIs is registered once in each supported role.
+   *
+   * <p>A user-supplied catalog replaces this bean collection step, giving programmatic registration
+   * the same meaning in Spring and plain JUnit. Registered beans remain owned by Spring.
+   */
   @Bean
   @ConditionalOnMissingBean(AuditExtensions.class)
   public AuditExtensions queryAuditExtensions(ListableBeanFactory beanFactory) {
