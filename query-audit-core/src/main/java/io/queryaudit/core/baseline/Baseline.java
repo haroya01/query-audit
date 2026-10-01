@@ -92,7 +92,9 @@ public final class Baseline {
    * @throws IOException if the file cannot be written
    */
   public static void save(Path baselineFile, List<BaselineEntry> entries) throws IOException {
-    Files.createDirectories(baselineFile.getParent());
+    if (baselineFile.getParent() != null) {
+      Files.createDirectories(baselineFile.getParent());
+    }
     try (BufferedWriter writer = Files.newBufferedWriter(baselineFile, StandardCharsets.UTF_8)) {
       writer.write("# QueryAudit Baseline — acknowledged issues");
       writer.newLine();
