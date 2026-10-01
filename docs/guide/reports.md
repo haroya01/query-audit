@@ -320,7 +320,7 @@ may be `null` when no additional context is available:
 | `QUERY_LIMIT_REACHED` | JUnit query capture exceeded `max-queries`; retained queries are still analyzed and reported. |
 | `DATASOURCE_UNAVAILABLE` | An active JUnit audit could not resolve a `DataSource`. |
 | `AUDIT_INITIALIZATION_FAILED` | An active JUnit audit could not install reliable query capture, including unsupported concurrent execution. |
-| `AUDIT_ANALYSIS_FAILED` | QueryAudit could not complete analysis for an active test. Earlier per-test reports remain available, but the suite is incomplete. |
+| `AUDIT_ANALYSIS_FAILED` | QueryAudit could not complete analysis for an active test. Earlier per-test reports remain available, but the suite is incomplete. The detail names capture problems such as `UNATTRIBUTED_QUERY` or `LAZY_LOAD_LIMIT_REACHED`. |
 | `CONTRACT_UNREADABLE` | The query contract or query-count baseline was unreadable or malformed. |
 | `POLICY_WRITE_FAILED` | Requested contract or query-count baseline recording failed. The launcher fails and the suite outcome is `INCONCLUSIVE`, even in report-only mode. |
 | `UNSUPPORTED_SCHEMA` | Report comparison received a schema it cannot evaluate safely, including legacy 1.0 input with no outcome. |
