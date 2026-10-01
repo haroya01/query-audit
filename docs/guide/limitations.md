@@ -47,11 +47,11 @@ details when checking your setup.
 
 ## Shared annotation policies
 
-Use direct `@EnableQueryInspector` / `@QueryAudit` and budget annotations for the first audit.
-A composed/inherited activation gap was reported in
-[#290](https://github.com/haroya01/query-audit/issues/290) against `0.6.0` source. These docs do
-not claim a shipped fix. Before sharing policies through custom annotations or inheritance, require
-an intentional budget failure through the exact declaration your tests will use.
+Since 0.7.0, composed annotations and audited base classes activate QueryAudit with the same
+precedence JUnit uses to register it; see
+[composed and inherited annotations](annotations.md#composed-and-inherited-annotations). In 0.6.x
+those declarations registered the extension but left the test unaudited. Before relying on a shared
+declaration, require one intentional budget failure through it.
 
 ## Reports and shared CI logs
 

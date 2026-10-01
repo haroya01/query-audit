@@ -35,7 +35,7 @@ final class ComparisonInputRecorder {
       QueryAudit annotation = settings.findAnnotation(context);
       FindingFailurePolicy.from(annotation).recordInto(inlineLimits);
       Method method = context.getRequiredTestMethod();
-      ExpectQueries queries = method.getAnnotation(ExpectQueries.class);
+      ExpectQueries queries = AuditAnnotations.onMethod(method, ExpectQueries.class);
       if (queries != null) {
         inlineLimits.put("expectQueriesPresent", 1);
         inlineLimits.put("select", queries.select());
@@ -44,17 +44,11 @@ final class ComparisonInputRecorder {
         inlineLimits.put("delete", queries.delete());
         if (queries.total() >= 0) inlineLimits.put("total", queries.total());
       }
-      ExpectMaxQueryCount maximum = method.getAnnotation(ExpectMaxQueryCount.class);
+      ExpectMaxQueryCount maximum = AuditAnnotations.onMethod(method, ExpectMaxQueryCount.class);
       if (maximum != null) {
         inlineLimits.put("maximumQueries", maximum.value());
       }
-      boolean detectsNPlusOne = method.isAnnotationPresent(DetectNPlusOne.class);
-      for (Class<?> testType = context.getRequiredTestClass();
-          testType != null;
-          testType = testType.getEnclosingClass()) {
-        detectsNPlusOne |= testType.isAnnotationPresent(DetectNPlusOne.class);
-      }
-      if (detectsNPlusOne) {
+      if (settings.findDetectNPlusOne(context) != null) {
         inlineLimits.put("detectNPlusOne", analyzer.getConfig().getNPlusOneThreshold());
       }
       AuditPolicyInputs policy =

@@ -26,10 +26,10 @@ final class AuditTestAssertions {
       var method = scope.context().getRequiredTestMethod();
       requireSatisfied(
           AuditAssertions.maxQueryCountFailure(
-              method.getAnnotation(ExpectMaxQueryCount.class),
+              AuditAnnotations.onMethod(method, ExpectMaxQueryCount.class),
               result.queries(),
               result.testName()));
-      ExpectQueries inlineBudget = method.getAnnotation(ExpectQueries.class);
+      ExpectQueries inlineBudget = AuditAnnotations.onMethod(method, ExpectQueries.class);
       if (inlineBudget != null) {
         requireSatisfied(
             AuditAssertions.buildExpectQueriesFailureMessage(

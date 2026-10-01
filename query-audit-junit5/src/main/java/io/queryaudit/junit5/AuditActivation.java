@@ -41,7 +41,8 @@ final class AuditActivation {
   boolean isActive(AuditScope scope) {
     ExtensionContext context = scope.context();
     Optional<Method> method = context.getTestMethod();
-    if (method.isPresent() && method.get().isAnnotationPresent(QueryAuditExclude.class)) {
+    if (method.isPresent()
+        && AuditAnnotations.onMethod(method.get(), QueryAuditExclude.class) != null) {
       return false;
     }
     if (settings.isClassExcluded(context.getRequiredTestClass())) {
