@@ -80,6 +80,7 @@ final class AuditResources {
     if (closed) throw new IllegalStateException("Audit resources have already closed");
     QueryCaptureSession session =
         QueryCaptureSession.open(interceptor, tracker, scope.identity(), maxQueries);
+    session.adoptUnboundWork();
     session.setPhase(LifecyclePhase.SETUP);
     InvocationCapture capture = new InvocationCapture(scope, this, session);
     captures.add(capture);

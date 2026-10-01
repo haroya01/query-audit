@@ -4,6 +4,7 @@ import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.parser.SqlParser;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -11,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.ttddyy.dsproxy.ExecutionInfo;
 import net.ttddyy.dsproxy.QueryInfo;
 import net.ttddyy.dsproxy.listener.QueryExecutionListener;
+import net.ttddyy.dsproxy.proxy.ParameterSetOperation;
 
 /**
  * Intercepts SQL queries via datasource-proxy and records all statements (SELECT, INSERT, UPDATE,
@@ -154,7 +156,8 @@ public class QueryInterceptor implements QueryExecutionListener {
                 System.currentTimeMillis(),
                 stackTrace,
                 stackHash,
-                phase));
+                phase,
+                parameterHash(sql, queryInfo)));
       }
     }
   }
@@ -299,6 +302,17 @@ public class QueryInterceptor implements QueryExecutionListener {
   }
 
   private record CapturedStack(String frames, int fullHash) {}
+
+  private static int parameterHash(String sql, QueryInfo queryInfo) {
+    int hash = sql.hashCode();
+    for (List<ParameterSetOperation> parameters : queryInfo.getParametersList()) {
+      for (ParameterSetOperation parameter : parameters) {
+        Object[] args = parameter.getArgs();
+        hash = 31 * hash + (args == null ? 0 : Arrays.deepHashCode(args));
+      }
+    }
+    return hash == 0 ? 1 : hash;
+  }
 
   private static boolean shouldSkip(String className) {
     if (className.contains("$$SpringCGLIB$$") || className.contains("$$EnhancerBySpringCGLIB$$")) {

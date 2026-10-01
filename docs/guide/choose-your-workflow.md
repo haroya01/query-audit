@@ -10,7 +10,7 @@ applies them to an existing Spring Boot suite.
 
 | To keep… | Add | The test fails when |
 |---|---|---|
-| A fixed N+1 from returning | `@QueryAudit` on the class | the same SELECT runs three or more times from one call site |
+| A fixed N+1 from returning | `@QueryAudit` on the class | the same SELECT runs three or more times from one call site with different values |
 | A read path bounded and free of writes | `@ExpectQueries(select = 2, insert = 0, update = 0, delete = 0)` | it runs more SELECTs than the limit or any listed write |
 | A request's or job's exact counts | [`QueryContractScope`](contracts.md#contract-a-request-or-job) and a recorded contract | any count changes, in either direction, until it is re-recorded |
 | Every audited test's exact counts | [Record mode](contracts.md#recording) across the suite | any recorded test's counts change |

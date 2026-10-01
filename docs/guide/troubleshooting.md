@@ -205,11 +205,12 @@ Do not automatically regenerate it to make CI pass. See [contracts](contracts.md
 Since 0.7.0, concurrent audited classes and methods each capture into their own session. QueryAudit
 0.6.x rejects concurrent audited methods; keep those versions on the same thread.
 
-`UNATTRIBUTED_QUERY` means JDBC work ran without an invocation binding while capture was active.
-With Spring, name the pools that the test hands work to in
-[`await-executors`](configuration.md#background-work). Otherwise wrap executor tasks with
-`QueryCaptureSession.wrap` on the test thread and join them before the test returns. `QUERY_STILL_RUNNING`, `ASYNC_WORK_STILL_RUNNING` or `WORK_AFTER_CAPTURE` mean work
-outlived its capture boundary. They are incomplete evidence, not a clean audit. See
+`UNATTRIBUTED_QUERY` means JDBC work ran on another thread while several audits were active, so
+QueryAudit could not tell which test it belonged to. A test that runs alone counts that work; see
+[background work](configuration.md#background-work). With parallel audits, wrap executor tasks with
+`QueryCaptureSession.wrap` on the test thread and join them before the test returns.
+`QUERY_STILL_RUNNING`, `ASYNC_WORK_STILL_RUNNING` or `WORK_AFTER_CAPTURE` mean work outlived its
+capture boundary; name the pools in `await-executors` so the test waits for them. They are incomplete evidence, not a clean audit. See
 [Parallel capture](extensions.md#parallel-capture) for a complete example and lifecycle boundaries.
 
 Use a separate EntityManager/transaction per test and keep custom extensions thread-safe. Avoid

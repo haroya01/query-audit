@@ -171,12 +171,20 @@ final class AuditAssertions {
         issue
             .sourceLocation()
             .lines()
+            .filter(AuditAssertions::isApplicationFrame)
             .limit(5)
             .forEach(frame -> sb.append("\n      at ").append(frame));
       }
       sb.append("\n");
     }
     return sb.toString();
+  }
+
+  private static boolean isApplicationFrame(String frame) {
+    return !frame.startsWith("java.")
+        && !frame.startsWith("jdk.")
+        && !frame.startsWith("sun.")
+        && !frame.startsWith("worker.org.gradle.");
   }
 
   static String contractFailure(
