@@ -306,6 +306,29 @@ class QueryAuditExtensionAfterAllTest {
     }
 
     @Test
+    @DisplayName("HTML shows an incomplete run as INCONCLUSIVE, not as clean")
+    void htmlShowsIncompleteRunOutcome(@TempDir Path tempDir) throws IOException {
+      HtmlReportAggregator.getInstance()
+          .addReport(
+              new QueryAuditReport(
+                  "ClassA", "test1", List.of(), List.of(), List.of(), List.of(), 0, 1, 1_000L));
+      QueryAuditExtension.AuditRunState runState = runStateWithReports();
+      runState.markIncomplete(AuditIncompleteReason.of(IncompleteReasonCode.QUERY_LIMIT_REACHED));
+      Path outputDirectory = tempDir.resolve("incomplete-html");
+
+      new QueryAuditExtension.ReportFinalizer(
+              new QueryAuditExtension(), outputDirectory, ReportFormat.HTML, runState)
+          .close();
+
+      assertThat(Files.readString(outputDirectory.resolve("index.html")))
+          .contains("data-outcome=\"INCONCLUSIVE\"", "QUERY_LIMIT_REACHED")
+          .doesNotContain("class=\"row-pass\"");
+      assertThat(Files.readString(outputDirectory.resolve("ClassA.html")))
+          .contains("data-outcome=\"INCONCLUSIVE\"")
+          .doesNotContain("No issues detected", "stat ok\">");
+    }
+
+    @Test
     @DisplayName("a JSON write failure invalidates the audit run")
     void jsonWriteFailureInvalidatesRun(@TempDir Path tempDir) throws IOException {
       addReports();

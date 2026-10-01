@@ -20,7 +20,7 @@ class HtmlReportAssetsTest {
   @Test
   void extractedAssetsPreserveTheExistingRenderedBytes() throws Exception {
     assertThat(digest(asset("report.css")))
-        .isEqualTo("8df1719eb6bb0e65208ffe6f9f860566aee6866f30624f97619d997d1f436a19");
+        .isEqualTo("11c0dcb265459a62d3b6b16f30b5e62d674c2c3222be5d9097dadddd687bcbc4");
     assertThat(digest(asset("report.js")))
         .isEqualTo("0bee2c2cd37c26140d35590af002ac4ed15733aad0a69c1e93b4d028540c5de1");
   }
