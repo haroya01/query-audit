@@ -49,6 +49,7 @@ public class QueryAuditProperties {
   private int maxQueries = 10_000;
   private Report report = new Report();
   private Contracts contracts = new Contracts();
+  private List<String> awaitExecutors = new ArrayList<>();
   private List<String> disabledRules = new ArrayList<>();
   private Map<String, String> severityOverrides = new HashMap<>();
   private LargeInList largeInList = new LargeInList();
@@ -150,6 +151,14 @@ public class QueryAuditProperties {
 
   public void setContracts(Contracts contracts) {
     this.contracts = contracts;
+  }
+
+  public List<String> getAwaitExecutors() {
+    return awaitExecutors;
+  }
+
+  public void setAwaitExecutors(List<String> awaitExecutors) {
+    this.awaitExecutors = awaitExecutors;
   }
 
   public String getBaselinePath() {
@@ -320,7 +329,6 @@ public class QueryAuditProperties {
 
   public static class Contracts {
     private String path = QueryContracts.DEFAULT_FILE_NAME;
-    private List<String> awaitExecutors = new ArrayList<>();
 
     public String getPath() {
       return path;
@@ -328,14 +336,6 @@ public class QueryAuditProperties {
 
     public void setPath(String path) {
       this.path = path;
-    }
-
-    public List<String> getAwaitExecutors() {
-      return awaitExecutors;
-    }
-
-    public void setAwaitExecutors(List<String> awaitExecutors) {
-      this.awaitExecutors = awaitExecutors;
     }
   }
 

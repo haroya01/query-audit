@@ -19,7 +19,6 @@ import io.queryaudit.core.reporter.delivery.ReportSinkRegistration;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
@@ -28,12 +27,14 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 
 /**
@@ -112,18 +113,24 @@ public class QueryAuditAutoConfiguration {
     return interceptor;
   }
 
+  // The JUnit extension looks this bean up by name to wait for, and count, off-thread work.
+  @Bean(name = "queryAuditBackgroundWork")
+  @Conditional(AwaitExecutorsDeclared.class)
+  ExecutorIdleAwaiter queryAuditBackgroundWork(
+      QueryAuditProperties properties, ListableBeanFactory beanFactory) {
+    return new ExecutorIdleAwaiter(beanFactory, properties.getAwaitExecutors());
+  }
+
   @Bean
   @ConditionalOnMissingBean(QueryContractScope.class)
   public QueryContractScope queryContractScope(
       QueryInterceptor interceptor,
       QueryAuditProperties properties,
-      ListableBeanFactory beanFactory) {
+      ObjectProvider<ExecutorIdleAwaiter> backgroundWork) {
     QueryContractScope scope =
         QueryContractScope.of(interceptor, Path.of(properties.getContracts().getPath()));
-    List<String> executors = properties.getContracts().getAwaitExecutors();
-    return executors.isEmpty()
-        ? scope
-        : scope.awaitingCompletion(new ExecutorIdleAwaiter(beanFactory, executors));
+    ExecutorIdleAwaiter awaitIdle = backgroundWork.getIfAvailable();
+    return awaitIdle == null ? scope : scope.awaitingCompletion(awaitIdle);
   }
 
   /**

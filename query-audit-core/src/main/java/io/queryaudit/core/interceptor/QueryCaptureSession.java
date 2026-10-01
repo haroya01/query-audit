@@ -1,6 +1,7 @@
 package io.queryaudit.core.interceptor;
 
 import io.queryaudit.core.model.LifecyclePhase;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -47,6 +48,7 @@ public final class QueryCaptureSession implements AutoCloseable {
   private volatile LifecyclePhase phase = LifecyclePhase.TEST;
   private boolean stopped;
   private volatile boolean closed;
+  private volatile boolean adoptsUnboundWork;
   private int inFlightQueries;
   private int runningTasks;
   private int pendingTasks;
@@ -108,6 +110,15 @@ public final class QueryCaptureSession implements AutoCloseable {
       if (lazyRouter != null) remove(LAZY_ACTIVE, lazyRouter, this);
     }
     return snapshot;
+  }
+
+  /**
+   * Counts SQL and lazy loads from threads without a capture binding toward this session while it
+   * is the only active capture on its router. With several active captures that work stays
+   * unattributed, because it cannot be assigned to one of them.
+   */
+  public void adoptUnboundWork() {
+    adoptsUnboundWork = true;
   }
 
   /** Returns immutable diagnostic codes; SQL, identifiers, and exception messages are excluded. */
@@ -197,10 +208,22 @@ public final class QueryCaptureSession implements AutoCloseable {
     }
     Set<QueryCaptureSession> sessions = ACTIVE.get(router);
     if (sessions == null || sessions.isEmpty()) return null;
+    QueryCaptureSession adopter = soleAdopter(sessions);
+    if (adopter != null) {
+      Origin selected = adopter.beginQuery(started);
+      return selected == IGNORED && router.isActive() ? LEGACY : selected;
+    }
     if (UNBOUND_WORK_CLAIMS.get() == 0) {
       sessions.forEach(session -> session.incompleteReasons.add("UNATTRIBUTED_QUERY"));
     }
     return router.isActive() ? LEGACY : IGNORED;
+  }
+
+  private static QueryCaptureSession soleAdopter(Set<QueryCaptureSession> sessions) {
+    Iterator<QueryCaptureSession> active = sessions.iterator();
+    if (!active.hasNext()) return null;
+    QueryCaptureSession only = active.next();
+    return !active.hasNext() && only.adoptsUnboundWork ? only : null;
   }
 
   private synchronized Origin beginQuery(boolean started) {
@@ -232,6 +255,11 @@ public final class QueryCaptureSession implements AutoCloseable {
     }
     Set<QueryCaptureSession> sessions = LAZY_ACTIVE.get(router);
     if (sessions == null || sessions.isEmpty()) return false;
+    QueryCaptureSession adopter = soleAdopter(sessions);
+    if (adopter != null) {
+      adopter.recordLazy(record);
+      return true;
+    }
     if (UNBOUND_WORK_CLAIMS.get() == 0) {
       sessions.forEach(session -> session.incompleteReasons.add("UNATTRIBUTED_LAZY_LOAD"));
     }

@@ -206,8 +206,9 @@ Since 0.7.0, concurrent audited classes and methods each capture into their own 
 0.6.x rejects concurrent audited methods; keep those versions on the same thread.
 
 `UNATTRIBUTED_QUERY` means JDBC work ran without an invocation binding while capture was active.
-Wrap executor tasks with `QueryCaptureSession.wrap` on the test thread and join them before the
-test returns. `QUERY_STILL_RUNNING`, `ASYNC_WORK_STILL_RUNNING` or `WORK_AFTER_CAPTURE` mean work
+With Spring, name the pools that the test hands work to in
+[`await-executors`](configuration.md#background-work). Otherwise wrap executor tasks with
+`QueryCaptureSession.wrap` on the test thread and join them before the test returns. `QUERY_STILL_RUNNING`, `ASYNC_WORK_STILL_RUNNING` or `WORK_AFTER_CAPTURE` mean work
 outlived its capture boundary. They are incomplete evidence, not a clean audit. See
 [Parallel capture](extensions.md#parallel-capture) for a complete example and lifecycle boundaries.
 

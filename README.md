@@ -95,9 +95,9 @@ The Spring Boot starter provides it:
 
 ```yaml
 query-audit:
+  await-executors: [taskExecutor]
   contracts:
     path: src/test/resources/query-contracts
-    await-executors: [taskExecutor]
 ```
 
 ```java

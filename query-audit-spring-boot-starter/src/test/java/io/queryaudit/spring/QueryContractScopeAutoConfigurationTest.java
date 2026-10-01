@@ -65,8 +65,7 @@ class QueryContractScopeAutoConfigurationTest {
 
     runner
         .withPropertyValues(
-            "query-audit.contracts.path=" + contracts,
-            "query-audit.contracts.await-executors=clickExecutor")
+            "query-audit.contracts.path=" + contracts, "query-audit.await-executors=clickExecutor")
         .run(
             context -> {
               QueryContractScope scope = context.getBean(QueryContractScope.class);
@@ -88,11 +87,19 @@ class QueryContractScopeAutoConfigurationTest {
   }
 
   @Test
+  void registersTheBackgroundWorkOnlyWhenExecutorsAreNamed() {
+    runner.run(context -> assertThat(context).doesNotHaveBean("queryAuditBackgroundWork"));
+    runner
+        .withPropertyValues("query-audit.await-executors=clickExecutor")
+        .run(context -> assertThat(context).hasBean("queryAuditBackgroundWork"));
+  }
+
+  @Test
   void namesAnExecutorThatDoesNotExist() {
     runner
         .withPropertyValues(
             "query-audit.contracts.path=" + contracts,
-            "query-audit.contracts.await-executors=missingExecutor")
+            "query-audit.await-executors=missingExecutor")
         .run(
             context ->
                 assertThatThrownBy(

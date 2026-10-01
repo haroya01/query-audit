@@ -111,9 +111,9 @@ or job you hand it, not fixture setup or assertions, and waits for the thread po
 
 ```yaml
 query-audit:
+  await-executors: [taskExecutor]
   contracts:
     path: src/test/resources/query-contracts
-    await-executors: [taskExecutor]
 ```
 
 ```java
