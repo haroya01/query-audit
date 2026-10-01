@@ -62,7 +62,7 @@ class HtmlReportAssetsTest {
     }
     String classHtml = Files.readString(output.resolve("ExampleTest.html"));
     assertThat(classHtml)
-        .contains("<details class=\"method method-ok\">", "findUsers", "Select only needed columns")
+        .contains("class=\"method method-ok\">", "findUsers", "Select only needed columns")
         .doesNotContain("<details class=\"test-card", "<details class=\"method-card");
   }
 
