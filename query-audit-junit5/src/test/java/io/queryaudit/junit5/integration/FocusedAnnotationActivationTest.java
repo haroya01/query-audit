@@ -138,7 +138,7 @@ class FocusedAnnotationActivationTest {
       try (Connection connection = DATA_SOURCE.getConnection();
           Statement statement = connection.createStatement()) {
         for (int i = 0; i < count; i++) {
-          statement.executeQuery("SELECT 1").close();
+          statement.executeQuery("SELECT " + (i + 1)).close();
         }
       }
     }

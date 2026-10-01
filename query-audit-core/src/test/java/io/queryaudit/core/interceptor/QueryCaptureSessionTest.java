@@ -164,6 +164,18 @@ class QueryCaptureSessionTest {
   }
 
   @Test
+  void lazyLoadsBeyondTheCaptureLimitMakeTheCaptureIncomplete() {
+    try (QueryCaptureSession session = QueryCaptureSession.open(router, lazyRouter, "owner", 2)) {
+      for (int id = 0; id < 3; id++) {
+        lazyRouter.recordProxyResolved("Entity", id);
+      }
+      session.stop();
+      assertThat(session.tracker().getRecords()).hasSize(2);
+      assertThat(session.incompleteReasons()).containsExactly("LAZY_LOAD_LIMIT_REACHED");
+    }
+  }
+
+  @Test
   void unboundWorkersAreIncompleteInsteadOfSilentlyPassing() throws Exception {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     try (QueryCaptureSession session = QueryCaptureSession.open(router, lazyRouter, "owner", 10)) {

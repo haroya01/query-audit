@@ -63,7 +63,7 @@ public final class QueryCaptureSession implements AutoCloseable {
     interceptor.setMaxQueries(maxQueries);
     interceptor.start();
     router.getConnectionTracker().copyOpenConnectionsTo(interceptor.getConnectionTracker());
-    tracker = lazyRouter == null ? null : new LazyLoadTracker(true);
+    tracker = lazyRouter == null ? null : new LazyLoadTracker(true, maxQueries);
     if (tracker != null) tracker.start();
     add(ACTIVE, router, this);
     if (lazyRouter != null) {
@@ -104,7 +104,10 @@ public final class QueryCaptureSession implements AutoCloseable {
       if (runningTasks > 0) incompleteReasons.add("ASYNC_WORK_STILL_RUNNING");
       if (pendingTasks > 0) incompleteReasons.add("ASYNC_WORK_NOT_COMPLETED");
       interceptor.stop();
-      if (tracker != null) tracker.stop();
+      if (tracker != null) {
+        tracker.stop();
+        if (tracker.getDroppedEventCount() > 0) incompleteReasons.add("LAZY_LOAD_LIMIT_REACHED");
+      }
       snapshot = interceptor.snapshot();
       remove(ACTIVE, router, this);
       if (lazyRouter != null) remove(LAZY_ACTIVE, lazyRouter, this);
