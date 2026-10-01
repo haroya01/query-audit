@@ -1,15 +1,16 @@
 # Detection Rules Overview
 
-Use this reference after a test reports a query finding. Find the issue code, inspect its
-captured SQL and available call-site or database evidence, then decide whether the rule belongs
-in that test's policy. Start with `@EnableQueryInspector` to review findings without making them
-fatal; explicit query budgets still fail when exceeded.
+The default `recommended` profile runs one built-in rule: [call-site N+1](n-plus-one.md). Every
+other rule on this page is optional. Turn rules on with `profile: minimal`, `profile: strict`, or
+`enabled-rules` ([rule profiles](../guide/configuration.md#rule-profiles)), and review what they
+report under `@EnableQueryInspector` before making them fatal. Explicit query budgets and
+contracts fail regardless of the profile.
 
-For the primary workflows—keeping reads free of writes, reviewing count-contract diffs,
-locating failing SQL, and comparing complete CI runs—start with
-[Choose Your Workflow](../guide/choose-your-workflow.md). Detection rules provide supporting
-evidence for those decisions. The tables below retain the rule codes and requirements, including
-[disabled or reserved entries](#disabled-reserved-rules).
+Use this reference after a test reports a finding. Find the issue code, inspect its captured SQL
+and available call-site or database evidence, then decide whether the rule belongs in that test's
+policy. To keep a fixed path from regressing, start with
+[Lock a Fixed Path](../guide/choose-your-workflow.md). The tables below retain the rule codes and
+requirements, including [disabled or reserved entries](#disabled-reserved-rules).
 
 ---
 
