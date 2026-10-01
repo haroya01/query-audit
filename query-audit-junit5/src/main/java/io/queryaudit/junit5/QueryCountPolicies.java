@@ -66,7 +66,7 @@ final class QueryCountPolicies {
     }
     Optional<Method> method = scope.context().getTestMethod();
     boolean inlineContract =
-        method.isPresent() && method.get().getAnnotation(ExpectQueries.class) != null;
+        method.isPresent() && AuditAnnotations.onMethod(method.get(), ExpectQueries.class) != null;
     LegacyPolicyIdentities.track(
         scope, "query contract", contracts, testId, testClass, testName, !inlineContract);
     if (inlineContract) {

@@ -8,13 +8,13 @@ import io.queryaudit.core.config.RuleProfile;
 import io.queryaudit.core.detector.RepositoryReturnTypeResolver;
 import io.queryaudit.core.regression.QueryContracts;
 import io.queryaudit.core.regression.QueryCountBaseline;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.ExtensionConfigurationException;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
@@ -86,14 +86,7 @@ final class AuditSettingsResolver {
   }
 
   static boolean isClassExcluded(Class<?> testClass) {
-    Class<?> clazz = testClass;
-    while (clazz != null) {
-      if (clazz.isAnnotationPresent(QueryAuditExclude.class)) {
-        return true;
-      }
-      clazz = clazz.getEnclosingClass();
-    }
-    return false;
+    return AuditAnnotations.onClass(testClass, QueryAuditExclude.class) != null;
   }
 
   AuditMode resolveAuditMode(ExtensionContext context) {
@@ -109,18 +102,7 @@ final class AuditSettingsResolver {
   }
 
   static boolean hasDirectExtendWith(ExtensionContext context) {
-    Class<?> clazz = context.getRequiredTestClass();
-    while (clazz != null) {
-      for (ExtendWith extendWith : clazz.getAnnotationsByType(ExtendWith.class)) {
-        for (Class<?> registered : extendWith.value()) {
-          if (registered == QueryAuditExtension.class) {
-            return true;
-          }
-        }
-      }
-      clazz = clazz.getEnclosingClass();
-    }
-    return false;
+    return AuditAnnotations.registersExtension(context.getRequiredTestClass());
   }
 
   static boolean hasFocusedAuditAnnotation(ExtensionContext context) {
@@ -129,24 +111,18 @@ final class AuditSettingsResolver {
       return true;
     }
 
-    Class<?> clazz = context.getRequiredTestClass();
-    while (clazz != null) {
-      if (clazz.isAnnotationPresent(DetectNPlusOne.class)) {
-        return true;
-      }
-      clazz = clazz.getEnclosingClass();
-    }
-    return false;
+    return AuditAnnotations.onClass(context.getRequiredTestClass(), DetectNPlusOne.class) != null;
   }
 
   static boolean isMethodLevelOptIn(Method method) {
-    return method.isAnnotationPresent(QueryAudit.class) || hasFocusedAuditAnnotation(method);
+    return AuditAnnotations.onMethod(method, QueryAudit.class) != null
+        || hasFocusedAuditAnnotation(method);
   }
 
   static boolean hasFocusedAuditAnnotation(Method method) {
-    return method.isAnnotationPresent(DetectNPlusOne.class)
-        || method.isAnnotationPresent(ExpectQueries.class)
-        || method.isAnnotationPresent(ExpectMaxQueryCount.class);
+    return AuditAnnotations.onMethod(method, DetectNPlusOne.class) != null
+        || AuditAnnotations.onMethod(method, ExpectQueries.class) != null
+        || AuditAnnotations.onMethod(method, ExpectMaxQueryCount.class) != null;
   }
 
   QueryAuditConfig buildConfig(ExtensionContext context, RepositoryReturnTypeResolver resolver) {
@@ -249,49 +225,27 @@ final class AuditSettingsResolver {
   }
 
   boolean hasEnableQueryInspector(ExtensionContext context) {
-    Class<?> clazz = context.getRequiredTestClass();
-    while (clazz != null) {
-      if (clazz.isAnnotationPresent(EnableQueryInspector.class)) return true;
-      clazz = clazz.getEnclosingClass();
-    }
-    return false;
+    return AuditAnnotations.onClass(context.getRequiredTestClass(), EnableQueryInspector.class)
+        != null;
   }
 
   DetectNPlusOne findDetectNPlusOne(ExtensionContext context) {
-    Optional<Method> method = context.getTestMethod();
-    if (method.isPresent()) {
-      DetectNPlusOne annotation = method.get().getAnnotation(DetectNPlusOne.class);
-      if (annotation != null) {
-        return annotation;
-      }
-    }
-    Class<?> clazz = context.getRequiredTestClass();
-    while (clazz != null) {
-      DetectNPlusOne annotation = clazz.getAnnotation(DetectNPlusOne.class);
-      if (annotation != null) {
-        return annotation;
-      }
-      clazz = clazz.getEnclosingClass();
-    }
-    return null;
+    return findOnMethodOrClass(context, DetectNPlusOne.class);
   }
 
   QueryAudit findAnnotation(ExtensionContext context) {
+    return findOnMethodOrClass(context, QueryAudit.class);
+  }
+
+  private static <A extends Annotation> A findOnMethodOrClass(
+      ExtensionContext context, Class<A> type) {
     // getTestMethod() returns Optional.empty() in afterAll (class-level context)
     Optional<Method> testMethod = context.getTestMethod();
     if (testMethod.isPresent()) {
-      QueryAudit annotation = testMethod.get().getAnnotation(QueryAudit.class);
+      A annotation = AuditAnnotations.onMethod(testMethod.get(), type);
       if (annotation != null) return annotation;
     }
-
-    Class<?> clazz = context.getRequiredTestClass();
-    while (clazz != null) {
-      QueryAudit annotation = clazz.getAnnotation(QueryAudit.class);
-      if (annotation != null) return annotation;
-      clazz = clazz.getEnclosingClass();
-    }
-
-    return null;
+    return AuditAnnotations.onClass(context.getRequiredTestClass(), type);
   }
 
   Path resolveCountBaselinePath(ExtensionContext context) {
