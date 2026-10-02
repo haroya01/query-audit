@@ -113,8 +113,7 @@ database credentials and service setup.
         }
         ```
 
-    The lowercase `queryaudit` in the last property is intentional. With these settings, omit the
-    Spring profile variable from the script below and replace `QueryBudgetTest` in the test filter
+    With these settings, omit the Spring profile variable from the script below and replace `QueryBudgetTest` in the test filter
     with your actual class name (`FirstAuditTest` for the quick start). For command-line-selectable settings and Maven,
     see [CI build-tool setup](ci-cd.md#plain-junit-build-tool-setup).
 

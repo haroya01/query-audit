@@ -300,100 +300,56 @@ Without Spring, wrap the tasks with `QueryCaptureSession.wrap`; see
 
 Copy-paste these presets for typical use cases.
 
-=== "Recommended (new projects)"
+=== "New project (default)"
 
-    Start with the default rule set and tighter thresholds for a new project.
+    The default profile runs only the call-site N+1 rule. Name the pools your requests hand work
+    to, and keep contracts next to the tests.
 
     ```yaml
     query-audit:
-      enabled: true
-      profile: recommended
-      fail-on-detection: true
-      n-plus-one:
-        threshold: 2
-      slow-query:
-        warning-ms: 200
-        error-ms: 1000
-      too-many-joins:
-        threshold: 3
-      large-in-list:
-        threshold: 50
-      report:
-        format: console
-        show-info: true
+      profile: recommended               # call-site N+1 only
+      await-executors: [taskExecutor]    # wait for @Async work and count its SQL
+      contracts:
+        path: src/test/resources/query-contracts
     ```
 
-=== "Gradual adoption (legacy projects)"
+=== "Gradual adoption"
 
-    Start with report-only mode to inventory existing issues without breaking builds.
+    Report N+1 findings without failing tests while you review the existing ones. Budgets and
+    contracts still fail.
 
     ```yaml
     query-audit:
-      enabled: true
-      fail-on-detection: false          # Report only, no failures
-      suppress-patterns:
-        - "select-all"                   # Suppress common legacy patterns
-        - "offset-pagination"
+      fail-on-detection: false           # report findings, keep budgets and contracts
       report:
-        format: console
-        show-info: false                 # Hide noise from INFO findings
+        format: html
     ```
 
 === "CI pipeline"
 
-    Optimized for headless CI environments.
+    Write the JSON report that the [first CI check](first-ci-check.md) and report comparison read.
 
     ```yaml
     query-audit:
-      enabled: true
-      fail-on-detection: true
-      auto-open-report: false            # No browser in CI
+      auto-open-report: false            # no browser in CI
       report:
-        format: console
+        format: json
         output-dir: build/reports/query-audit
-      suppress-queries:
-        - "SELECT 1"                     # Health-check queries
-        - "SHOW WARNINGS"               # MySQL driver internals
     ```
 
-=== "Performance-focused"
+=== "Index and SQL review"
 
-    Tight thresholds for performance-critical services.
+    Other rules run only when a profile or `enabled-rules` selects them. `minimal` adds index,
+    join, and write-safety rules; `strict` runs every rule. Index rules need the MySQL or
+    PostgreSQL module and that database.
 
     ```yaml
     query-audit:
-      enabled: true
-      fail-on-detection: true
-      n-plus-one:
-        threshold: 2                     # Strict N+1 detection
+      profile: minimal
       slow-query:
-        warning-ms: 100                  # Flag anything over 100ms
-        error-ms: 500                    # Fail on anything over 500ms
-      too-many-joins:
-        threshold: 3                     # Strict join limit
-      large-in-list:
-        threshold: 50                    # Tighter IN list limit
-      excessive-column:
-        threshold: 10                    # Discourage wide queries
+        warning-ms: 200
+        error-ms: 1000
     ```
-
-=== "Minimal (N+1 only)"
-
-    Only detect the single most impactful anti-pattern.
-
-    ```yaml
-    query-audit:
-      enabled: true
-      fail-on-detection: true
-      disabled-rules:                    # Disable everything except N+1
-        - "select-all"
-        - "missing-where-index"
-        - "offset-pagination"
-        # ... add all other rule codes you want to skip
-    ```
-
-    !!! tip
-        The default `recommended` profile already runs only the N+1 rule.
 
 ### Recommended Threshold Values
 
@@ -409,7 +365,9 @@ Copy-paste these presets for typical use cases.
 | `or-clause.threshold` | 5 | 3 | 2 |
 | `repeated-update.threshold` | 5 | 3 | 2 |
 
-!!! tip "Choosing the right profile"
+Thresholds other than `n-plus-one.threshold` apply only when their rule is enabled.
+
+!!! tip "Choosing threshold values"
     - **Conservative**: Use when adopting QueryAudit in a large existing codebase.
       Minimizes false positives at the cost of missing some real issues.
     - **Moderate (default)**: Balanced for most projects. Good starting point.

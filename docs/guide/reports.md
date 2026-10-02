@@ -96,8 +96,8 @@ excerpt from the console report:
     Query:  select id, order_id, sku from order_items where order_id = ?
     Source: com.example.OrderService.findOrders:42
     Target: order_items
-    Detail: Query repeated 3 times (threshold: 3)
-    Fix:    Use JOIN FETCH, @EntityGraph, or batch loading (IN clause)
+    Detail: The same SELECT ran 3 times from one call site
+    Fix:    Load the rows once before the loop: JOIN FETCH, @EntityGraph, or one query with an IN list.
 
 --- Query Patterns ---
   [  3x] select id, order_id, sku from order_items where order_id = ?

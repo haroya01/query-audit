@@ -7,7 +7,9 @@ description: Check the published library's capabilities, upgrade notes, report s
 
 These guides describe **published QueryAudit `0.7.1`**. Keep every QueryAudit module on the same
 version. The release code is tagged [`v0.7.1`](https://github.com/haroya01/query-audit/tree/v0.7.1).
-`0.7.0` was tagged but not published to Maven Central; `0.7.1` is the first 0.7 release there.
+`0.7.0` is also on Maven Central, but use `0.7.1`: in 0.7.0 SQL that a server thread runs, as with
+`RANDOM_PORT` tests, does not count toward the test, so an N+1 behind such a request does not fail
+the test and the run is only `INCONCLUSIVE`.
 
 ## What you can use in 0.7.1
 
