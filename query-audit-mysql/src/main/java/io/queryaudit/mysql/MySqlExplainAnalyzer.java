@@ -38,62 +38,80 @@ public class MySqlExplainAnalyzer implements ExplainAnalyzer {
     return "mysql";
   }
 
-  @Override
-  public List<Issue> analyze(Connection connection, List<QueryRecord> queries) {
-    List<Issue> issues = new ArrayList<>();
-    Set<String> analyzed = new HashSet<>();
+    @Override
+    public List<Issue> analyze(Connection connection, List<QueryRecord> queries) {
+        List<Issue> issues = new ArrayList<>();
+        Set<String> analyzed = new HashSet<>();
 
-    for (QueryRecord query : queries) {
-      String sql = query.sql();
-      if (!SqlParser.isSelectQuery(sql)) {
-        continue;
-      }
-      if (sql.indexOf('?') >= 0) {
-        throw new ExplainAnalysisException(
-            ExplainAnalysisException.Reason.UNSUPPORTED_PARAMETERS,
-            issues,
-            new SQLFeatureNotSupportedException("Captured bind values and types are unavailable"));
-      }
-      if (!analyzed.add(sql)) {
-        continue;
-      }
+        for (QueryRecord query : queries) {
+            String sql = query.sql();
+            if (!SqlParser.isSelectQuery(sql)) {
+                continue;
+            }
+            if (sql.indexOf('?') >= 0) {
+                throw new ExplainAnalysisException(
+                    ExplainAnalysisException.Reason.UNSUPPORTED_PARAMETERS,
+                    issues,
+                    new SQLFeatureNotSupportedException("Captured bind values and types are unavailable"));
+            }
+            if (!analyzed.add(sql)) {
+                continue;
+            }
 
-      try {
-        ExplainRow row = runExplain(connection, sql);
-        if (row == null) {
-          throw new SQLException("EXPLAIN returned no query plan");
-        }
+            try {
+                List<ExplainRow> rows = runExplain(connection, sql);
+                if (rows.isEmpty()) {
+                    throw new SQLException("EXPLAIN returned no query plan");
+                }
 
-        if ("ALL".equalsIgnoreCase(row.type)) {
-          issues.add(fullTableScanIssue(query, row));
+                // Track issues per table to avoid duplicates within the same query
+                Set<String> reportedIssues = new HashSet<>();
+
+                for (ExplainRow row : rows) {
+                    if ("ALL".equalsIgnoreCase(row.type)) {
+                        String issueKey = row.table + ":" + IssueType.FULL_TABLE_SCAN;
+                        if (!reportedIssues.contains(issueKey)) {
+                            issues.add(fullTableScanIssue(query, row));
+                            reportedIssues.add(issueKey);
+                        }
+                    }
+                    if (row.extra != null && row.extra.contains("Using filesort")) {
+                        String issueKey = row.table + ":" + IssueType.FILESORT;
+                        if (!reportedIssues.contains(issueKey)) {
+                            issues.add(filesortIssue(query, row));
+                            reportedIssues.add(issueKey);
+                        }
+                    }
+                    if (row.extra != null && row.extra.contains("Using temporary")) {
+                        String issueKey = row.table + ":" + IssueType.TEMPORARY_TABLE;
+                        if (!reportedIssues.contains(issueKey)) {
+                            issues.add(temporaryTableIssue(query, row));
+                            reportedIssues.add(issueKey);
+                        }
+                    }
+                }
+            } catch (Exception failure) {
+                throw new ExplainAnalysisException(issues, failure);
+            }
         }
-        if (row.extra != null && row.extra.contains("Using filesort")) {
-          issues.add(filesortIssue(query, row));
-        }
-        if (row.extra != null && row.extra.contains("Using temporary")) {
-          issues.add(temporaryTableIssue(query, row));
-        }
-      } catch (Exception failure) {
-        throw new ExplainAnalysisException(issues, failure);
-      }
+        return issues;
     }
-    return issues;
-  }
 
-  ExplainRow runExplain(Connection conn, String sql) throws SQLException {
-    try (Statement stmt = conn.createStatement();
-        ResultSet rs = stmt.executeQuery("EXPLAIN " + sql)) {
-      if (rs.next()) {
-        return new ExplainRow(
-            rs.getString("table"),
-            rs.getString("type"),
-            rs.getString("key"),
-            rs.getLong("rows"),
-            rs.getString("Extra"));
-      }
+    List<ExplainRow> runExplain(Connection conn, String sql) throws SQLException {
+        List<ExplainRow> rows = new ArrayList<>();
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("EXPLAIN " + sql)) {
+            while (rs.next()) {
+                rows.add(new ExplainRow(
+                    rs.getString("table"),
+                    rs.getString("type"),
+                    rs.getString("key"),
+                    rs.getLong("rows"),
+                    rs.getString("Extra")));
+            }
+        }
+        return rows;
     }
-    return null;
-  }
 
   private Issue fullTableScanIssue(QueryRecord query, ExplainRow row) {
     String detail =
