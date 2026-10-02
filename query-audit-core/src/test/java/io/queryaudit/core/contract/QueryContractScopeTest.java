@@ -60,7 +60,7 @@ class QueryContractScopeTest {
                           fire("UPDATE links SET viewed_at = ? WHERE id = ?");
                           return null;
                         }))
-        .isInstanceOf(AssertionError.class)
+        .isInstanceOf(QueryContractViolation.class)
         .hasMessageContaining(
             "link-list deviates from its recorded query contract ("
                 + directory.resolve("api.contracts")
@@ -74,7 +74,7 @@ class QueryContractScopeTest {
     write("api.contracts", "@junit | link-list | 1 | 0 | 0 | 0 | 1");
 
     assertThatThrownBy(() -> scope().verify("link-create", () -> null))
-        .isInstanceOf(AssertionError.class)
+        .isInstanceOf(QueryContractViolation.class)
         .hasMessageContaining("Missing query contract: link-create")
         .hasMessageContaining("Measured: @junit | link-create | 0 | 0 | 0 | 0 | 0")
         .hasMessageContaining(directory.resolve(".query-audit-contracts").toString())
@@ -96,7 +96,7 @@ class QueryContractScopeTest {
                           fire("SELECT 2");
                           return null;
                         }))
-        .isInstanceOf(AssertionError.class)
+        .isInstanceOf(QueryContractViolation.class)
         .hasMessageContaining("discarded 1 queries");
   }
 
@@ -213,7 +213,7 @@ class QueryContractScopeTest {
                 fire("SELECT 2");
               }
             })
-        .isInstanceOf(AssertionError.class)
+        .isInstanceOf(QueryContractViolation.class)
         .hasMessageContaining("SELECT: contract 1, executed 2 (+1)");
   }
 
@@ -233,7 +233,7 @@ class QueryContractScopeTest {
             failure ->
                 assertThat(failure.getSuppressed())
                     .singleElement()
-                    .isInstanceOf(AssertionError.class));
+                    .isInstanceOf(QueryContractViolation.class));
   }
 
   @Test
