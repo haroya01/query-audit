@@ -9,6 +9,7 @@ edit_uri: edit/main/docs/
 # Theme templates are rendered by Material, not served as standalone pages.
 exclude_docs: |
   /overrides/
+  /hooks/
 
 theme:
   name: material
@@ -51,8 +52,40 @@ extra_css:
 
 plugins:
   - search
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: ko
+          name: 한국어
+          build: true
+          site_description: JUnit 5 테스트에서 N+1 쿼리를 호출 위치로 찾고, 고친 쿼리 수를 계약으로 고정하고, PR을 게이트해요
+          nav_translations:
+            Home: 홈
+            Start Here: 시작하기
+            Install in Your Project: 프로젝트에 설치
+            Spring Boot Setup: Spring Boot 설정
+            Run the Example: 예제 실행
+            Guides: 가이드
+            Find an N+1: N+1 찾기
+            How N+1 Detection Works: N+1 탐지 방식
+            Lock the Fix: 고친 경로 고정
+            Lock a Fixed Path: 고친 경로 고정하기
+            Query Contracts: 쿼리 계약
+            Gate the Pull Request: PR 게이트
+            Your First CI Check: 첫 CI 체크
+            Reference: 레퍼런스
+            Extend and Contribute: 확장과 기여
   - minify:
       minify_html: true
+hooks:
+  - docs/hooks/translation_status.py
 
 markdown_extensions:
   - pymdownx.highlight:

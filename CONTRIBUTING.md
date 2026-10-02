@@ -19,6 +19,7 @@ Thank you for considering contributing to QueryAudit! Whether it's a bug report,
 - [Coding Conventions](#coding-conventions)
 - [Commit Message Guidelines](#commit-message-guidelines)
 - [Pull Request Process](#pull-request-process)
+- [Documentation and Translations](#documentation-and-translations)
 - [Good First Issues](#good-first-issues)
 - [License](#license)
 
@@ -432,6 +433,33 @@ dispatched just to test the setup; inspect the environment's branch policy and s
 The environment permits the workflow from `main`; the validated release tag still determines the
 source checked out for publication. See GitHub's [environment configuration guide](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)
 for the repository settings.
+
+---
+
+## Documentation and Translations
+
+The documentation site is built with MkDocs Material from `docs/`. English pages are the source.
+Korean translations of the entry pages sit next to them with a `.ko.md` suffix, for example
+`docs/guide/contracts.ko.md`. Under `/ko/`, a page without a translation falls back to English.
+
+Build the site with the pinned toolchain:
+
+```bash
+python3 -m pip install -r docs/requirements.txt
+mkdocs build --strict
+```
+
+Each Korean page records `source_digest`, the first 12 hexadecimal characters of the SHA-256 of
+the English page it translates. When the English page changes, the Korean page shows a notice that
+the translation is older than the source. After you update a translation, refresh the digest:
+
+```bash
+shasum -a 256 docs/guide/contracts.md | cut -c1-12
+```
+
+Keep heading IDs identical to the English page with `{#id}` so that links and anchors work in both
+languages. An English change does not have to update its translation in the same pull request; the
+notice tells readers which page is behind.
 
 ---
 
