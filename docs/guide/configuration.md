@@ -577,7 +577,7 @@ their presence in configuration does not mean that the corresponding check ran.
 | `correlated-subquery` | `CORRELATED_SUBQUERY` | Correlated subquery in SELECT |
 | `redundant-index` | `REDUNDANT_INDEX` | Redundant index (prefix of another) |
 | `slow-query` | `SLOW_QUERY` | Query exceeding time threshold |
-| `unbounded-result-set` | `UNBOUNDED_RESULT_SET` | SELECT without LIMIT |
+| `unbounded-result-set` | `UNBOUNDED_RESULT_SET` | SELECT whose outer result set is not proven bounded |
 | `write-amplification` | `WRITE_AMPLIFICATION` | Too many indexes on table |
 | `implicit-type-conversion` | `IMPLICIT_TYPE_CONVERSION` | Implicit type conversion disables index |
 | `order-by-limit-no-index` | `ORDER_BY_LIMIT_WITHOUT_INDEX` | ORDER BY + LIMIT without index |

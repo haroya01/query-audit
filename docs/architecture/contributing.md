@@ -90,7 +90,8 @@ python3 -m venv .venv-docs
 
 Open the local address printed by `mkdocs serve`; stop it with Ctrl+C. The Documentation
 workflow builds relevant pull requests and publishes only from `main`. Keep the pinned direct
-dependencies in `docs/requirements.txt` aligned with the locally verified toolchain.
+dependencies in `docs/requirements.txt` aligned with the locally verified toolchain, following
+the [dependency policy](#documentation-dependency-policy) below.
 
 The [first-run tutorial](../getting-started/quickstart.md) includes its Java source directly from
 `examples/first-audit`. Missing snippet files fail the docs build. Verify the example separately:
@@ -107,6 +108,41 @@ The example consumes a pinned Maven Central release, independently of the source
 new artifact is published, update its `build.gradle`, `PUBLISHED_VERSION` in the verifier, and the
 [version guide](../getting-started/versions.md) together, then rerun both checks. Keep the first-run
 example on a published dependency during release preparation.
+
+### Documentation dependency policy
+
+`docs/requirements.txt` is the only place documentation package versions are declared. The
+Documentation workflow installs it with `python -m pip install -r docs/requirements.txt` under
+Python 3.12, so local builds, pull request validation, and Pages deployment all resolve the same
+inputs from the same file. Do not add a second version list to the workflow.
+
+Direct dependencies are pinned exactly with `==`. Transitive dependencies are deliberately left
+unpinned. Locking the full transitive closure would mean committing a generated lock file and
+maintaining it with an extra Python lock tool, which is a poor trade for a build that only ever
+runs MkDocs in strict mode. The cost of that choice is accepted on purpose: an unpinned library can
+change between builds, so an upstream release can alter the build with no change in this
+repository. In exchange, the pinned direct versions, the shared `mkdocs.yml`, and the strict build
+keep that drift visible as a build failure rather than a quietly different site. Reproducible here
+means the same declared inputs, configuration, and strict command on every path — not
+byte-identical output across time.
+
+### Updating documentation dependencies
+
+1. Change the pinned version in `docs/requirements.txt`.
+2. Rebuild from a clean environment so the new version is exercised, not a cached one:
+
+   ```bash
+   rm -rf .venv-docs
+   python3 -m venv .venv-docs
+   .venv-docs/bin/python -m pip install -r docs/requirements.txt
+   .venv-docs/bin/mkdocs build --strict
+   ```
+
+3. Open a pull request. Because this file lives under `docs/`, editing it triggers the
+   Documentation workflow like any other documentation change, and that workflow rebuilds the
+   site with `mkdocs build --strict`.
+4. Check the rendered site on the pull request before merging. Pages publishes only after the
+   change reaches `main`.
 
 ---
 

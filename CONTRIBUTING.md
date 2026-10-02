@@ -132,6 +132,30 @@ Run the same check locally with:
 The temporary Maven repository stays under `query-audit-core/build`. It needs no signing key;
 Maven Central publications still require signing.
 
+### Documentation site
+
+The documentation toolchain is defined once, in `docs/requirements.txt`. Local builds, pull request
+validation, and GitHub Pages deployment all install that same file and run the same strict command,
+so a green local build is what CI checks. Use Python 3.12, the version the Documentation workflow
+pins:
+
+```bash
+python3 -m venv .venv-docs
+.venv-docs/bin/python -m pip install -r docs/requirements.txt
+.venv-docs/bin/mkdocs build --strict
+.venv-docs/bin/mkdocs serve   # optional: preview at the printed local address
+```
+
+`--strict` turns documentation warnings into build failures; never drop it. The Documentation
+workflow validates every pull request that touches `docs/**` (which includes
+`docs/requirements.txt`), `mkdocs.yml`, `.github/workflows/docs.yml`, or
+`examples/first-audit/**`, and it deploys to Pages only from `main`. Pull requests, including forks,
+get a read-only validation job with no Pages credentials.
+
+Direct dependencies are pinned exactly and transitive dependencies are deliberately not locked; the
+policy and the dependency update procedure are documented in
+[Maintaining the Codebase](docs/architecture/contributing.md#documentation-dependency-policy).
+
 ### Test Categories
 
 | Test | Purpose |

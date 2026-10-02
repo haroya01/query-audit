@@ -347,7 +347,7 @@ suppression, and baselines.
 | LazyLoadNPlusOneDetector | `N_PLUS_ONE` | ERROR | Hibernate events: same lazy collection/proxy initialized for `threshold`+ distinct owners. |
 | SelectAllDetector | `SELECT_ALL` | INFO | `SELECT *` usage |
 | CountInsteadOfExistsDetector | `COUNT_INSTEAD_OF_EXISTS` | INFO | `COUNT(*)` where `EXISTS` is better |
-| UnboundedResultSetDetector | `UNBOUNDED_RESULT_SET` | WARNING | SELECT without LIMIT |
+| UnboundedResultSetDetector | `UNBOUNDED_RESULT_SET` | WARNING | SELECT whose outer result set is not proven bounded (no outer `LIMIT`/`FETCH`, and no PRIMARY KEY/UNIQUE equality) |
 | SlowQueryDetector | `SLOW_QUERY` | WARNING/ERROR | Queries exceeding time thresholds |
 | ~~DuplicateQueryDetector~~ | `DUPLICATE_QUERY` | WARNING | Exact duplicate SQL *(disabled)* |
 | CoveringIndexDetector | `COVERING_INDEX_OPPORTUNITY` | INFO | Queries that could use covering indexes |

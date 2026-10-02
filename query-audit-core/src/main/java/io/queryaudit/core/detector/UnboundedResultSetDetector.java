@@ -39,7 +39,9 @@ import java.util.regex.Pattern;
  *       match many rows, so {@code WHERE tenant_id = ?} stays reportable;
  *   <li>{@code EXISTS (...)} or {@code IN (SELECT ...)} in the outer WHERE. Those bound the
  *       subquery's rows, not the rows the outer statement returns;
- *   <li>a {@code LIMIT} on a derived table, scalar subquery or set operand.
+ *   <li>a {@code LIMIT} on a derived table or a scalar subquery. Those cap an inner scope only. A
+ *       set operation's trailing {@code LIMIT} is different — it caps the combined result, so it
+ *       does count as a bound;
  * </ul>
  *
  * <p>Other exclusions that are not row bounds but not result sets either: aggregate-only

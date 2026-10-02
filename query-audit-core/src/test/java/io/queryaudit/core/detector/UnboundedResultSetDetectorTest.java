@@ -246,6 +246,118 @@ class UnboundedResultSetDetectorTest {
       assertThat(issues).as("LIMIT/FETCH text outside a real clause must not suppress").hasSize(1);
       assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
     }
+
+    @Test
+    void offsetWithoutLimitDoesNotBoundTheResult() {
+      // OFFSET alone skips rows; it never caps them.
+      List<Issue> issues =
+          detector.evaluate(List.of(record("SELECT * FROM orders OFFSET 10 ROWS")), EMPTY_INDEX);
+
+      assertThat(issues).as("a bare OFFSET is not a row cap").hasSize(1);
+    }
+
+    @Test
+    void topNTopKGroupRowLimitIsHonoured() {
+      // TiDB/ClickHouse top-N: LIMIT n BY group returns at most n rows per group.
+      List<Issue> issues =
+          detector.evaluate(List.of(record("SELECT * FROM orders ORDER BY id LIMIT 1 BY user_id")),
+              EMPTY_INDEX);
+
+      assertThat(issues).as("LIMIT n BY group caps every group").isEmpty();
+    }
+
+    @Test
+    void unparseableSelectStillFailsClosed() {
+      // Parsing fails, so no bound is proven. The query must stay reportable rather than fall back
+      // to a text match that might "find" a limit that isn't there.
+      List<Issue> issues = detector.evaluate(List.of(record("SELECT * FROM")), EMPTY_INDEX);
+
+      assertThat(issues).as("an unparseable SELECT must not be silently suppressed").hasSize(1);
+    }
+  }
+
+  // ── a set operation's limit bounds the union, a branch's does not (#292) ──
+
+  @Nested
+  class SetOperationRowLimits {
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = {
+          "SELECT * FROM a UNION SELECT * FROM b LIMIT 1",
+          "SELECT * FROM a UNION ALL SELECT * FROM b LIMIT 1 OFFSET 2",
+          "SELECT * FROM a INTERSECT SELECT * FROM b LIMIT 1",
+          "SELECT * FROM a EXCEPT SELECT * FROM b LIMIT 1",
+          "SELECT * FROM a UNION SELECT * FROM b ORDER BY id LIMIT 1",
+          "SELECT * FROM a UNION SELECT * FROM b FETCH FIRST 2 ROWS ONLY",
+          "SELECT * FROM a UNION ALL (SELECT * FROM b LIMIT 1) LIMIT 2",
+          "SELECT * FROM a UNION (SELECT * FROM b UNION SELECT * FROM c) LIMIT 1"
+        })
+    void aLimitOnTheWholeSetOperationBoundsTheResult(String sql) {
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      assertThat(issues).as("a trailing limit caps the combined result set").isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = {
+          "SELECT * FROM a UNION ALL SELECT * FROM b",
+          // Only the parenthesized branch is capped; the union still returns every row of a.
+          "SELECT * FROM a UNION (SELECT * FROM b LIMIT 1)",
+          "SELECT * FROM (SELECT * FROM x LIMIT 1) t UNION SELECT * FROM b"
+        })
+    void aLimitInsideOneBranchDoesNotBoundTheResult(String sql) {
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      assertThat(issues).as("a branch-local limit leaves the union unbounded").hasSize(1);
+    }
+  }
+
+  // ── uniqueness must be proven on the table actually being queried (#292) ──
+
+  @Nested
+  class MetadataMustBelongToTheQueriedTable {
+
+    private final IndexMetadata accountsPrimaryKey =
+        new IndexMetadata(
+            Map.of("accounts", List.of(new IndexInfo("accounts", "PRIMARY", "id", 1, false, 2))));
+
+    @Test
+    void anotherTablesPrimaryKeyDoesNotBoundThisQuery() {
+      List<Issue> issues =
+          detector.evaluate(
+              List.of(record("SELECT id FROM orders WHERE id = ?")), accountsPrimaryKey);
+
+      assertThat(issues)
+          .as("accounts' primary key says nothing about how many orders match")
+          .hasSize(1);
+    }
+
+    @Test
+    void theQueriedTablesOwnPrimaryKeyDoesBoundIt() {
+      List<Issue> issues =
+          detector.evaluate(
+              List.of(record("SELECT id FROM accounts WHERE id = ?")), accountsPrimaryKey);
+
+      assertThat(issues).isEmpty();
+    }
+
+    @Test
+    void uniqueMetadataForTheRightTableIsNotAppliedToTheWrongColumn() {
+      IndexMetadata ordersByTenant =
+          new IndexMetadata(
+              Map.of("orders", List.of(new IndexInfo("orders", "UNIQUE", "email", 1, false, 5))));
+
+      // email is unique, but this query filters on tenant_id.
+      List<Issue> issues =
+          detector.evaluate(
+              List.of(record("SELECT id FROM orders WHERE tenant_id = ?")), ordersByTenant);
+
+      assertThat(issues)
+          .as("a unique index on another column does not bound a different predicate")
+          .hasSize(1);
+    }
   }
 
   // ── name-only uniqueness is not a row bound (#292) ─────────────────

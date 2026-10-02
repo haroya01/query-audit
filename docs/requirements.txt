@@ -1,4 +1,20 @@
-# Direct documentation dependencies used for the strict site build.
+# Documentation dependencies — the single toolchain for local builds, pull request
+# validation, and GitHub Pages deployment. All three install this file and run the same
+# strict build, so do not declare a second version list in the workflow.
+#
+# Policy: direct dependencies are pinned exactly (==); transitive dependencies are
+# deliberately left unpinned. Locking the transitive closure would mean committing a generated
+# lock file and maintaining it with an extra Python lock tool, for a build that only ever runs
+# MkDocs with --strict. The trade-off is accepted on purpose: an unpinned library can change
+# between builds, and the pinned direct versions plus the strict build are what turn that drift
+# into a visible build failure rather than a quietly different site.
+#
+# Update procedure: edit the version here, then rebuild from a clean environment and open a
+# pull request. This file lives under docs/, so editing it triggers the Documentation workflow
+# like any other documentation change.
+#
+# Policy rationale and full procedure:
+# docs/architecture/contributing.md#documentation-dependency-policy
 mkdocs==1.6.1
 mkdocs-material==9.7.7
 mkdocs-minify-plugin==0.8.0
