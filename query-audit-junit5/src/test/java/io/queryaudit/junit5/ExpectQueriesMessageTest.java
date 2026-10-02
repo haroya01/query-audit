@@ -39,6 +39,12 @@ class ExpectQueriesMessageTest {
 
     @ExpectQueries(select = 5, total = 2)
     void typeAndTotalBudgets() {}
+
+    @ExpectQueries(select = 2, insert = 0, exact = true)
+    void exactSelectsNoInserts() {}
+
+    @ExpectQueries(total = 3, exact = true)
+    void exactTotal() {}
   }
 
   private static ExpectQueries budget(String fixtureMethod) throws NoSuchMethodException {
@@ -82,6 +88,63 @@ class ExpectQueriesMessageTest {
   }
 
   @Test
+  void exactCountFailsWhenFewerQueriesRun() throws NoSuchMethodException {
+    String message =
+        QueryAuditExtension.buildExpectQueriesFailureMessage(
+            budget("exactSelectsNoInserts"),
+            List.of(query("select * from orders")),
+            "listOrders()");
+
+    assertThat(message)
+        .startsWith("QueryAudit: listOrders() did not match its exact query counts.")
+        .contains("SELECT: executed 1, expected exactly 2.")
+        .contains("select * from orders")
+        .contains("at " + CALL_SITE)
+        .doesNotContain("INSERT:");
+  }
+
+  @Test
+  void exactCountFailsWhenMoreQueriesRun() throws NoSuchMethodException {
+    List<QueryRecord> queries = List.of(query("select 1"), query("select 2"), query("select 3"));
+
+    assertThat(
+            QueryAuditExtension.buildExpectQueriesFailureMessage(
+                budget("exactSelectsNoInserts"), queries, "listOrders()"))
+        .contains("SELECT: executed 3, expected exactly 2.");
+  }
+
+  @Test
+  void exactCountPassesOnlyAtTheDeclaredCount() throws NoSuchMethodException {
+    assertThat(
+            QueryAuditExtension.buildExpectQueriesFailureMessage(
+                budget("exactSelectsNoInserts"),
+                List.of(query("select 1"), query("select 2")),
+                "listOrders()"))
+        .isNull();
+    assertThat(
+            QueryAuditExtension.buildExpectQueriesFailureMessage(
+                budget("exactSelectsNoInserts"),
+                List.of(query("select 1"), query("select 2"), query("insert into t values (1)")),
+                "listOrders()"))
+        .contains("INSERT: executed 1, expected exactly 0.");
+  }
+
+  @Test
+  void exactAppliesToTheTotalAndLeavesUndeclaredTypesFree() throws NoSuchMethodException {
+    List<QueryRecord> threeMixed =
+        List.of(query("select 1"), query("insert into t values (1)"), query("delete from t"));
+
+    assertThat(
+            QueryAuditExtension.buildExpectQueriesFailureMessage(
+                budget("exactTotal"), threeMixed, "sync()"))
+        .isNull();
+    assertThat(
+            QueryAuditExtension.buildExpectQueriesFailureMessage(
+                budget("exactTotal"), threeMixed.subList(0, 2), "sync()"))
+        .contains("TOTAL: executed 2, expected exactly 3.");
+  }
+
+  @Test
   @DisplayName("Fails when the SELECT budget is exceeded, listing SQL and call site")
   void failsWhenSelectBudgetExceeded() throws NoSuchMethodException {
     List<QueryRecord> queries =
@@ -92,7 +155,7 @@ class ExpectQueriesMessageTest {
             budget("selectBudgetOne"), queries, "createOrder()");
 
     assertThat(message)
-        .contains("createOrder()")
+        .startsWith("QueryAudit: createOrder() exceeded its query budget.")
         .contains("SELECT: executed 2, expected at most 1")
         .contains("select * from orders")
         .contains("select * from members")

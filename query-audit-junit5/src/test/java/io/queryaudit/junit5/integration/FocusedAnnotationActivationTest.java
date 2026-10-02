@@ -75,6 +75,24 @@ class FocusedAnnotationActivationTest {
   }
 
   @Test
+  @DisplayName("exact query counts fail below the declared count and pass at it")
+  void exactQueryCountsFailBelowTheDeclaredCount() {
+    TestExecutionSummary summary = runFixtures(ExactQueriesFixture.class);
+
+    assertThat(summary.getTestsFoundCount()).isEqualTo(2);
+    assertThat(summary.getTestsSucceededCount()).isEqualTo(1);
+    assertThat(summary.getFailures())
+        .singleElement()
+        .satisfies(
+            failure -> {
+              assertThat(failure.getTestIdentifier().getDisplayName()).isEqualTo("runsOneSelect()");
+              assertThat(failure.getException())
+                  .hasMessageContaining("did not match its exact query counts")
+                  .hasMessageContaining("SELECT: executed 1, expected exactly 2.");
+            });
+  }
+
+  @Test
   @DisplayName("@DetectNPlusOne fails a repeated call-site SELECT at method and class scope")
   void detectNPlusOneActivatesAtBothScopes() {
     TestExecutionSummary summary =
@@ -157,6 +175,22 @@ class FocusedAnnotationActivationTest {
     @ExpectQueries(select = 0)
     void executesSelect() throws SQLException {
       executeSelects(1);
+    }
+  }
+
+  @EnabledIfSystemProperty(named = FIXTURE_PROPERTY, matches = "true")
+  static class ExactQueriesFixture extends FocusedAnnotationDataSourceFixture {
+
+    @Test
+    @ExpectQueries(select = 2, exact = true)
+    void runsOneSelect() throws SQLException {
+      executeSelects(1);
+    }
+
+    @Test
+    @ExpectQueries(select = 2, exact = true)
+    void runsTwoSelects() throws SQLException {
+      executeSelects(2);
     }
   }
 
