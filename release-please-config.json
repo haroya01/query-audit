@@ -30,6 +30,11 @@
         },
         {
           "type": "generic",
+          "path": "docs/getting-started/installation.ko.md",
+          "glob": false
+        },
+        {
+          "type": "generic",
           "path": "docs/getting-started/quickstart.md",
           "glob": false
         },
