@@ -207,11 +207,16 @@ Scoped IDs use the same line format as test methods:
 | Situation | Result |
 |---|---|
 | Counts match | passes and returns the work's result |
-| Counts differ in either direction | `AssertionError` with the delta, the SQL of the grown types, and the contract file |
-| No entry for the scope ID | `AssertionError` with the measured line to add |
+| Counts differ in either direction | `QueryContractViolation` with the delta, the SQL of the grown types, and the contract file |
+| No entry for the scope ID | `QueryContractViolation` with the measured line to add |
 | The same ID in two files | `IllegalStateException` |
-| The capture reached `max-queries` | `AssertionError`; a truncated capture cannot verify a contract |
+| The capture reached `max-queries` | `QueryContractViolation`; a truncated capture cannot verify a contract |
 | A scope is still open | `IllegalStateException` naming the open scope |
+
+`QueryContractViolation` is an `AssertionError`. Since 0.7.2, a test that ends with one also makes
+the run's JSON outcome `FAIL`, even in a test class without an audit annotation, and the console
+summary names the test. A test that catches the violation itself, such as with `assertThrows`,
+does not. In 0.7.1 the failure showed only as a failed test.
 
 Test methods without a recorded contract pass, because contracts apply to every audited test
 automatically. A scope without a contract fails, because the test asked for one.

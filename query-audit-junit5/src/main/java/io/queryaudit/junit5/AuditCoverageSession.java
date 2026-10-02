@@ -35,6 +35,7 @@ final class AuditCoverageSession {
   private final Map<String, QueryAuditReport> reports = new LinkedHashMap<>();
   private boolean finalized;
   private Object extensionRoot;
+  private ContractViolations contractViolations = new ContractViolations();
 
   private AuditCoverageSession(Set<String> expected, List<AuditIncompleteReason> manifestFailures) {
     this.expected = expected;
@@ -42,6 +43,10 @@ final class AuditCoverageSession {
   }
 
   static AuditCoverageSession open(TestPlan testPlan) {
+    return open(testPlan, new ContractViolations());
+  }
+
+  static AuditCoverageSession open(TestPlan testPlan, ContractViolations contractViolations) {
     String configuredPath = AuditCoverageManifest.configuredPath();
     Path manifest;
     AuditCoverageSession session;
@@ -67,6 +72,7 @@ final class AuditCoverageSession {
                       IncompleteReasonCode.COVERAGE_MANIFEST_UNREADABLE,
                       "The expected-test manifest could not be loaded.")));
     }
+    session.contractViolations = contractViolations;
     for (TestIdentifier root : testPlan.getRoots()) {
       session.discovered(root);
       for (TestIdentifier test : testPlan.getDescendants(root)) {
@@ -129,7 +135,8 @@ final class AuditCoverageSession {
     reasons.addAll(manifestFailures);
     return AuditRunResult.determine(
             result.reports(),
-            result.outcome() == io.queryaudit.core.model.AuditOutcome.FAIL,
+            result.outcome() == io.queryaudit.core.model.AuditOutcome.FAIL
+                || !contractViolations.tests().isEmpty(),
             reasons)
         .withComparisonInputs(result.comparisonInputs())
         .withCoverage(coverage());

@@ -32,6 +32,7 @@ class SuiteReportFinalizer implements ExtensionContext.Store.CloseableResource {
   private final ReportRedaction reportRedaction;
   private final SuiteAuditState runState;
   private AuditCoverageSession coverageSession;
+  private ContractViolations contractViolations;
   private volatile boolean autoOpen;
   private List<ReportSinkRegistration> reportSinks;
   private PublicationResult publicationResult;
@@ -80,6 +81,10 @@ class SuiteReportFinalizer implements ExtensionContext.Store.CloseableResource {
               + requestedFormat.name().toLowerCase(Locale.ROOT)
               + "'. Use one query-audit.report.format value for all active test contexts.");
     }
+  }
+
+  synchronized void requireContractViolations(ContractViolations requested) {
+    if (contractViolations == null) contractViolations = requested;
   }
 
   synchronized void requireCoverageSession(AuditCoverageSession requestedSession) {
@@ -142,6 +147,13 @@ class SuiteReportFinalizer implements ExtensionContext.Store.CloseableResource {
       return;
     }
     closed = true;
+    List<String> violatedContracts =
+        contractViolations == null ? List.of() : contractViolations.tests();
+    if (!violatedContracts.isEmpty()) {
+      runState.markPolicyFailed();
+      violatedContracts.forEach(
+          testId -> System.out.println("[QueryAudit] Query contract failed in " + testId));
+    }
     List<QueryAuditReport> reports =
         coverageSession == null ? runState.retainedReports() : coverageSession.reports();
     AuditRunResult runResult = runState.result(reports);
