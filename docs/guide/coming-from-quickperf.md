@@ -23,7 +23,7 @@ Try one existing SQL test before applying the setup across the suite.
 | Your goal | QuickPerf approach | QueryAudit approach |
 |---|---|---|
 | Allow at most two SELECTs | `@ExpectMaxSelect(2)` | `@ExpectQueries(select = 2)` |
-| Require exactly two SELECTs | `@ExpectSelect(2)` | Keep the exact assertion, or deliberately adopt a [snapshot contract](contracts.md) for all recorded SELECT/INSERT/UPDATE/DELETE counts. `@ExpectQueries(select = 2)` permits fewer SELECTs |
+| Require exactly two SELECTs | `@ExpectSelect(2)` | `@ExpectQueries(select = 2, exact = true)` since 0.7.2. Without `exact`, `select = 2` permits fewer SELECTs. A [snapshot contract](contracts.md) records all SELECT/INSERT/UPDATE/DELETE counts instead |
 | Forbid INSERT, UPDATE, and DELETE | Zero expectations for each write type | `@ExpectQueries(insert = 0, update = 0, delete = 0)` |
 | Investigate repeated SELECTs or N+1 | SQL counts and repeated-SELECT checks | Inspect findings first with `@EnableQueryInspector`; verify the query shape before enabling a finding gate |
 | Measure heap allocation or profile the JVM | Heap/JVM annotations and JFR support | Keep a JVM measurement tool; QueryAudit does not provide these measurements |
@@ -51,6 +51,8 @@ void readsOrdersWithinBudget() {
 Each field is an independent **upper bound**. An omitted field defaults to `-1` and is not checked;
 negative values mean unspecified. For example, `@ExpectQueries(select = 2)` alone permits writes.
 Use explicit zeros to forbid them, and keep ordinary assertions that verify the returned result.
+Since 0.7.2, `exact = true` turns every declared field into an exact count, so
+`@ExpectQueries(select = 2, exact = true)` keeps the meaning of `@ExpectSelect(2)`.
 
 QueryAudit's inline budgets count captured setup and teardown SQL too. Its general finding analysis
 uses test-body SQL by default. Move fixture creation outside the counted window only when that is

@@ -276,7 +276,7 @@ public class HtmlReporter implements Reporter {
 
     // Footer
     sb.append("<footer class=\"footer\">\n");
-    sb.append("  <p>QueryAudit &mdash; Static &amp; Runtime SQL Analysis</p>\n");
+    sb.append("  <p>QueryAudit &mdash; N+1 queries and query regressions, caught in tests</p>\n");
     sb.append("</footer>\n");
 
     HtmlReportAssets.appendScript(sb);
@@ -377,7 +377,7 @@ public class HtmlReporter implements Reporter {
 
     // Footer
     sb.append("<footer class=\"footer\">\n");
-    sb.append("  <p>QueryAudit &mdash; Static &amp; Runtime SQL Analysis</p>\n");
+    sb.append("  <p>QueryAudit &mdash; N+1 queries and query regressions, caught in tests</p>\n");
     sb.append("</footer>\n");
 
     HtmlReportAssets.appendScript(sb);
