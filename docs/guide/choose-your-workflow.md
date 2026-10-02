@@ -70,7 +70,7 @@ UPDATE: executed 1, expected at most 0.
 The limits are upper bounds. `select = 2` permits zero, one, or two SELECTs; it does not require
 exactly two. `0` forbids that statement type, and an omitted attribute does not restrict it.
 `total` limits all statements together. The budget counts captured statements, not returned rows
-or elapsed time. Since 0.8.0, `exact = true` requires each declared count exactly, so a path that
+or elapsed time. Since 0.7.2, `exact = true` requires each declared count exactly, so a path that
 stops issuing a query fails too.
 
 ## Contract a request or job

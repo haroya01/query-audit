@@ -59,7 +59,7 @@ public @interface ExpectQueries {
    * Requires every declared count to match exactly instead of acting as an upper bound, so the test
    * also fails when fewer queries run.
    *
-   * @since 0.8.0
+   * @since 0.7.2
    */
   boolean exact() default false;
 }

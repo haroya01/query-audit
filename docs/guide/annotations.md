@@ -407,11 +407,11 @@ class OrderServiceTest {
 | `update` | `int` | `-1` (not verified) | Maximum UPDATE queries allowed |
 | `delete` | `int` | `-1` (not verified) | Maximum DELETE queries allowed |
 | `total` | `int` | `-1` (not verified) | Maximum captured statements of any type |
-| `exact` | `boolean` | `false` | Since 0.8.0: require each declared count exactly instead of as a maximum |
+| `exact` | `boolean` | `false` | Since 0.7.2: require each declared count exactly instead of as a maximum |
 
 ### Exact counts
 
-Since 0.8.0, `exact = true` makes every declared attribute an exact count. The test also fails when
+Since 0.7.2, `exact = true` makes every declared attribute an exact count. The test also fails when
 fewer statements run, which an upper bound cannot catch: a cache that starts hiding a lookup, or a
 capture that silently stopped seeing the `DataSource`.
 
