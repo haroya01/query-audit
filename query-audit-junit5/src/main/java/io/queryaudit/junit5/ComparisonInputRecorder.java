@@ -6,7 +6,6 @@ import io.queryaudit.core.provenance.AuditCapability;
 import io.queryaudit.core.provenance.AuditPolicyInputs;
 import io.queryaudit.core.regression.QueryCountBaseline;
 import io.queryaudit.core.regression.QueryCounts;
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.TreeMap;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -34,28 +33,12 @@ final class ComparisonInputRecorder {
       Map<String, Integer> inlineLimits = new TreeMap<>();
       QueryAudit annotation = settings.findAnnotation(context);
       FindingFailurePolicy.from(annotation).recordInto(inlineLimits);
-      Method method = context.getRequiredTestMethod();
-      ExpectQueries queries = AuditAnnotations.onMethod(method, ExpectQueries.class);
-      if (queries != null) {
-        inlineLimits.put("expectQueriesPresent", 1);
-        inlineLimits.put("select", queries.select());
-        inlineLimits.put("insert", queries.insert());
-        inlineLimits.put("update", queries.update());
-        inlineLimits.put("delete", queries.delete());
-        if (queries.total() >= 0) inlineLimits.put("total", queries.total());
-      }
-      ExpectMaxQueryCount maximum = AuditAnnotations.onMethod(method, ExpectMaxQueryCount.class);
-      if (maximum != null) {
-        inlineLimits.put("maximumQueries", maximum.value());
-      }
       if (settings.findDetectNPlusOne(context) != null) {
         inlineLimits.put("detectNPlusOne", analyzer.getConfig().getNPlusOneThreshold());
       }
       AuditPolicyInputs policy =
           new AuditPolicyInputs(
-              queries == null
-                  ? effectiveCounts(scope.contracts(), testId, testClass, testName)
-                  : Map.of(),
+              Map.of(),
               effectiveCounts(scope.countBaseline(), testId, testClass, testName),
               inlineLimits,
               AuditSettingsResolver.isContractRecordMode(),
