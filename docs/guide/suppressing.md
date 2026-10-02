@@ -4,6 +4,9 @@ Not every detected issue is a problem. Sometimes a full table scan is intentiona
 a `SELECT *` is used in a test helper, or a health-check query should be ignored.
 QueryAudit provides multiple ways to suppress issues at different levels.
 
+The default `recommended` profile runs only `n-plus-one`. The other rule codes on this page apply
+once you enable [optional rules](../detections/overview.md).
+
 ---
 
 ## When to Suppress vs When to Fix
@@ -90,20 +93,15 @@ Is the issue a real performance problem in production?
     }
     ```
 
-=== "Suppress: Test data setup"
+=== "Suppress: Intended keyset page loop"
 
     ```java
-    // @BeforeEach inserts test data that triggers repeated-single-insert.
-    // These are test artifacts, not production patterns.
-    @QueryAudit(suppress = {"repeated-single-insert"})
-    @SpringBootTest
-    class OrderServiceTest {
-        @BeforeEach
-        void setUp() {
-            orderRepository.save(new Order(...));
-            orderRepository.save(new Order(...));
-            orderRepository.save(new Order(...));
-        }
+    // Each page binds the last id it read, so the page query repeats with new values.
+    // The loop is the design, not one query per row.
+    @QueryAudit(suppress = {"n-plus-one"})
+    @Test
+    void exportsAllOrdersPageByPage() {
+        exportService.exportAll();
     }
     ```
 

@@ -92,13 +92,15 @@ When QueryAudit reports an N+1 issue, follow these steps to find and fix the roo
 
 ### Step 1: Identify the Repeated Query
 
-The report tells you the **normalized SQL pattern** and the **table** being hit repeatedly:
+The console report shows the repeated SELECT, the line that issued it, and the table it reads
+(excerpt):
 
 ```
 [ERROR] N+1 Query detected
-  Pattern : SELECT * FROM members WHERE id = ?
-  Table   : members
-  Detail  : Executed 100 times
+  Query:  select m1_0.id,m1_0.name from members m1_0 where m1_0.id=?
+  Source: com.example.OrderService.lambda$findOrders$0:42
+  Target: members
+  Detail: The same SELECT ran 100 times from one call site
 ```
 
 ### Step 2: Find the Triggering Code
@@ -555,18 +557,26 @@ Need a safety net for all lazy loads?
 
 ## QueryAudit Report Output
 
-```
-============================================================
- QUERY AUDIT REPORT
-============================================================
+Each audited test prints its own report. Excerpt:
 
- [ERROR] N+1 Query detected
-   Pattern : SELECT * FROM members WHERE id = ?
-   Table   : members
-   Detail  : Executed 100 times
-   Fix     : Use JOIN FETCH or @EntityGraph
-------------------------------------------------------------
 ```
+────────────────────────────────────────────────────────────────────────
+  QUERYAUDIT REPORT
+  Test: findOrders()
+────────────────────────────────────────────────────────────────────────
+
+--- CONFIRMED (sorted by priority) ---
+
+  [ERROR] N+1 Query detected
+    ID:     qa-finding-v1:7452…
+    Query:  select m1_0.id,m1_0.name from members m1_0 where m1_0.id=?
+    Source: com.example.OrderService.lambda$findOrders$0:42
+    Target: members
+    Detail: The same SELECT ran 100 times from one call site
+    Fix:    Load the rows once before the loop: JOIN FETCH, @EntityGraph, or one query with an IN list.
+```
+
+When the test fails, the failure message repeats the finding with its application call stack.
 
 ---
 

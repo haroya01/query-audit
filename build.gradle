@@ -69,7 +69,7 @@ subprojects {
 
         pom {
             name = "QueryAudit - ${project.name}"
-            description = 'Automatic query performance analysis for JUnit tests'
+            description = 'Catch N+1 queries and query regressions in JUnit 5 tests before merge'
             url = 'https://github.com/haroya01/query-audit'
             inceptionYear = '2025'
 
