@@ -6,6 +6,7 @@ import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.QueryRecord;
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.function.Consumer;
 import net.ttddyy.dsproxy.ExecutionInfo;
 import net.ttddyy.dsproxy.QueryInfo;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,35 @@ class QueryInterceptorCallSiteTest {
         .contains("QueryInterceptorCallSiteTest");
   }
 
+  static final class Team$HibernateProxy$aB3dQ9 {
+    void getName(QueryInterceptor interceptor) {
+      fire(interceptor);
+    }
+  }
+
+  static final class Team$HibernateProxy$Zx7Lm2 {
+    void getName(QueryInterceptor interceptor) {
+      fire(interceptor);
+    }
+  }
+
+  @Test
+  void generatedProxyNamesDoNotEnterTheCallSite() {
+    List<Consumer<QueryInterceptor>> proxies =
+        List.of(
+            new Team$HibernateProxy$aB3dQ9()::getName, new Team$HibernateProxy$Zx7Lm2()::getName);
+    QueryInterceptor interceptor = new QueryInterceptor();
+    interceptor.start();
+    for (Consumer<QueryInterceptor> proxy : proxies) proxy.accept(interceptor);
+    interceptor.stop();
+
+    List<QueryRecord> records = interceptor.getRecordedQueries();
+    assertThat(records.get(0).stackTrace())
+        .doesNotContain("HibernateProxy")
+        .isEqualTo(records.get(1).stackTrace());
+    assertThat(records.get(0).fullStackHash()).isEqualTo(records.get(1).fullStackHash());
+  }
+
   @Test
   void repeatedQueriesFromOneLoopShareTheirFullCallSite() {
     QueryInterceptor interceptor = new QueryInterceptor();
@@ -47,7 +77,9 @@ class QueryInterceptorCallSiteTest {
     interceptor.stop();
 
     List<QueryRecord> records = interceptor.getRecordedQueries();
-    assertThat(records).extracting(QueryRecord::fullStackHash).containsOnly(records.get(0).fullStackHash());
+    assertThat(records)
+        .extracting(QueryRecord::fullStackHash)
+        .containsOnly(records.get(0).fullStackHash());
   }
 
   @Test
