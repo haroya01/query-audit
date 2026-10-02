@@ -138,7 +138,10 @@ public final class QueryContracts {
         .append(expected)
         .append(", executed ")
         .append(actual)
-        .append(actual > expected ? " (+" + (actual - expected) + ")" : "")
+        .append(
+            actual > expected
+                ? " (+" + (actual - expected) + ")"
+                : " (" + (actual - expected) + ")")
         .append('\n');
     if (actual > expected) {
       for (QueryRecord query : queries) {

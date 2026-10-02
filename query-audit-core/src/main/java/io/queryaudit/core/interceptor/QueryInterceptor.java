@@ -315,7 +315,11 @@ public class QueryInterceptor implements QueryExecutionListener {
   }
 
   private static boolean shouldSkip(String className) {
-    if (className.contains("$$SpringCGLIB$$") || className.contains("$$EnhancerBySpringCGLIB$$")) {
+    if (className.contains("$$SpringCGLIB$$")
+        || className.contains("$$EnhancerBySpringCGLIB$$")
+        || className.contains("$$EnhancerByCGLIB$$")
+        || className.contains("$HibernateProxy$")
+        || className.contains("$ByteBuddy$")) {
       return true;
     }
     for (String prefix : SKIP_PREFIXES) {

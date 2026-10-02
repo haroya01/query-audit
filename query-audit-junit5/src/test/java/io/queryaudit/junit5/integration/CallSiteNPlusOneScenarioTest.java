@@ -45,6 +45,7 @@ class CallSiteNPlusOneScenarioTest {
 
   private final Map<String, Throwable> failures = new HashMap<>();
   private final Map<String, List<String>> confirmed = new HashMap<>();
+  private final Map<String, List<String>> stacks = new HashMap<>();
 
   @BeforeAll
   void runScenarios(@TempDir Path output) throws Exception {
@@ -88,12 +89,28 @@ class CallSiteNPlusOneScenarioTest {
         types.add(finding.get("type") + "");
       }
       confirmed.put(method, types);
+      List<String> traces = new ArrayList<>();
+      for (Object query : (List<?>) report.get("queries")) {
+        traces.add(((Map<?, ?>) query).get("stackTrace") + "");
+      }
+      stacks.put(method, traces);
     }
   }
 
   @Test
   void aLazyManyToOneReadInALoopIsAnNPlusOne() {
     assertNPlusOne("lazyManyToOneInLoop()");
+  }
+
+  @Test
+  void aLazyProxyIsNotReportedAsTheCallSite() {
+    assertThat(failures.get("lazyManyToOneInLoop()"))
+        .hasMessageContaining(
+            "Call stack:\n      at " + Scenarios.class.getName() + ".lambda$lazyManyToOneInLoop$")
+        .hasMessageNotContaining("HibernateProxy");
+    assertThat(stacks.get("lazyManyToOneInLoop()"))
+        .isNotEmpty()
+        .noneMatch(stack -> stack.contains("HibernateProxy"));
   }
 
   @Test

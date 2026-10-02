@@ -88,7 +88,7 @@ class QueryContractsTest {
             contracts(new QueryCounts(2, 1, 0, 0, 3)),
             List.of());
 
-    assertThat(failure).contains("SELECT: contract 2, executed 1");
-    assertThat(failure).contains("INSERT: contract 1, executed 0");
+    assertThat(failure).contains("SELECT: contract 2, executed 1 (-1)");
+    assertThat(failure).contains("INSERT: contract 1, executed 0 (-1)");
   }
 }

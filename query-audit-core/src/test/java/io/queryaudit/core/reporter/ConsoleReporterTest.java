@@ -49,6 +49,38 @@ class ConsoleReporterTest {
   }
 
   @Test
+  void sourcePrintsApplicationFramesAlignedUnderTheLabel() {
+    Issue error =
+        new Issue(
+            IssueType.N_PLUS_ONE,
+            Severity.ERROR,
+            "select * from order_items where order_id = ?",
+            "order_items",
+            null,
+            "The same SELECT ran 5 times from one call site",
+            "Load the rows once before the loop",
+            String.join(
+                "\n",
+                "shop.OrderService.lambda$itemCounts$3:128",
+                "java.util.stream.ReferencePipeline$4$1.accept:214",
+                "java.util.stream.IntPipeline.sum:473",
+                "shop.OrderService.itemCounts:128",
+                "worker.org.gradle.process.internal.worker.GradleWorkerMain.main:74"));
+
+    String output =
+        captureReport(
+            new QueryAuditReport(
+                "itemCounts", List.of(error), List.of(), List.of(), 1, 6, 1_000_000L));
+
+    assertThat(output)
+        .contains(
+            "    Source: shop.OrderService.lambda$itemCounts$3:128\n"
+                + "            shop.OrderService.itemCounts:128\n")
+        .doesNotContain("java.util.stream")
+        .doesNotContain("GradleWorkerMain");
+  }
+
+  @Test
   void reportWithWarningOutputsConfirmedSection() {
     Issue warning =
         new Issue(
