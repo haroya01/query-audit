@@ -126,6 +126,21 @@ public final class EnhancedSqlParser {
     return SqlParser.hasWhereClause(sql);
   }
 
+  /**
+   * Returns true when the outermost SELECT carries a row-limiting clause: MySQL/SQL {@code LIMIT}
+   * (including {@code LIMIT ... OFFSET ...}), {@code LIMIT BY} or SQL:2008 {@code FETCH FIRST n
+   * ROWS}.
+   *
+   * <p>The clause is read from the parsed statement, not from SQL text, so the words {@code LIMIT}
+   * or {@code FETCH} inside a string literal, a quoted identifier or a comment do not count. A
+   * limit on a derived table, scalar subquery or set operand does not bound the outer statement and
+   * is not counted either. When the statement cannot be parsed, this returns false: absence of
+   * proof is reported as unbounded.
+   */
+  public static boolean hasOuterRowLimit(String sql) {
+    return SqlParserRouting.flag(sql, SqlAstRowLimits::hasOuterRowLimit);
+  }
+
   public static boolean isSelectQuery(String sql) {
     return SqlParser.isSelectQuery(sql);
   }

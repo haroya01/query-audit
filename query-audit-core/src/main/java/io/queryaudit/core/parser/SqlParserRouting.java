@@ -25,6 +25,15 @@ final class SqlParserRouting {
     return extract(sql, () -> null, ast, fallback);
   }
 
+  /**
+   * A structural predicate whose false result must stay conservative. There is no text fallback:
+   * when the parser cannot prove the structure, the predicate reports {@code false} so callers keep
+   * treating the SQL as unbounded rather than guessing from keyword text.
+   */
+  static boolean flag(String sql, Extraction<Boolean> ast) {
+    return extract(sql, () -> Boolean.FALSE, ast, ignored -> Boolean.FALSE);
+  }
+
   static String rewriteSubqueries(String sql) {
     if (sql != null && !SqlSourceScanner.containsNestedSelect(sql)) {
       return sql;

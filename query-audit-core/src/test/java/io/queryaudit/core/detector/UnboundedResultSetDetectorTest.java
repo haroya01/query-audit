@@ -8,10 +8,17 @@ import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class UnboundedResultSetDetectorTest {
 
@@ -119,31 +126,34 @@ class UnboundedResultSetDetectorTest {
   }
 
   @Test
-  void noIssueForPrimaryKeyLookup() {
+  void reportsIdLookupWithoutMetadata() {
     String sql = "SELECT * FROM users WHERE id = ?";
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-    assertThat(issues).isEmpty();
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
   }
 
   @Test
-  void noIssueForForeignKeyLookup() {
+  void reportsForeignKeyColumnLookupWithoutMetadata() {
     String sql = "SELECT * FROM orders WHERE user_id = ?";
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-    assertThat(issues).isEmpty();
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
   }
 
   @Test
-  void noIssueForInSubquery() {
+  void reportsInSubquery() {
     String sql =
         "SELECT * FROM users WHERE id IN (SELECT user_id FROM orders WHERE status = 'ACTIVE')";
 
     List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-    assertThat(issues).isEmpty();
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
   }
 
   @Test
@@ -197,45 +207,111 @@ class UnboundedResultSetDetectorTest {
     assertThat(issues).hasSize(1);
   }
 
-  // ── new tests: expanded PK/unique column patterns ───────────────────
+  // ── the outer bound must be a parsed clause, not the word (#292) ────
 
   @Nested
-  class ExpandedUniqueLookupPatterns {
+  class OuterRowLimitMustBeParsedSyntax {
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = {
+          "SELECT * FROM orders LIMIT 1",
+          "SELECT * FROM orders LIMIT 10",
+          "SELECT * FROM orders LIMIT ?",
+          "SELECT * FROM orders ORDER BY id LIMIT 5 OFFSET 20",
+          "select o.id from orders o limit 1",
+          "SELECT * FROM orders FETCH FIRST 5 ROWS ONLY",
+          "SELECT * FROM orders ORDER BY id OFFSET 10 ROWS FETCH FIRST 5 ROWS ONLY"
+        })
+    void realOuterRowLimitBoundsTheResult(String sql) {
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      assertThat(issues).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = {
+          "SELECT 'LIMIT' AS label FROM orders",
+          "SELECT 'FETCH FIRST 5 ROWS' AS label FROM orders",
+          "SELECT * FROM orders WHERE status = 'LIMIT'",
+          "SELECT * FROM orders /* LIMIT 10 */",
+          "SELECT * FROM orders -- LIMIT 10",
+          "SELECT * FROM (SELECT * FROM orders LIMIT 10) t",
+          "SELECT (SELECT id FROM orders LIMIT 1) AS first_id FROM accounts"
+        })
+    void limitWordsThatAreNotAClauseDoNotBoundTheResult(String sql) {
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      assertThat(issues).as("LIMIT/FETCH text outside a real clause must not suppress").hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
+    }
+  }
+
+  // ── name-only uniqueness is not a row bound (#292) ─────────────────
+
+  @Nested
+  class NameOnlyUniquenessIsNoBound {
+
+    @ParameterizedTest
+    @ValueSource(
+        strings = {
+          "id",
+          "tenant_id",
+          "user_id",
+          "account_id",
+          "order_id",
+          "email",
+          "uuid",
+          "username"
+        })
+    void reportsUniqueLookingColumnWithoutMetadata(String column) {
+      String sql = "SELECT * FROM orders WHERE " + column + " = ?";
+
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      assertThat(issues).as("column name %s proves no uniqueness", column).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
+    }
 
     @Test
-    void noIssueForEmailLookup() {
+    void reportsEmailLookup() {
       String sql = "SELECT * FROM users WHERE email = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
-    void noIssueForUuidLookup() {
+    void reportsUuidLookup() {
       String sql = "SELECT * FROM sessions WHERE uuid = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
-    void noIssueForUsernameLookup() {
+    void reportsUsernameLookup() {
       String sql = "SELECT * FROM users WHERE username = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
-    void noIssueForAliasedEmailLookup() {
+    void reportsAliasedEmailLookup() {
       String sql = "SELECT * FROM users u WHERE u.email = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
     }
   }
 
@@ -335,18 +411,34 @@ class UnboundedResultSetDetectorTest {
     }
 
     @Test
-    void noIssueWhenNoIndexMetadataButPkPattern() {
-      // Even without metadata, id = ? is still excluded by PK_LOOKUP_PATTERN
+    void reportsIdLookupWhenMetadataIsAbsent() {
+      // Without collected metadata there is no proof of uniqueness, so the column name cannot
+      // suppress the finding.
       String sql = "SELECT * FROM users WHERE id = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
+    }
+
+    @Test
+    void noIssueWhenPrimaryKeyMetadataProvesSingleRow() {
+      // The same query is suppressed once a real PRIMARY KEY constraint is known.
+      IndexMetadata metadata =
+          new IndexMetadata(
+              Map.of("users", List.of(new IndexInfo("users", "PRIMARY", "id", 1, false, 10000))));
+
+      String sql = "SELECT * FROM users WHERE id = ?";
+
+      List<Issue> issues = detector.evaluate(List.of(record(sql)), metadata);
 
       assertThat(issues).isEmpty();
     }
 
     @Test
     void flagsUnknownColumnWithoutMetadata() {
-      // "phone" is not in PK_LOOKUP_PATTERN and no metadata
+      // No metadata at all, so nothing proves a single row.
       String sql = "SELECT * FROM users WHERE phone = ?";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
@@ -591,33 +683,35 @@ class UnboundedResultSetDetectorTest {
     }
   }
 
-  // ── false positive fix: EXISTS subquery ────────────────────────────
+  // ── an EXISTS subquery bounds the inner rows, not the outer result (#292) ──
 
   @Nested
   class ExistsSubqueryTests {
 
     @Test
-    void noIssueForWhereExistsSubquery() {
+    void reportsWhereExistsSubquery() {
       String sql =
           "SELECT * FROM users u WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
-    void noIssueForWhereNotExistsSubquery() {
+    void reportsWhereNotExistsSubquery() {
       String sql =
           "SELECT name FROM users u WHERE NOT EXISTS (SELECT 1 FROM orders WHERE user_id = u.id)";
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
     }
 
     @Test
-    void noIssueForExistsWithJoin() {
+    void reportsExistsWithJoin() {
       String sql =
           "SELECT u.name, u.email FROM users u "
               + "JOIN departments d ON u.dept_id = d.id "
@@ -625,7 +719,8 @@ class UnboundedResultSetDetectorTest {
 
       List<Issue> issues = detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
     }
   }
 
@@ -886,10 +981,10 @@ class UnboundedResultSetDetectorTest {
       assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
     }
 
-    // ── Case 8: 기존 PK exclusion은 resolver와 무관하게 동작 ──
+    // ── Case 8: 이름만으로 제외되지 않고, return type 분석과 독립적으로 보고된다 ──
 
     @Test
-    void pkLookup_stillSuppressedRegardlessOfResolver() {
+    void pkLookup_reportedRegardlessOfResolver() {
       UnboundedResultSetDetector withResolver =
           new UnboundedResultSetDetector(stack -> RepositoryReturnType.COLLECTION);
 
@@ -898,7 +993,11 @@ class UnboundedResultSetDetectorTest {
       List<Issue> issues =
           withResolver.evaluate(List.of(recordWithStack(sql, PROXY_STACK)), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      // COLLECTION + WHERE downgrades the severity to INFO, but the finding stays: an id lookup
+      // without uniqueness metadata is still an unbounded result.
+      assertThat(issues).hasSize(1);
+      assertThat(issues.get(0).type()).isEqualTo(IssueType.UNBOUNDED_RESULT_SET);
+      assertThat(issues.get(0).severity()).isEqualTo(Severity.INFO);
     }
 
     // ── Case 9: resolver 예외 시 WARNING으로 fallback ──
@@ -919,6 +1018,200 @@ class UnboundedResultSetDetectorTest {
       // 예외가 전파되지 않고 WARNING으로 fallback
       assertThat(issues).hasSize(1);
       assertThat(issues.get(0).severity()).isEqualTo(Severity.WARNING);
+    }
+  }
+
+  // ── #292: the suppressed shapes really do return many rows ───────────
+  //
+  // The detector's contract is "report unless the outer result set is bounded". These tests run the
+  // exact SQL shapes that used to be suppressed against a real database and assert the result
+  // really
+  // contains multiple rows, so the finding is a true positive rather than a naming convention.
+
+  @Nested
+  class H2ActualResultEvidence {
+
+    private Connection openDatabase() throws SQLException {
+      return DriverManager.getConnection("jdbc:h2:mem:qa-unbounded;DB_CLOSE_DELAY=-1", "sa", "");
+    }
+
+    private void seed(Connection connection) throws SQLException {
+      try (Statement statement = connection.createStatement()) {
+        statement.execute("DROP TABLE IF EXISTS orders");
+        statement.execute("DROP TABLE IF EXISTS accounts");
+        // No UNIQUE constraint on tenant_id / user_id: naming alone cannot bound the result.
+        statement.execute("CREATE TABLE accounts (id BIGINT PRIMARY KEY, label VARCHAR(64))");
+        statement.execute(
+            "CREATE TABLE orders (id BIGINT PRIMARY KEY, tenant_id BIGINT, account_id BIGINT,"
+                + " status VARCHAR(32))");
+        statement.execute("INSERT INTO accounts VALUES (1, 'primary')");
+        statement.execute("INSERT INTO accounts VALUES (2, 'secondary')");
+        // Three orders share tenant_id=7, and three share account_id=1.
+        statement.execute("INSERT INTO orders VALUES (10, 7, 1, 'NEW')");
+        statement.execute("INSERT INTO orders VALUES (11, 7, 1, 'NEW')");
+        statement.execute("INSERT INTO orders VALUES (12, 7, 1, 'NEW')");
+        statement.execute("INSERT INTO orders VALUES (13, 8, 2, 'NEW')");
+      }
+    }
+
+    private int countRows(Connection connection, String sql) throws SQLException {
+      try (Statement statement = connection.createStatement();
+          ResultSet resultSet = statement.executeQuery(sql)) {
+        assertThat(resultSet.next()).isTrue();
+        return resultSet.getInt(1);
+      }
+    }
+
+    private List<Issue> issuesFor(String sql) {
+      return detector.evaluate(List.of(record(sql)), EMPTY_INDEX);
+    }
+
+    @Test
+    void tenantIdLookupReturnsManyRowsAndIsReported() throws SQLException {
+      try (Connection connection = openDatabase()) {
+        seed(connection);
+
+        assertThat(countRows(connection, "SELECT COUNT(*) FROM orders WHERE tenant_id = 7"))
+            .as("tenant_id = 7 matches three orders")
+            .isEqualTo(3);
+
+        assertThat(issuesFor("SELECT id FROM orders WHERE tenant_id = ?"))
+            .as("a *_id equality without uniqueness metadata stays reportable")
+            .hasSize(1);
+      }
+    }
+
+    @Test
+    void accountIdLookupReturnsManyRowsAndIsReported() throws SQLException {
+      try (Connection connection = openDatabase()) {
+        seed(connection);
+
+        assertThat(countRows(connection, "SELECT COUNT(*) FROM orders WHERE account_id = 1"))
+            .as("account_id = 1 matches three orders")
+            .isEqualTo(3);
+
+        assertThat(issuesFor("SELECT id FROM orders WHERE account_id = ?")).hasSize(1);
+      }
+    }
+
+    @Test
+    void existsSubqueryDoesNotBoundOuterRowsAndIsReported() throws SQLException {
+      try (Connection connection = openDatabase()) {
+        seed(connection);
+
+        int returned =
+            countRows(
+                connection,
+                "SELECT COUNT(*) FROM orders WHERE EXISTS "
+                    + "(SELECT 1 FROM accounts WHERE accounts.id = orders.account_id)");
+
+        assertThat(returned)
+            .as("EXISTS filters the outer rows but does not cap them at one")
+            .isEqualTo(4);
+
+        assertThat(
+                issuesFor(
+                    "SELECT id FROM orders WHERE EXISTS "
+                        + "(SELECT 1 FROM accounts WHERE accounts.id = orders.account_id)"))
+            .hasSize(1);
+      }
+    }
+
+    @Test
+    void inSubqueryDoesNotBoundOuterRowsAndIsReported() throws SQLException {
+      try (Connection connection = openDatabase()) {
+        seed(connection);
+
+        int returned =
+            countRows(
+                connection,
+                "SELECT COUNT(*) FROM orders WHERE id IN (SELECT id FROM orders WHERE tenant_id = 7)");
+
+        assertThat(returned).as("IN (subquery) returns every matching outer row").isEqualTo(3);
+
+        assertThat(
+                issuesFor(
+                    "SELECT id FROM orders WHERE id IN (SELECT id FROM orders WHERE tenant_id = 7)"))
+            .hasSize(1);
+      }
+    }
+
+    @Test
+    void limitAsAStringLiteralReturnsManyRowsAndIsReported() throws SQLException {
+      try (Connection connection = openDatabase()) {
+        seed(connection);
+
+        assertThat(
+                countRows(
+                    connection, "SELECT COUNT(*) FROM (SELECT 'LIMIT' AS label FROM orders) t"))
+            .as("the literal projection returns every order row")
+            .isEqualTo(4);
+
+        assertThat(issuesFor("SELECT 'LIMIT' AS label FROM orders"))
+            .as("the word LIMIT inside a literal is not a clause")
+            .hasSize(1);
+      }
+    }
+
+    @Test
+    void derivedTableLimitDoesNotBoundOuterRowsAndIsReported() throws SQLException {
+      try (Connection connection = openDatabase()) {
+        seed(connection);
+
+        assertThat(
+                countRows(
+                    connection, "SELECT COUNT(*) FROM (SELECT id FROM orders LIMIT 1) AS limited"))
+            .as("an inner LIMIT of 1 yields one row, not a bound on the outer query")
+            .isEqualTo(1);
+
+        assertThat(issuesFor("SELECT id FROM (SELECT id FROM orders LIMIT 1) AS limited"))
+            .hasSize(1);
+      }
+    }
+
+    @Test
+    void aRealOuterLimitReturnsOneRowAndStaysSuppressed() throws SQLException {
+      try (Connection connection = openDatabase()) {
+        seed(connection);
+
+        assertThat(countRows(connection, "SELECT COUNT(*) FROM (SELECT id FROM orders LIMIT 1) t"))
+            .isEqualTo(1);
+        assertThat(countRows(connection, "SELECT COUNT(*) FROM (SELECT id FROM orders LIMIT 2) t"))
+            .as("the outer LIMIT really does cap the result at two rows")
+            .isEqualTo(2);
+
+        assertThat(issuesFor("SELECT id FROM orders LIMIT 2"))
+            .as("a real outer LIMIT is a genuine bound")
+            .isEmpty();
+      }
+    }
+
+    @Test
+    void primaryKeyEqualityReturnsOneRowAndStaysSuppressedWithMetadata() throws SQLException {
+      try (Connection connection = openDatabase()) {
+        seed(connection);
+
+        assertThat(countRows(connection, "SELECT COUNT(*) FROM accounts WHERE id = 1"))
+            .as("the PRIMARY KEY really does return at most one row")
+            .isEqualTo(1);
+
+        IndexMetadata metadata =
+            new IndexMetadata(
+                Map.of(
+                    "accounts", List.of(new IndexInfo("accounts", "PRIMARY", "id", 1, false, 2))));
+
+        assertThat(
+                detector.evaluate(
+                    List.of(record("SELECT label FROM accounts WHERE id = ?")), metadata))
+            .as("proven PRIMARY KEY uniqueness bounds the result")
+            .isEmpty();
+
+        assertThat(
+                detector.evaluate(
+                    List.of(record("SELECT label FROM accounts WHERE id = ?")), EMPTY_INDEX))
+            .as("without that metadata the same query is reported")
+            .hasSize(1);
+      }
     }
   }
 }

@@ -289,11 +289,18 @@ class SeverityAppropriatenessTest {
     @Test
     @DisplayName("JPA findById — 단건 조회에 이슈 없어야 함")
     void jpaFindByIdClean() {
+      // #292: findById is bounded by the entity's PRIMARY KEY, not by the column being named "id".
+      // The detector only suppresses once that uniqueness is actually proven, so this test has to
+      // supply the metadata a real database would report.
+      IndexMetadata meta =
+          new IndexMetadata(
+              Map.of("members", List.of(new IndexInfo("members", "PRIMARY", "id", 1, false, 100))));
+
       queryInterceptor.start();
       memberRepository.findById(1L);
       queryInterceptor.stop();
 
-      QueryAuditReport report = analyze("jpaFindById", queryInterceptor.getRecordedQueries());
+      QueryAuditReport report = analyze("jpaFindById", queryInterceptor.getRecordedQueries(), meta);
       assertThat(warnings(report)).as("findById에 WARNING이 있으면 과잉").isEmpty();
     }
 

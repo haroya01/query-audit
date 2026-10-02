@@ -1626,10 +1626,11 @@ class AdversarialFalsePositiveTest {
     }
 
     @Test
-    void primaryKeyLookupShouldNotTrigger() {
+    void primaryKeyNameAloneDoesNotSuppress() {
+      // #292: without uniqueness metadata the column name proves nothing.
       List<Issue> issues =
           detector.evaluate(List.of(record("SELECT * FROM users WHERE id = ?")), EMPTY_INDEX);
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
     }
 
     @Test
@@ -1656,12 +1657,13 @@ class AdversarialFalsePositiveTest {
     }
 
     @Test
-    void inSubqueryBoundedResultShouldNotTrigger() {
+    void inSubqueryDoesNotBoundOuterResult() {
+      // #292: the subquery bounds its own rows, not the rows the outer SELECT returns.
       List<Issue> issues =
           detector.evaluate(
               List.of(record("SELECT * FROM users WHERE id IN (SELECT user_id FROM active_users)")),
               EMPTY_INDEX);
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
     }
 
     @Test

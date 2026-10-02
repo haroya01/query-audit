@@ -193,12 +193,12 @@ class ComprehensiveFalsePositiveTest2 {
     }
 
     @Test
-    @DisplayName("TN: Primary key lookup does not trigger")
+    @DisplayName("TN: Primary key column name alone does not trigger (no uniqueness metadata)")
     void trueNegative_pkLookup() {
       List<Issue> issues =
           detector.evaluate(queries("SELECT * FROM orders WHERE id = ?"), EMPTY_INDEX);
 
-      assertThat(issues).isEmpty();
+      assertThat(issues).hasSize(1);
     }
 
     @Test

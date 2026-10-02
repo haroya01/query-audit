@@ -763,13 +763,15 @@ class FalsePositiveAuditTest {
 
   @Test
   void additionalRealisticPatterns_unboundedWithPkLookup() {
-    // Queries with PK-like patterns that should be excluded
+    // #292: a *_id column name is not uniqueness. Without a proven constraint these queries can
+    // still match many rows, so they stay reportable. The same queries are suppressed once the
+    // real PRIMARY KEY metadata is available (see unboundedResultSetDetector_legitimateQueries).
     List<String> sqls =
         List.of(
             "select u1_0.id,u1_0.name from users u1_0 where u1_0.user_id=?",
             "select o1_0.id,o1_0.total from orders o1_0 where o1_0.order_id=?");
     List<Issue> issues = evaluate(new UnboundedResultSetDetector(), sqls);
-    assertThat(issues).as("UnboundedResultSetDetector PK lookup").isEmpty();
+    assertThat(issues).as("UnboundedResultSetDetector name-only uniqueness").hasSize(2);
   }
 
   @Test

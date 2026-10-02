@@ -16,6 +16,7 @@ dependencies {
     testImplementation 'org.mockito:mockito-core:5.14.2'
     testImplementation 'ch.qos.logback:logback-classic:1.5.15'
     testImplementation 'org.hibernate.orm:hibernate-core:6.6.4.Final'
+    testImplementation 'com.h2database:h2:2.3.232'
 }
 
 tasks.named('processResources') {
