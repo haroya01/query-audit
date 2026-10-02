@@ -14,7 +14,7 @@ thresholds below configure supporting analysis; they do not change explicit quer
 snapshot count contracts.
 
 !!! note "Version scope"
-    This reference documents QueryAudit `0.7.1`. Check [Versions and compatibility](../getting-started/versions.md)
+    This reference documents QueryAudit `0.7.2`. Check [Versions and compatibility](../getting-started/versions.md)
     for the published dependency and tested framework/database combinations.
 
 QueryAudit can be configured at three levels. When multiple levels conflict, the

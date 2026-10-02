@@ -5,18 +5,19 @@ description: Check the published library's capabilities, upgrade notes, report s
 
 # Versions and compatibility
 
-These guides describe **published QueryAudit `0.7.1`**. Keep every QueryAudit module on the same
-version. The release code is tagged [`v0.7.1`](https://github.com/haroya01/query-audit/tree/v0.7.1).
-`0.7.0` is also on Maven Central, but use `0.7.1`: in 0.7.0 SQL that a server thread runs, as with
-`RANDOM_PORT` tests, does not count toward the test, so an N+1 behind such a request does not fail
-the test and the run is only `INCONCLUSIVE`.
+These guides describe **published QueryAudit `0.7.2`**. Keep every QueryAudit module on the same
+version. The release code is tagged [`v0.7.2`](https://github.com/haroya01/query-audit/tree/v0.7.2).
+`0.7.0` and `0.7.1` are also on Maven Central, but use `0.7.2`. In 0.7.0, SQL that a server thread
+runs, as with `RANDOM_PORT` tests, does not count toward the test. In 0.7.1, a failed scoped
+contract leaves the run `PASS`, and a lazy-proxy N+1 changes its finding ID on every run. See
+[changes in 0.7.2](#changes-in-072).
 
-## What you can use in 0.7.1
+## What you can use in 0.7.2
 
 | Capability | Start here |
 | --- | --- |
 | N+1 detection at the call site, the only default built-in rule | [N+1 detection](../detections/n-plus-one.md) |
-| Read-path budgets with SELECT/INSERT/UPDATE/DELETE/total limits | [Annotations](../guide/annotations.md#expectqueries) |
+| Read-path budgets with SELECT/INSERT/UPDATE/DELETE/total limits, or exact counts | [Annotations](../guide/annotations.md#expectqueries) |
 | Recorded count contracts for test methods, requests, jobs, and journeys | [Contracts](../guide/contracts.md) |
 | Captured SQL and application call sites, printed with each failure | [Read SQL and call sites](../guide/reports.md) |
 | JSON `PASS` / `FAIL` / `INCONCLUSIVE` with expected-test coverage | [Require expected tests](../guide/audit-coverage.md) |
@@ -25,9 +26,19 @@ the test and the run is only `INCONCLUSIVE`.
 | Mutable static `DataSource` capture in plain JUnit | [Plain JUnit setup](installation.md#plain-junit-5) |
 | Optional index, `EXPLAIN`, and SQL style rules | [Optional rules](../detections/overview.md) |
 
-The [JSON reporter](https://github.com/haroya01/query-audit/blob/v0.7.1/query-audit-core/src/main/java/io/queryaudit/core/reporter/JsonReporter.java)
+The [JSON reporter](https://github.com/haroya01/query-audit/blob/v0.7.2/query-audit-core/src/main/java/io/queryaudit/core/reporter/JsonReporter.java)
 writes schema **`1.7.0`**, the same schema as `0.6.1`. Keep the report reader and library versions
 aligned.
+
+## Changes in 0.7.2
+
+| Change | What to do |
+| --- | --- |
+| `@ExpectQueries(exact = true)` makes every declared count exact, so fewer queries fail too | Optional. See [exact counts](../guide/annotations.md#exact-counts) |
+| A failed `QueryContractScope` makes the run `FAIL`, also in a test class without an audit annotation. In 0.7.1 the JSON outcome, the HTML banner, and the comparison stayed `PASS` | None |
+| An N+1 reached through a Hibernate lazy proxy keeps its finding ID across runs. In 0.7.1 the ID changed on every run, so a comparison reported the finding as new and resolved, and `--require-resolved` could call it resolved while it remained | Record new comparison baselines with 0.7.2 |
+| Contract counts and budget limits are no longer comparison inputs, so a pull request that re-records a contract compares as `PASS` instead of `INCONCLUSIVE` | None. Review the contract change in the diff |
+| The console prints only application frames under `Source:`, and a contract that ran fewer queries shows a negative delta | None |
 
 ## Upgrading from 0.6
 
@@ -44,12 +55,12 @@ aligned.
 | `ReportComparator.Finding` and `ReportComparator.Verdict` add record components | Earlier constructors remain. See [Java API compatibility](../guide/reports.md#delta-verdict-compare-two-runs) |
 
 The active rules changed, so a 0.6 report is not a valid comparison baseline. Record a new
-baseline report with 0.7.1 before comparing runs in CI.
+baseline report with 0.7.2 before comparing runs in CI.
 
 ## Tested combinations
 
-The release's [CI workflow](https://github.com/haroya01/query-audit/blob/v0.7.1/.github/workflows/ci.yml)
-and [starter test configuration](https://github.com/haroya01/query-audit/blob/v0.7.1/query-audit-spring-boot-starter/build.gradle)
+The release's [CI workflow](https://github.com/haroya01/query-audit/blob/v0.7.2/.github/workflows/ci.yml)
+and [starter test configuration](https://github.com/haroya01/query-audit/blob/v0.7.2/query-audit-spring-boot-starter/build.gradle)
 define this matrix. Entries identify the configured checks; they do not establish compatibility
 with every intermediate framework or database version.
 
