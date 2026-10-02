@@ -13,10 +13,9 @@ or [plain JUnit quick start](../getting-started/quickstart.md).
 | Symptom | First check | Next action |
 | --- | --- | --- |
 | SQL ran, but the report says zero queries | Does the one-SELECT/zero-budget check fail? | [Trace the datasource and audit activation](#queryaudit-not-detecting-any-queries) |
-| A test passes after its Spring context is replaced | Does it use `@DirtiesContext` between methods? | Check the [known context-replacement gap](limitations.md) before trusting the result |
 | No audit with a custom or inherited annotation | Which artifact/version is loaded, and does a direct annotation activate capture? | Check [shared-policy checks](limitations.md#shared-annotation-policies), then rerun the zero-budget proof |
 | A budget fails unexpectedly | Which statements were captured during setup, the test, and teardown? | [Check the count boundary](#a-query-budget-fails-unexpectedly) |
-| A batched Hibernate fetch is reported as N+1 | How many SQL statements actually ran? | [Check the known batch false positive](#common-jpahibernate-issues) |
+| A loop that should repeat is reported as N+1 | Does each pass bind a new value, as a keyset page loop does? | [Suppress `n-plus-one` on that test](limitations.md#choose-the-right-audit-scope) |
 | An expected finding is missing | Was SQL captured, and is the rule enabled in this profile? | [Check rule inputs](#why-didnt-queryaudit-detect-my-issue) |
 | No JSON/HTML file | Was that format selected, and did the test session finalize? | [Check report generation](#html-report-not-generated) |
 | HTML is green but the run was incomplete | What do the test exit status and JSON outcome say? | [Use the canonical outcome](#html-report-not-generated) |
@@ -44,11 +43,10 @@ A raw mutable `static DataSource` field can be wrapped automatically on 0.6.0+, 
 constructed earlier from the raw object will still bypass capture. The explicit proxy in
 [plain JUnit installation](../getting-started/installation.md#plain-junit-5) avoids that ambiguity.
 
-Context replacement and composed/inherited annotations have reported capture gaps
-([#287](https://github.com/haroya01/query-audit/issues/287),
-[#290](https://github.com/haroya01/query-audit/issues/290)). See their
-[reproduction scope](limitations.md#reported-cases-to-check) and verify capture after either change.
-A zero-query result alone does not prove a clean audit.
+Before 0.7.0, a replaced Spring context and composed or inherited annotations could leave a test
+unaudited ([#287](https://github.com/haroya01/query-audit/issues/287),
+[#290](https://github.com/haroya01/query-audit/issues/290)). On 0.6.x, verify capture after either
+change. A zero-query result alone does not prove a clean audit.
 
 ## Why Didn't QueryAudit Detect My Issue?
 
@@ -162,10 +160,9 @@ Verify that the association is actually accessed inside the audited work and ins
 A cache, fetch join, entity graph, or batch fetch can reduce SQL executions. Conversely, entity-load
 events alone do not prove that one query ran per entity.
 
-The reviewed source can flag a **two-query batched fetch** as N+1
-([#289](https://github.com/haroya01/query-audit/issues/289)). Confirm the SQL count before changing a
-working batch strategy, and consult [known limitations](limitations.md). A query budget can enforce
-the observed statement count while the detector result is investigated.
+Since 0.7.0, a batched fetch with a multi-placeholder `IN (?, ?, ...)` list is not an N+1
+([#289](https://github.com/haroya01/query-audit/issues/289)). If a batch strategy is still reported,
+read the repeated statement in the finding: it shows the SQL that ran once per row.
 
 ### FetchType.EAGER Causes Extra Queries
 
@@ -256,9 +253,9 @@ configured output directory. See [report configuration](reports.md).
 Remove a previous run's expected report before a diagnostic rerun so an old file cannot be mistaken
 for new evidence. In CI, require both the test result and a freshly generated JSON outcome.
 
-The reviewed HTML can show `all clean` while the canonical result is `INCONCLUSIVE`
-([#296](https://github.com/haroya01/query-audit/issues/296)). Until that issue is fixed in your version,
-use the test result and JSON for the verdict; a green HTML page is not a CI gate.
+Since 0.7.0 the HTML report shows the run's `PASS`, `FAIL`, or `INCONCLUSIVE` outcome
+([#296](https://github.com/haroya01/query-audit/issues/296)); 0.6.x could show `all clean` for an
+incomplete run. For a CI gate, still use the test result and the JSON outcome.
 
 ## "HikariDataSource has been closed" on Spring Boot 4.x
 
@@ -267,8 +264,7 @@ Check the QueryAudit version and context lifecycle first. Older proxy-close hand
 before applying an old workaround.
 
 Disabling QueryAudit wrapping is appropriate only if another query-aware datasource is already
-registered. It is not a general fix for a closed pool. Context replacement also has a separately
-tracked capture gap in [#287](https://github.com/haroya01/query-audit/issues/287).
+registered. It is not a general fix for a closed pool.
 
 ## OutOfMemoryError During Tests
 
