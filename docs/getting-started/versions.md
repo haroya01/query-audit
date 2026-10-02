@@ -27,7 +27,7 @@ contract leaves the run `PASS`, and a lazy-proxy N+1 changes its finding ID on e
 | Optional index, `EXPLAIN`, and SQL style rules | [Optional rules](../detections/overview.md) |
 
 The [JSON reporter](https://github.com/haroya01/query-audit/blob/v0.7.2/query-audit-core/src/main/java/io/queryaudit/core/reporter/JsonReporter.java)
-writes schema **`1.7.0`**, the same schema as `0.6.1`. Keep the report reader and library versions
+writes schema **`1.8.0`**, the same schema as `0.6.1 through 0.7.2`. Keep the report reader and library versions
 aligned.
 
 ## Changes in 0.7.2

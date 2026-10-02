@@ -22,7 +22,14 @@ Use the JSON evidence to find the application caller; this is the same write in 
   "sql": "UPDATE orders SET status = ? WHERE id = ?",
   "stackTrace": "example.audit.FirstAuditTest.writeOnReadPath:43\nexample.audit.FirstAuditTest.readsOnce:26"
 }
+
+The `contractViolations` field contains a list of test IDs that failed due to scoped query contract violations.
+When no contract violations exist, this field is an empty list.
+
 ```
+The  field contains a list of test IDs that failed due to scoped query contract violations.
+When no contract violations exist, this field is an empty list.
+
 
 JSON redacts literal values and filters stack frames. Application frames appear when capture
 retains them. [Snapshot contract failures](contracts.md#enforcement) also show recorded and
@@ -181,7 +188,7 @@ Finding IDs in this example illustrate the schema 1.7 format introduced for Quer
 
 ```json
 {
-  "schemaVersion": "1.7.0",
+  "schemaVersion": "1.8.0",
   "redaction": "REDACTED",
   "outcome": "FAIL",
   "incompleteReasons": [],
@@ -285,20 +292,14 @@ Finding IDs in this example illustrate the schema 1.7 format introduced for Quer
 ### JSON Schema
 
 The envelope carries `schemaVersion` (semver) so consumers can detect incompatible input instead
-of silently misparsing it. QueryAudit 0.6.1 through 0.7.2 write **1.7.0**; QueryAudit 0.6.0 writes
+of silently misparsing it. QueryAudit 0.6.1 through 0.7.2 write **1.7.0**; starting with 0.8.0, write **1.8.0**; QueryAudit 0.6.0 writes
 schema 1.6. QueryAudit 0.5.x wrote schema 1.0
 without a run outcome; the comparator treats those reports as `INCONCLUSIVE` because it cannot
 infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run outcomes, 1.2
 added stable test identities, 1.3 added query-evidence retention counts, and 1.4 added the report
 redaction mode. Schema 1.5 added expected-test coverage; 1.6 added per-test comparison inputs.
 Schema 1.7 adds stable finding IDs and preserves repeated observations under `occurrences`.
-
-Each version has its own JSON Schema file. The deprecated Java method
-`JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` emits a legacy 1.0 envelope without run
-outcomes or stable identity fields. A list of reports cannot establish whether the audit
-completed or its policies passed. New callers should use
-`JsonReporter.toRunEnvelopeJson(AuditRunResult)`.
-
+Schema 1.8 adds the contractViolations field to list test IDs affected by scoped query contract violations.
 ### Run outcomes
 
 The suite outcome uses one precedence rule everywhere: `INCONCLUSIVE > FAIL > PASS`.
@@ -533,7 +534,7 @@ are empty:
   "findingIdentity": {
     "mode": "LEGACY",
     "baselineSchemaVersion": "1.6.0",
-    "candidateSchemaVersion": "1.7.0"
+    "candidateSchemaVersion": "1.8.0"
   }
 }
 ```

@@ -2,6 +2,7 @@ package io.queryaudit.mysql;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.tuple.Tuple.tuple;
 import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.*;
 
@@ -270,18 +271,18 @@ class MySqlExplainAnalyzerTest {
       when(rs1.next()).thenReturn(true);
       when(rs1.getString("table")).thenReturn("users");
       when(rs1.getString("type")).thenReturn("ALL");
-      when(rs1.getString("key")).thenReturn(null);
+       when(rs1.getString("key")).thenReturn((String) null);
       when(rs1.getLong("rows")).thenReturn(10000L);
-      when(rs1.getString("Extra")).thenReturn(null);
+      when(rs1.getString("Extra")).thenReturn((String) null);
 
       // Second query: uses index
       when(stmt2.executeQuery(startsWith("EXPLAIN"))).thenReturn(rs2);
       when(rs2.next()).thenReturn(true);
       when(rs2.getString("table")).thenReturn("orders");
       when(rs2.getString("type")).thenReturn("ref");
-      when(rs2.getString("key")).thenReturn("idx_user_id");
+       when(rs2.getString("key")).thenReturn((String) "idx_user_id");
       when(rs2.getLong("rows")).thenReturn(5L);
-      when(rs2.getString("Extra")).thenReturn(null);
+       when(rs2.getString("Extra")).thenReturn((String) null);
 
       List<QueryRecord> queries =
           List.of(
@@ -296,47 +297,181 @@ class MySqlExplainAnalyzerTest {
     }
   }
 
-  @Test
-  void aLaterFailureRetainsCompletedFindingsAndTheOriginalCause() throws SQLException {
-    mockExplainResult("users", "ALL", null, 100L, null);
-    SQLException failure = new SQLException("private SQL and connection details");
-    when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet).thenThrow(failure);
-    List<QueryRecord> queries =
-        List.of(
-            new QueryRecord("SELECT * FROM users", 0L, 0L, null),
-            new QueryRecord("SELECT * FROM orders", 0L, 0L, null));
+    @Test
+    void aLaterFailureRetainsCompletedFindingsAndTheOriginalCause() throws SQLException {
+        mockExplainResult("users", "ALL", null, 100L, null);
+        SQLException failure = new SQLException("private SQL and connection details");
+        when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet).thenThrow(failure);
+        List<QueryRecord> queries =
+            List.of(
+                new QueryRecord("SELECT * FROM users", 0L, 0L, null),
+                new QueryRecord("SELECT * FROM orders", 0L, 0L, null));
 
-    assertThatThrownBy(() -> analyzer.analyze(connection, queries))
-        .isInstanceOfSatisfying(
-            ExplainAnalysisException.class,
-            incomplete -> {
-              assertThat(incomplete.getCause()).isSameAs(failure);
-              assertThat(incomplete.getMessage()).doesNotContain("private SQL");
-              assertThat(incomplete.getCompletedIssues())
-                  .extracting(Issue::type)
-                  .containsExactly(IssueType.FULL_TABLE_SCAN);
-            });
-  }
+        assertThatThrownBy(() -> analyzer.analyze(connection, queries))
+            .isInstanceOfSatisfying(
+                ExplainAnalysisException.class,
+                incomplete -> {
+                    assertThat(incomplete.getCause()).isSameAs(failure);
+                    assertThat(incomplete.getMessage()).doesNotContain("private SQL");
+                    assertThat(incomplete.getCompletedIssues())
+                        .extracting(Issue::type)
+                        .containsExactly(IssueType.FULL_TABLE_SCAN);
+                });
+    }
 
-  @Test
-  void anEmptyExplainResponseIsIncomplete() throws SQLException {
-    when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
-    when(resultSet.next()).thenReturn(false);
-    assertThatThrownBy(
-            () ->
-                analyzer.analyze(
-                    connection, List.of(new QueryRecord("SELECT * FROM users", 0L, 0L, null))))
-        .isInstanceOf(ExplainAnalysisException.class);
-  }
+    @Test
+    void anEmptyExplainResponseIsIncomplete() throws SQLException {
+        when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
+        when(resultSet.next()).thenReturn(false);
+        assertThatThrownBy(
+                () ->
+                    analyzer.analyze(
+                        connection, List.of(new QueryRecord("SELECT * FROM users", 0L, 0L, null))))
+            .isInstanceOf(ExplainAnalysisException.class);
+    }
 
-  private void mockExplainResult(String table, String type, String key, long rows, String extra)
-      throws SQLException {
-    when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
-    when(resultSet.next()).thenReturn(true);
-    when(resultSet.getString("table")).thenReturn(table);
-    when(resultSet.getString("type")).thenReturn(type);
-    when(resultSet.getString("key")).thenReturn(key);
-    when(resultSet.getLong("rows")).thenReturn(rows);
-    when(resultSet.getString("Extra")).thenReturn(extra);
-  }
+    @Nested
+    @DisplayName("Multi-row EXPLAIN results")
+    class MultiRowTests {
+
+        @Test
+        @DisplayName("detects issues in second row when first row is clean")
+        void detectsIssueInSecondRow() throws SQLException {
+            // First row: const/PRIMARY (clean)
+            // Second row: ALL + Using filesort (problematic)
+            when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
+            when(resultSet.next()).thenReturn(true, true, false); // Two rows, then end
+            
+            // First row
+            when(resultSet.getString("table")).thenReturn("a", "o");
+            when(resultSet.getString("type")).thenReturn("const", "ALL");
+            when(resultSet.getString("key")).thenReturn((String) "PRIMARY", (String) null);
+            when(resultSet.getLong("rows")).thenReturn(1L, 100000L);
+            when(resultSet.getString("Extra")).thenReturn("", "Using filesort");
+            
+            List<QueryRecord> queries = List.of(
+                new QueryRecord("SELECT a.id, o.amount FROM accounts a JOIN orders o ON o.account_id = a.id WHERE a.id = 1", 0L, 0L, null));
+
+            List<Issue> issues = analyzer.analyze(connection, queries);
+
+            // Should find exactly one issue: filesort on table 'o'
+            assertThat(issues).hasSize(1);
+            Issue issue = issues.get(0);
+            assertThat(issue.type()).isEqualTo(IssueType.FILESORT);
+            assertThat(issue.table()).isEqualTo("o");
+            assertThat(issue.detail()).contains("Using filesort").contains("o").contains("100000");
+        }
+
+        @Test
+        @DisplayName("detects issues only in the last row of multiple rows")
+        void detectsIssueOnlyInLastRow() throws SQLException {
+            // Three rows: first two clean, last problematic
+            when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
+            when(resultSet.next()).thenReturn(true, true, true, false); // Three rows, then end
+            
+            // Row 1: const/PRIMARY
+            when(resultSet.getString("table")).thenReturn("a", "b", "o");
+            when(resultSet.getString("type")).thenReturn("const", "const", "ALL");
+             when(resultSet.getString("key")).thenReturn((String) "PRIMARY", (String) "PRIMARY", (String) null);
+            when(resultSet.getLong("rows")).thenReturn(1L, 1L, 50000L);
+            when(resultSet.getString("Extra")).thenReturn("", "", "Using temporary");
+            
+            List<QueryRecord> queries = List.of(
+                new QueryRecord("SELECT * FROM a JOIN b ON a.id = b.a_id JOIN o ON b.id = o.b_id WHERE a.id = 1", 0L, 0L, null));
+
+            List<Issue> issues = analyzer.analyze(connection, queries);
+
+            // Should find exactly one issue: temporary table on table 'o'
+            assertThat(issues).hasSize(1);
+            Issue issue = issues.get(0);
+            assertThat(issue.type()).isEqualTo(IssueType.TEMPORARY_TABLE);
+            assertThat(issue.table()).isEqualTo("o");
+            assertThat(issue.detail()).contains("Using temporary").contains("o").contains("50000");
+        }
+
+        @Test
+        @DisplayName("reports all distinct issues from multiple problematic rows")
+        void reportsAllDistinctIssues() throws SQLException {
+            // Two problematic rows: one with filesort, one with temporary table
+            when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
+            when(resultSet.next()).thenReturn(true, true, false); // Two rows, then end
+            
+            // Row 1: Using filesort
+            // Row 2: Using temporary
+            when(resultSet.getString("table")).thenReturn("orders", "customers");
+            when(resultSet.getString("type")).thenReturn("ref", "ALL");
+             when(resultSet.getString("key")).thenReturn((String) "idx_user_id", (String) null);
+            when(resultSet.getLong("rows")).thenReturn(100L, 1000L);
+            when(resultSet.getString("Extra")).thenReturn("Using filesort", "Using temporary");
+            
+            List<QueryRecord> queries = List.of(
+                new QueryRecord("SELECT * FROM orders JOIN customers ON orders.customer_id = customers.id WHERE orders.amount > 100", 0L, 0L, null));
+
+            List<Issue> issues = analyzer.analyze(connection, queries);
+
+            // Should find exactly two issues: filesort on orders, temporary table on customers
+            assertThat(issues).hasSize(2);
+            assertThat(issues)
+                .extracting(Issue::type, Issue::table)
+                .containsExactlyInAnyOrder(
+                    tuple(IssueType.FILESORT, "orders"),
+                    tuple(IssueType.TEMPORARY_TABLE, "customers"));
+        }
+
+        @Test
+        @DisplayName("deduplicates same table/problem appearing in multiple rows")
+        void deduplicatesSameTableAndIssue() throws SQLException {
+            // Two rows for same table, both showing same issue type
+            when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
+            when(resultSet.next()).thenReturn(true, true, false); // Two rows, then end
+            
+            // Both rows for table 'big_table', both showing Using filesort
+            when(resultSet.getString("table")).thenReturn("big_table", "big_table");
+            when(resultSet.getString("type")).thenReturn("ALL", "ALL");
+             when(resultSet.getString("key")).thenReturn((String) null, (String) null);
+            when(resultSet.getLong("rows")).thenReturn(1000L, 5000L);
+            when(resultSet.getString("Extra")).thenReturn("Using filesort", "Using filesort");
+            
+            List<QueryRecord> queries = List.of(
+                new QueryRecord("SELECT * FROM big_table WHERE category IN (SELECT cat FROM categories)", 0L, 0L, null));
+
+            List<Issue> issues = analyzer.analyze(connection, queries);
+
+            // Should find exactly one issue for filesort on big_table (deduplicated)
+            assertThat(issues).hasSize(1);
+            Issue issue = issues.get(0);
+            assertThat(issue.type()).isEqualTo(IssueType.FILESORT);
+            assertThat(issue.table()).isEqualTo("big_table");
+            // Note: the detail will show the values from whichever row was processed first
+            // The important thing is that we don't get two issues for the same table+issue type
+        }
+
+        @Test
+        @DisplayName("single-row plan behaves identically to before")
+        void singleRowPlanUnchanged() throws SQLException {
+            mockExplainResult("users", "ALL", null, 100L, null);
+            
+            List<QueryRecord> queries = List.of(
+                new QueryRecord("SELECT * FROM users", 0L, 0L, null));
+
+            List<Issue> issues = analyzer.analyze(connection, queries);
+
+            assertThat(issues).hasSize(1);
+            Issue issue = issues.get(0);
+            assertThat(issue.type()).isEqualTo(IssueType.FULL_TABLE_SCAN);
+            assertThat(issue.table()).isEqualTo("users");
+            assertThat(issue.detail()).contains("type=ALL").contains("100");
+        }
+    }
+
+    private void mockExplainResult(String table, String type, String key, long rows, String extra)
+        throws SQLException {
+        when(statement.executeQuery(startsWith("EXPLAIN"))).thenReturn(resultSet);
+        when(resultSet.next()).thenReturn(true);
+        when(resultSet.getString("table")).thenReturn(table);
+        when(resultSet.getString("type")).thenReturn(type);
+        when(resultSet.getString("key")).thenReturn(key);
+        when(resultSet.getLong("rows")).thenReturn(rows);
+        when(resultSet.getString("Extra")).thenReturn(extra);
+    }
 }

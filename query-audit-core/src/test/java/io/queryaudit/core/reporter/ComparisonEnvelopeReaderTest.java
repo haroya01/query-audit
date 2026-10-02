@@ -138,7 +138,7 @@ class ComparisonEnvelopeReaderTest {
             ReportRedaction.REDACTED,
             null,
             inputs,
-            new SchemaVersion(1, 7, "1.7.0"));
+            new SchemaVersion(1, 8, "1.8.0"));
     findings.clear();
     reports.clear();
     inputs.clear();
@@ -226,6 +226,6 @@ class ComparisonEnvelopeReaderTest {
         ReportRedaction.REDACTED,
         null,
         Map.of(TEST_ID, ComparisonInputFixtures.defaults()),
-        new SchemaVersion(1, 7, "1.7.0"));
+        new SchemaVersion(1, 8, "1.8.0"));
   }
 }

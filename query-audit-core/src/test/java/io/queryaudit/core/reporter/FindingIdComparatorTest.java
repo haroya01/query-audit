@@ -40,7 +40,7 @@ class FindingIdComparatorTest {
     var verdict = compare(before, after);
 
     assertThat(verdict.findingIdentity())
-        .isEqualTo(new ReportComparator.FindingIdentity("RECORDED", "1.7.0", "1.7.0"));
+        .isEqualTo(new ReportComparator.FindingIdentity("RECORDED", "1.8.0", "1.8.0"));
     assertThat(verdict.resolved())
         .singleElement()
         .satisfies(finding -> assertThat(finding.findingId()).isEqualTo(id(before, 0, 1)));
@@ -61,7 +61,7 @@ class FindingIdComparatorTest {
         .isEqualTo("customer_id");
     assertThat(serialized.path("findingIdentity").path("mode").asText()).isEqualTo("RECORDED");
     assertThat(serialized.path("findingIdentity").path("baselineSchemaVersion").asText())
-        .isEqualTo("1.7.0");
+        .isEqualTo("1.8.0");
   }
 
   @Test
@@ -265,12 +265,12 @@ class FindingIdComparatorTest {
     var backward = compare(modern, legacy);
 
     assertThat(forward.findingIdentity())
-        .isEqualTo(new ReportComparator.FindingIdentity("LEGACY", "1.6.0", "1.7.0"));
+        .isEqualTo(new ReportComparator.FindingIdentity("LEGACY", "1.6.0", "1.8.0"));
     assertThat(forward.persisting())
         .singleElement()
         .satisfies(finding -> assertThat(finding.findingId()).isEqualTo(id(modern, 0, 0)));
     assertThat(backward.findingIdentity())
-        .isEqualTo(new ReportComparator.FindingIdentity("LEGACY", "1.7.0", "1.6.0"));
+        .isEqualTo(new ReportComparator.FindingIdentity("LEGACY", "1.8.0", "1.6.0"));
     assertThat(backward.persisting())
         .singleElement()
         .satisfies(finding -> assertThat(finding.findingId()).isNull());
