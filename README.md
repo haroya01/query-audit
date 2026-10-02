@@ -24,7 +24,7 @@ already use.
 
 ```kotlin
 dependencies {
-    testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.7.1") // x-release-please-version
+    testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.7.2") // x-release-please-version
 }
 ```
 

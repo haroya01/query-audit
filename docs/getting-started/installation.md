@@ -24,8 +24,8 @@ keep your JDBC driver, connection settings, migrations, and fixtures.
     ```kotlin
     dependencies {
         testImplementation("org.springframework.boot:spring-boot-starter-test")
-        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.7.1") // x-release-please-version
-        testImplementation("io.github.haroya01:query-audit-mysql:0.7.1") // x-release-please-version
+        testImplementation("io.github.haroya01:query-audit-spring-boot-starter:0.7.2") // x-release-please-version
+        testImplementation("io.github.haroya01:query-audit-mysql:0.7.2") // x-release-please-version
     }
 
     tasks.test {
@@ -38,8 +38,8 @@ keep your JDBC driver, connection settings, migrations, and fixtures.
     ```groovy
     dependencies {
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
-        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.7.1' // x-release-please-version
-        testImplementation 'io.github.haroya01:query-audit-mysql:0.7.1' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-spring-boot-starter:0.7.2' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-mysql:0.7.2' // x-release-please-version
     }
 
     test {
@@ -59,13 +59,13 @@ keep your JDBC driver, connection settings, migrations, and fixtures.
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-spring-boot-starter</artifactId>
-            <version>0.7.1</version> <!-- x-release-please-version -->
+            <version>0.7.2</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-mysql</artifactId>
-            <version>0.7.1</version> <!-- x-release-please-version -->
+            <version>0.7.2</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -93,7 +93,7 @@ The H2 dependency supplies the [runnable sample](quickstart.md); use your existi
     dependencies {
         testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
         testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
-        testImplementation("io.github.haroya01:query-audit-junit5:0.7.1") // x-release-please-version
+        testImplementation("io.github.haroya01:query-audit-junit5:0.7.2") // x-release-please-version
         testImplementation("net.ttddyy:datasource-proxy:1.10")
         testImplementation("com.h2database:h2:2.3.232")
     }
@@ -109,7 +109,7 @@ The H2 dependency supplies the [runnable sample](quickstart.md); use your existi
     dependencies {
         testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
-        testImplementation 'io.github.haroya01:query-audit-junit5:0.7.1' // x-release-please-version
+        testImplementation 'io.github.haroya01:query-audit-junit5:0.7.2' // x-release-please-version
         testImplementation 'net.ttddyy:datasource-proxy:1.10'
         testImplementation 'com.h2database:h2:2.3.232'
     }
@@ -132,7 +132,7 @@ The H2 dependency supplies the [runnable sample](quickstart.md); use your existi
         <dependency>
             <groupId>io.github.haroya01</groupId>
             <artifactId>query-audit-junit5</artifactId>
-            <version>0.7.1</version> <!-- x-release-please-version -->
+            <version>0.7.2</version> <!-- x-release-please-version -->
             <scope>test</scope>
         </dependency>
         <dependency>
