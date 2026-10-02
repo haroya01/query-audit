@@ -99,7 +99,8 @@ to the test, and make the service or repository use the instrumented DataSource.
 limit for that operation; zero INSERT/UPDATE/DELETE limits protect a read path from those writes.
 
 **Budgets are upper bounds.** `select = 1` also permits zero captured SELECTs; omitted attributes
-are unchecked. Verify a deliberate violation through your real operation before trusting a pass.
+are unchecked. Since 0.8.0, `exact = true` makes the declared attributes exact counts. Verify a
+deliberate violation through your real operation before trusting a pass.
 `@EnableQueryInspector` keeps findings informational while explicit query budgets still fail.
 
 ??? example "Complete runnable source"

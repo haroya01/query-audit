@@ -43,6 +43,7 @@ final class ComparisonInputRecorder {
         inlineLimits.put("update", queries.update());
         inlineLimits.put("delete", queries.delete());
         if (queries.total() >= 0) inlineLimits.put("total", queries.total());
+        if (queries.exact()) inlineLimits.put("exact", 1);
       }
       ExpectMaxQueryCount maximum = AuditAnnotations.onMethod(method, ExpectMaxQueryCount.class);
       if (maximum != null) {

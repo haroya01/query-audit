@@ -38,38 +38,45 @@ final class AuditAssertions {
 
   static String buildExpectQueriesFailureMessage(
       ExpectQueries annotation, List<QueryRecord> queries, String testName) {
+    boolean exact = annotation.exact();
     StringBuilder violations = new StringBuilder();
     appendBudgetViolation(
-        violations, "SELECT", annotation.select(), queries, SqlParser::isSelectQuery);
+        violations, "SELECT", annotation.select(), exact, queries, SqlParser::isSelectQuery);
     appendBudgetViolation(
-        violations, "INSERT", annotation.insert(), queries, SqlParser::isInsertQuery);
+        violations, "INSERT", annotation.insert(), exact, queries, SqlParser::isInsertQuery);
     appendBudgetViolation(
-        violations, "UPDATE", annotation.update(), queries, SqlParser::isUpdateQuery);
+        violations, "UPDATE", annotation.update(), exact, queries, SqlParser::isUpdateQuery);
     appendBudgetViolation(
-        violations, "DELETE", annotation.delete(), queries, SqlParser::isDeleteQuery);
-    appendBudgetViolation(violations, "TOTAL", annotation.total(), queries, sql -> true);
+        violations, "DELETE", annotation.delete(), exact, queries, SqlParser::isDeleteQuery);
+    appendBudgetViolation(violations, "TOTAL", annotation.total(), exact, queries, sql -> true);
 
     if (violations.length() == 0) {
       return null;
     }
-    return "QueryAudit: " + testName + " exceeded its query budget.\n" + violations;
+    String verdict =
+        exact ? " did not match its exact query counts.\n" : " exceeded its query budget.\n";
+    return "QueryAudit: " + testName + verdict + violations;
   }
 
   private static void appendBudgetViolation(
       StringBuilder sb,
       String type,
-      int max,
+      int expected,
+      boolean exact,
       List<QueryRecord> queries,
       Predicate<String> typeMatcher) {
-    if (max < 0) {
+    if (expected < 0) {
       return;
     }
     List<QueryRecord> matched = queries.stream().filter(q -> typeMatcher.test(q.sql())).toList();
-    if (matched.size() <= max) {
+    if (exact ? matched.size() == expected : matched.size() <= expected) {
       return;
     }
 
-    sb.append(String.format("%s: executed %d, expected at most %d.\n", type, matched.size(), max));
+    sb.append(
+        String.format(
+            "%s: executed %d, expected %s %d.\n",
+            type, matched.size(), exact ? "exactly" : "at most", expected));
     for (QueryRecord query : matched) {
       String sql = query.sql();
       sb.append("  ").append(sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);

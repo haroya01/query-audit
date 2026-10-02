@@ -13,7 +13,7 @@ reference documents the published `0.7.1` annotation API.
 |---|---|---|---|
 | `@QueryAudit` | Class / Method | Run the configured detection profile | Yes (configurable) |
 | `@EnableQueryInspector` | Class | Report findings without enforcing them | No finding failure; separate budget annotations still assert |
-| `@ExpectQueries` | Method | Assert query budgets per type and in total | Yes (on budget exceeded) |
+| `@ExpectQueries` | Method | Assert query budgets, or exact counts, per type and in total | Yes (on budget exceeded, or any difference with `exact`) |
 | `@DetectNPlusOne` | Class / Method | Deprecated since 0.7.0; use `@QueryAudit(failOn = N_PLUS_ONE)` | Yes (on N+1 only) |
 | `@ExpectMaxQueryCount` | Method | Deprecated since 0.7.0; use `@ExpectQueries(total = n)` | Yes (on count exceeded) |
 | `@QueryAuditExclude` | Class / Method | Opt a test out of auditing (the `mode: all` escape hatch) | No |
@@ -407,6 +407,32 @@ class OrderServiceTest {
 | `update` | `int` | `-1` (not verified) | Maximum UPDATE queries allowed |
 | `delete` | `int` | `-1` (not verified) | Maximum DELETE queries allowed |
 | `total` | `int` | `-1` (not verified) | Maximum captured statements of any type |
+| `exact` | `boolean` | `false` | Since 0.8.0: require each declared count exactly instead of as a maximum |
+
+### Exact counts
+
+Since 0.8.0, `exact = true` makes every declared attribute an exact count. The test also fails when
+fewer statements run, which an upper bound cannot catch: a cache that starts hiding a lookup, or a
+capture that silently stopped seeing the `DataSource`.
+
+```java
+@Test
+@ExpectQueries(select = 2, insert = 0, exact = true)
+void findOrderWithCustomer() {
+    orderService.findWithCustomer(1L);
+    // Fails on one SELECT as well as on three. UPDATE and DELETE stay unchecked.
+}
+```
+
+```
+QueryAudit: findOrderWithCustomer() did not match its exact query counts.
+SELECT: executed 1, expected exactly 2.
+  select * from orders where id = ?
+    at com.example.OrderService.findWithCustomer:31
+```
+
+Attributes left at `-1` stay unchecked. To pin every statement type of a test, a request, or a job
+without writing the numbers by hand, record a [contract](contracts.md) instead.
 
 ### Failure Message
 

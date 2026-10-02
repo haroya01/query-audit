@@ -70,7 +70,8 @@ UPDATE: executed 1, expected at most 0.
 The limits are upper bounds. `select = 2` permits zero, one, or two SELECTs; it does not require
 exactly two. `0` forbids that statement type, and an omitted attribute does not restrict it.
 `total` limits all statements together. The budget counts captured statements, not returned rows
-or elapsed time.
+or elapsed time. Since 0.8.0, `exact = true` requires each declared count exactly, so a path that
+stops issuing a query fails too.
 
 ## Contract a request or job
 
@@ -79,7 +80,7 @@ A contract is a count QueryAudit records for you. Compared with a budget:
 | | Budget | Contract |
 |---|---|---|
 | Who writes the number | You, in the annotation | Record mode, in a committed file |
-| What fails | Going over the limit | Any change, up or down |
+| What fails | Going over the limit, or any change with `exact = true` | Any change, up or down |
 | Scope | One test method | A test method, a request, a job, or a journey |
 | Fits | A few rules such as "no writes on this path" | Tracking hundreds of requests and reviewing every change |
 

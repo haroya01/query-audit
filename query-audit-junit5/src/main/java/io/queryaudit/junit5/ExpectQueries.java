@@ -27,6 +27,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * {@code @ExpectQueries(insert = 0, update = 0, delete = 0)} asserts that a read-only path performs
  * no writes.
  *
+ * <p>With {@code exact = true}, each declared count must match: {@code @ExpectQueries(select = 2,
+ * exact = true)} fails on one SELECT as well as on three.
+ *
  * <p>When a budget is exceeded, the failure message lists every query of the violated type together
  * with its call site.
  *
@@ -51,4 +54,12 @@ public @interface ExpectQueries {
   int delete() default -1;
 
   int total() default -1;
+
+  /**
+   * Requires every declared count to match exactly instead of acting as an upper bound, so the test
+   * also fails when fewer queries run.
+   *
+   * @since 0.8.0
+   */
+  boolean exact() default false;
 }
