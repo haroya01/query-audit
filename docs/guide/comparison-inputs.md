@@ -12,7 +12,8 @@ java -cp query-audit-core-<version>.jar \
 | Change between runs | Comparison result |
 |---|---|
 | Same effective inputs, complete audits, no new confirmed findings, passing candidate | `PASS` (exit `0`) |
-| Changed profile, rule settings, thresholds, or loaded query policies | `INCONCLUSIVE` with `INCOMPATIBLE_AUDIT_INPUTS`; `resolved` stays empty |
+| Changed profile, rule settings, thresholds, suppressions, finding policies, or contract record mode | `INCONCLUSIVE` with `INCOMPATIBLE_AUDIT_INPUTS`; `resolved` stays empty |
+| A re-recorded contract or an edited `@ExpectQueries` budget | Compared normally; review the change in the pull request diff |
 | Missing input metadata or unidentified custom inputs | `INCONCLUSIVE` with `COMPARISON_INPUTS_UNAVAILABLE` |
 | Missing expected audit evidence | `INCONCLUSIVE`; inspect [coverage](audit-coverage.md) |
 
@@ -43,17 +44,25 @@ is compacted from a large suite report.
 | `detectorCapabilities` | Active detector implementation identities, sorted for deterministic output. |
 | `detectorInputsComplete` | Whether the inputs of every active detector can be fully identified. |
 | `capabilities` | Availability, source identity, and input completeness for index metadata, Hibernate events, EXPLAIN, and repository return-type resolution. |
-| `fingerprints` | SHA-256 digests of the effective rule settings, thresholds, suppressions, loaded query contracts and query-count policies, and finding baseline. |
+| `fingerprints` | SHA-256 digests of the effective rule settings, thresholds, suppressions, finding failure policy, count baseline, contract and count record modes, and finding baseline. |
+
+Since 0.7.2, contract counts and `@ExpectQueries` or `@ExpectMaxQueryCount` limits are not
+comparison inputs. Each run still enforces them, so a count change without a re-recorded contract
+fails that run. A pull request that changes a count on purpose re-records the contract, its diff
+shows the new count, and the comparison stays `PASS`. In 0.7.1 such a pull request compared as
+`INCONCLUSIVE`. A run in contract record mode enforces nothing and stays incomparable with an
+enforced run.
 
 Fingerprint inputs are canonicalized before hashing, including collection order and null values.
 The report contains the digest, not policy file contents, raw environment values, or absolute
 policy paths. Moving an unchanged policy file does not itself change its fingerprint. Changing
-its effective contents does.
+the effective contents of a baseline or a finding policy does.
 
 Rule-setting fingerprints include explicit rule selection, severity overrides, audit mode,
 capture limits, setup-query handling, and policy behavior such as `failOnDetection`. Threshold
 fingerprints include limits that can change which findings appear. Query-policy fingerprints
-include inline expectations and recording modes as well as loaded file contents. A report's
+include the `failOn` selection, `@DetectNPlusOne`, the deprecated count baseline, and the contract
+and count recording modes, but not contract counts or budget limits. A report's
 format or output directory is not an analysis input; redaction compatibility is checked separately.
 
 The capability entries have this shape:
