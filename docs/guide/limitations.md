@@ -35,8 +35,8 @@ the budget.
 
 ## Reported cases to check
 
-The following issues were reproduced on `0.6.0` source and remain open in 0.7.1. These links do
-not claim that 0.7.1 still shows each behavior or that it fixes it. Use each issue's reproduction
+The following issues were reproduced on `0.6.0` source and remain open in 0.7.2. These links do
+not claim that 0.7.2 still shows each behavior or that it fixes it. Use each issue's reproduction
 details when checking your setup.
 
 | Workflow | Reported behavior | Check for your setup |

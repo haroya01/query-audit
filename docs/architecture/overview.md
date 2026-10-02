@@ -349,7 +349,7 @@ suppression, and baselines.
 | CountInsteadOfExistsDetector | `COUNT_INSTEAD_OF_EXISTS` | INFO | `COUNT(*)` where `EXISTS` is better |
 | UnboundedResultSetDetector | `UNBOUNDED_RESULT_SET` | WARNING | SELECT without LIMIT |
 | SlowQueryDetector | `SLOW_QUERY` | WARNING/ERROR | Queries exceeding time thresholds |
-| ~~DuplicateQueryDetector~~ | `DUPLICATE_QUERY` | WARNING | Exact duplicate SQL *(disabled -- awaiting parameter tracking)* |
+| ~~DuplicateQueryDetector~~ | `DUPLICATE_QUERY` | WARNING | Exact duplicate SQL *(disabled)* |
 | CoveringIndexDetector | `COVERING_INDEX_OPPORTUNITY` | INFO | Queries that could use covering indexes |
 | DistinctMisuseDetector | `DISTINCT_MISUSE` | WARNING | Unnecessary DISTINCT |
 | HavingMisuseDetector | `HAVING_MISUSE` | WARNING | HAVING on non-aggregate columns |

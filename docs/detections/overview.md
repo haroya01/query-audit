@@ -126,6 +126,7 @@ The complete searchable reference of issue types emitted by the active detection
 | 65 | Temporary Table | `temporary-table` | INFO | EXPLAIN-Based | Temporary table usage in EXPLAIN output |
 | 66 | Read-Modify-Write | `read-modify-write` | INFO | Locking Risks | SELECT without a lock followed by INSERT/UPDATE on the same table, with no unique-constraint backing, upsert, atomic SET, or version column |
 | 67 | Connection Held Idle | `connection-held-idle` | INFO | Connection Lifecycle | Connection held while non-database work runs -- the pool-exhaustion shape |
+| 68 | Full Table Scan | `full-scan` | INFO | EXPLAIN-Based | Full table scan in EXPLAIN output |
 
 !!! note "Rule numbering"
     The table numbers are lookup aids, not a priority ranking. Severity suggests review urgency;
@@ -276,6 +277,7 @@ but are worth reviewing.
 | `read-modify-write` | Check-then-act race: unlocked SELECT then INSERT/UPDATE on the same table | Sequence analysis + unique-index cross-check; exempts FOR UPDATE, upserts, @Version columns, atomic `SET col = col - ?`, non-overlapping predicates |
 | `connection-held-idle` | Connection held while non-database work runs | held − database-work time per connection checkout, from JDBC lifecycle events; threshold `connection-held-idle.threshold-ms` (200ms default) |
 | `n-plus-one-suspect` | Same-structure SELECTs repeated at the SQL level; review with Hibernate events and actual counts | SQL pattern repetition heuristic |
+| `full-scan` | Full table scan in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
 | `filesort` | Filesort detected in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
 | `temporary-table` | Temporary table usage in the execution plan | MySQL/PostgreSQL EXPLAIN analyzers |
 
@@ -285,37 +287,26 @@ but are worth reviewing.
 
 ---
 
-## Disabled & Reserved Rules
+## Disabled Rules
 
 Some issue codes remain available for compatibility even though no active detector emits them.
 Do not use their presence in configuration as evidence that the corresponding check ran.
 
-### Disabled Rules
-
 | Code | Reason |
 |------|--------|
-| `duplicate-query` | **Disabled in code.** datasource-proxy provides SQL with `?` placeholders, making it impossible to distinguish "same query, same params" from "same query, different params." The N+1 detector already covers repeated patterns. Will be re-enabled when parameter tracking is added. |
+| `duplicate-query` | **Disabled in code.** datasource-proxy provides SQL with `?` placeholders, making it impossible to distinguish "same query, same params" from "same query, different params." The call-site N+1 rule covers repetition: since 0.7.1 it hashes bound values and reports a lookup repeated with the same values as INFO. |
 
 !!! warning "DuplicateQueryDetector"
     The `DuplicateQueryDetector` class exists in the codebase but is intentionally omitted from
     `DetectionRuleRegistry.createBuiltInRules()`. The `DUPLICATE_QUERY` IssueType remains in the
     enum for forward compatibility.
 
-### Reserved for Future EXPLAIN-based Detection
-
-| Code | Description | Status |
-|------|-------------|--------|
-| `full-scan` | Full table scan detected | Reserved -- not yet emitted by the EXPLAIN analyzers |
-
-This IssueType exists in the enum but is not emitted yet. It is a placeholder
-for full-table-scan detection in the EXPLAIN analyzers.
-
 !!! note "Where findings come from"
     A single detector can emit multiple issue types. For example,
     `MissingIndexDetector` is registered as one detection rule but emits clause-specific
     `IssueType`s (`missing-where-index`, `missing-join-index`, `missing-order-by-index`,
     `missing-group-by-index`) -- one per SQL clause it analyzes. On top of the core rules,
-    the MySQL/PostgreSQL EXPLAIN analyzers emit `filesort` and `temporary-table`, the
+    the MySQL/PostgreSQL EXPLAIN analyzers emit `full-scan`, `filesort`, and `temporary-table`, the
     Hibernate-level trackers emit `find-by-id-for-association` and the event-based N+1
     signal, and the connection lifecycle tracker emits `connection-held-idle` -- these run
     outside `DetectionRuleRegistry.createBuiltInRules()`.
@@ -412,6 +403,7 @@ for full-table-scan detection in the EXPLAIN analyzers.
 - `window-no-partition` -- Window function without PARTITION BY (WARNING)
 
 ### EXPLAIN-Based
+- `full-scan` -- Full table scan in EXPLAIN output (INFO)
 - `filesort` -- Filesort detected in EXPLAIN output (INFO)
 - `temporary-table` -- Temporary table usage in EXPLAIN output (INFO)
 
@@ -430,17 +422,6 @@ change `@ExpectQueries` or a recorded count contract. See [Annotations](../guide
 and [Query Snapshot Contracts](../guide/contracts.md).
 
 ---
-
-## Future Phases
-
-| Phase | Focus | Status |
-|-------|-------|--------|
-| Phase 3 | Slow query log integration, execution time thresholds | Planned |
-| Phase 4 | Multi-database support (MariaDB, Oracle, SQL Server) | Planned |
-| Phase 5 | AI-assisted query rewrite suggestions | Research |
-
-!!! success "Completed"
-    **PostgreSQL support** is fully implemented in the `query-audit-postgresql` module.
 
 !!! note "Contribute"
     Have an idea for a new detection rule? See the
