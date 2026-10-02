@@ -25,9 +25,11 @@ public final class AuditCoverageListener implements TestExecutionListener {
   private static final class SessionHandle {
     private volatile AuditCoverageSession session;
     private volatile boolean active = true;
+    private final ContractViolations contractViolations;
 
-    SessionHandle(AuditCoverageSession session) {
+    SessionHandle(AuditCoverageSession session, ContractViolations contractViolations) {
       this.session = session;
+      this.contractViolations = contractViolations;
     }
 
     void close() {
@@ -50,6 +52,13 @@ public final class AuditCoverageListener implements TestExecutionListener {
     return current != null && current.bindRoot(context.getRoot()) ? current : null;
   }
 
+  static ContractViolations currentContractViolations() {
+    Execution execution = currentExecution();
+    return execution == null || !execution.handle().active
+        ? null
+        : execution.handle().contractViolations;
+  }
+
   private static Execution currentExecution() {
     Deque<Execution> executions = EXECUTIONS.get();
     while (!executions.isEmpty() && !executions.peek().handle().active) {
@@ -64,8 +73,9 @@ public final class AuditCoverageListener implements TestExecutionListener {
 
   @Override
   public void testPlanExecutionStarted(TestPlan testPlan) {
-    session = AuditCoverageSession.open(testPlan);
-    handle = new SessionHandle(session);
+    ContractViolations contractViolations = new ContractViolations();
+    session = AuditCoverageSession.open(testPlan, contractViolations);
+    handle = new SessionHandle(session, contractViolations);
   }
 
   @Override
@@ -95,6 +105,11 @@ public final class AuditCoverageListener implements TestExecutionListener {
   public void executionFinished(
       TestIdentifier testIdentifier, TestExecutionResult testExecutionResult) {
     try {
+      if (handle != null
+          && testIdentifier.isTest()
+          && testExecutionResult.getThrowable().map(ContractViolations::causedBy).orElse(false)) {
+        handle.contractViolations.record(testIdentifier.getUniqueId());
+      }
       if (session != null) {
         session.finished(testIdentifier, testExecutionResult);
       }

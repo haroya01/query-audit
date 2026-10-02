@@ -3,6 +3,7 @@ package io.queryaudit.junit5;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.config.ReportFormat;
 import io.queryaudit.core.config.ReportRedaction;
+import io.queryaudit.core.contract.QueryContractViolation;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.extension.AuditExtensions;
 import io.queryaudit.core.interceptor.QueryCaptureSession;
@@ -247,6 +248,7 @@ public class QueryAuditExtension
       finalizer.requireConfiguration(
           directory, config.getReportFormat(), config.getReportRedaction());
       finalizer.requireReportSinks(extensionsFor(context).reportSinks());
+      finalizer.requireContractViolations(AuditCoverageListener.currentContractViolations());
       AuditCoverageSession coverage = AuditCoverageListener.currentSession(context);
       finalizer.requireCoverageSession(coverage);
       if (AuditCoverageManifest.isConfigured() && coverage == null) {
@@ -327,7 +329,8 @@ public class QueryAuditExtension
   }
 
   static boolean isAuditPolicyFailure(Throwable failure) {
-    return AuditPolicyViolation.isPurePolicyFailure(failure);
+    return AuditPolicyViolation.isPurePolicyFailure(failure)
+        || (failure instanceof QueryContractViolation && failure.getSuppressed().length == 0);
   }
 
   static LegacyIdentityRegistry claimLegacyIdentity(
