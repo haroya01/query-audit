@@ -37,6 +37,7 @@ reference documents the published `0.7.1` annotation API.
 | `update` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum UPDATE queries allowed |
 | `delete` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum DELETE queries allowed |
 | `total` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum captured statements of any type |
+| `exact` | `@ExpectQueries` | `boolean` | `false` | Since 0.7.2: require each declared count exactly |
 
 Choose how findings are treated with one class-level annotation: `@QueryAudit` fails the test on
 confirmed findings, and `@EnableQueryInspector` reports them without failing. Put query budgets on

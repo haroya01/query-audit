@@ -225,7 +225,7 @@ scoped tests sequentially against an isolated database and keep schedulers off.
 | | Scope | Fails on | Update flow |
 |---|---|---|---|
 | **Contracts** | every recorded test | any count deviation, both directions | re-record, review file diff |
-| [`@ExpectQueries`](annotations.md#expectqueries) | one method | budget exceeded | edit the annotation |
+| [`@ExpectQueries`](annotations.md#expectqueries) | one method | budget exceeded, or any difference with `exact = true` | edit the annotation |
 | [`QueryContractScope`](#contract-a-request-or-job) | one request, job, or journey | any count deviation, missing contract | re-record, review file diff |
 | Count baseline (`queryAudit.counts.record`), deprecated since 0.7.0 | tests with a recorded baseline | threshold-based regression finding, subject to finding policy | update baseline; use contracts instead |
 | [Issue baseline](suppressing.md) | findings | new findings | acknowledge |
