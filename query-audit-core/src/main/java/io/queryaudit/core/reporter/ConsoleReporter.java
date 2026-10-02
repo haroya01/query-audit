@@ -230,7 +230,11 @@ public class ConsoleReporter implements Reporter {
     }
 
     if (issue.sourceLocation() != null && !issue.sourceLocation().isBlank()) {
-      out.println("    Source: " + color(DIM, issue.sourceLocation()));
+      List<String> frames = sourceFrames(issue.sourceLocation());
+      out.println("    Source: " + color(DIM, frames.get(0)));
+      for (String frame : frames.subList(1, frames.size())) {
+        out.println("            " + color(DIM, frame));
+      }
     }
 
     if (issue.table() != null && !issue.table().isBlank()) {
@@ -404,6 +408,22 @@ public class ConsoleReporter implements Reporter {
       return oneLine;
     }
     return oneLine.substring(0, maxLength - 3) + "...";
+  }
+
+  private static List<String> sourceFrames(String sourceLocation) {
+    List<String> lines =
+        sourceLocation.lines().map(String::strip).filter(line -> !line.isEmpty()).toList();
+    List<String> application =
+        lines.stream()
+            .filter(
+                frame ->
+                    !frame.startsWith("java.")
+                        && !frame.startsWith("jdk.")
+                        && !frame.startsWith("sun.")
+                        && !frame.startsWith("worker.org.gradle."))
+            .limit(5)
+            .toList();
+    return application.isEmpty() ? List.of(lines.get(0)) : application;
   }
 
   private String colorForSeverity(Severity severity) {
