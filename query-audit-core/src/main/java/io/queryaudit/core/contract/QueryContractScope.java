@@ -83,7 +83,7 @@ public final class QueryContractScope {
     }
     ContractFiles files = ContractFiles.load(location);
     if (!files.contracts().containsKey(key)) {
-      throw new AssertionError(
+      throw new QueryContractViolation(
           "Missing query contract: "
               + captured.contractId()
               + "\n  Measured: "
@@ -104,7 +104,7 @@ public final class QueryContractScope {
             captured.queries(),
             files.fileFor(key).toString());
     if (failure != null) {
-      throw new AssertionError(failure);
+      throw new QueryContractViolation(failure);
     }
   }
 
@@ -169,7 +169,7 @@ public final class QueryContractScope {
       }
       QueryCaptureSnapshot snapshot = interceptor.snapshot();
       if (snapshot.truncated()) {
-        throw new AssertionError(
+        throw new QueryContractViolation(
             "Query capture for "
                 + contractId
                 + " discarded "
