@@ -89,7 +89,7 @@ final class ComparisonEnvelopeReader {
     }
     try {
       AuditRunResult validated =
-          new AuditRunResult(List.of(), outcome, incompleteReasons, null, comparisonInputs, List.of());
+          new AuditRunResult(List.of(), outcome, incompleteReasons, null, comparisonInputs);
       if (coverage != null
           && coverage.failedToAudit() > 0
           && outcome != AuditOutcome.INCONCLUSIVE) {

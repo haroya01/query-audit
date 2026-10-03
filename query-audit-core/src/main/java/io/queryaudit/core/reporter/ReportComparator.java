@@ -119,8 +119,7 @@ public final class ReportComparator {
       inputDifferences = List.copyOf(inputDifferences);
       targetResolutions = List.copyOf(targetResolutions);
       Objects.requireNonNull(findingIdentity, "findingIdentity");
-      AuditRunResult validated =
-          new AuditRunResult(List.of(), outcome, incompleteReasons, null, List.of());
+      AuditRunResult validated = new AuditRunResult(List.of(), outcome, incompleteReasons);
       incompleteReasons = validated.incompleteReasons();
     }
 
