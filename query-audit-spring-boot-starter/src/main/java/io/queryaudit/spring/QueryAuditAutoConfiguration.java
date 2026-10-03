@@ -19,6 +19,7 @@ import io.queryaudit.core.reporter.delivery.ReportSinkRegistration;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
@@ -33,9 +34,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 
 /**
  * Auto-configuration for QueryAudit.
@@ -117,8 +121,30 @@ public class QueryAuditAutoConfiguration {
   @Bean(name = "queryAuditBackgroundWork")
   @Conditional(AwaitExecutorsDeclared.class)
   ExecutorIdleAwaiter queryAuditBackgroundWork(
-      QueryAuditProperties properties, ListableBeanFactory beanFactory) {
-    return new ExecutorIdleAwaiter(beanFactory, properties.getAwaitExecutors());
+      QueryAuditProperties properties,
+      ListableBeanFactory beanFactory,
+      ObjectProvider<AwaitedTaskTracker> taskTracker) {
+    return new ExecutorIdleAwaiter(
+        beanFactory, properties.getAwaitExecutors(), taskTracker.getIfAvailable());
+  }
+
+  /**
+   * Counts work handed to awaited {@link org.springframework.core.task.SimpleAsyncTaskExecutor}
+   * beans, which — unlike pool executors — expose no queue or active-count state to wait on.
+   *
+   * <p>Declared {@code static} with the awaited names read from the {@link Environment} rather than
+   * injected, because a {@link BeanPostProcessor} is created before most other beans: injecting the
+   * {@code @ConfigurationProperties} bean here would force it to initialize ahead of its own
+   * binding post-processor.
+   */
+  @Bean
+  @Conditional(AwaitExecutorsDeclared.class)
+  static AwaitedTaskTracker awaitedTaskTracker(Environment environment) {
+    return new AwaitedTaskTracker(
+        new HashSet<>(
+            Binder.get(environment)
+                .bind("query-audit.await-executors", Bindable.listOf(String.class))
+                .orElse(List.of())));
   }
 
   @Bean

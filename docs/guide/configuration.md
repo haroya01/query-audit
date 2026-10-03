@@ -38,7 +38,7 @@ All properties are optional. The table below lists every supported key under the
 | `enabled-rules` | `List<String>` | `[]` | Rule codes to run even when the profile tier excludes them. `disabled-rules` still wins. |
 | `mode` | `String` | `"annotated"` | Which tests the JUnit extension audits: `annotated` (opt-in via `@QueryAudit`) or `all` (every test, opt-out via `@QueryAuditExclude`). `all` additionally requires JUnit extension autodetection — see [Audit Coverage Mode](#audit-coverage-mode). |
 | `contracts.path` | `String` | `".query-audit-contracts"` | Query contracts for test methods and `QueryContractScope`: one file, or a directory whose `*.contracts` files are all read. See [contracts](contracts.md). |
-| `await-executors` | `List<String>` | `[]` | Bean names of `ThreadPoolTaskExecutor` or `ThreadPoolExecutor` pools that audited test methods and the injected `QueryContractScope` wait for. See [Background Work](#background-work). |
+| `await-executors` | `List<String>` | `[]` | Bean names of `ThreadPoolTaskExecutor`, `ThreadPoolExecutor`, or `SimpleAsyncTaskExecutor` executors that audited test methods and the injected `QueryContractScope` wait for. See [Background Work](#background-work). |
 | `wrap-data-source.enabled` | `boolean` | `true` | Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy). |
 | `fail-on-detection` | `boolean` | `true` | Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`. |
 | `count-instead-of-exists.enabled` | `boolean` | `false` | Enable the `count-instead-of-exists` INFO detector. Off by default because it can fire on legitimate aggregate counts. |
@@ -288,9 +288,30 @@ Without the wait, background SQL can land in teardown, after the audit ends, or 
 [contract a request or job](contracts.md#contract-a-request-or-job).
 
 Counting covers every thread, not only the named pools, so keep schedulers off during tests.
-`await-executors` accepts `ThreadPoolTaskExecutor` and `ThreadPoolExecutor` beans. With
-`spring.threads.virtual.enabled`, Spring runs `@Async` work on a `SimpleAsyncTaskExecutor`, which
-cannot be awaited; define a `ThreadPoolTaskExecutor` for tests or wait for the work in the test.
+`await-executors` accepts `ThreadPoolTaskExecutor`, `ThreadPoolExecutor`, and
+`SimpleAsyncTaskExecutor` beans. A `SimpleAsyncTaskExecutor` exposes no queue or active-count state,
+so QueryAudit counts the tasks handed to it: it installs a `TaskDecorator` on the named bean and
+waits until nothing has been submitted-and-unfinished for the same quiet period it uses for pools.
+That covers virtual-thread `@Async` work — with `spring.threads.virtual.enabled`, Spring runs
+`@Async` methods on a `SimpleAsyncTaskExecutor`, so name that bean:
+
+```yaml
+spring:
+  threads:
+    virtual:
+      enabled: true
+
+query-audit:
+  await-executors: [taskExecutor]   # a SimpleAsyncTaskExecutor bean works too
+```
+
+A `TaskDecorator` your application already installed stays in the chain, so context or MDC
+propagation keeps working. Two limits remain: the executor must be a Spring bean — one built by hand
+outside the context cannot be tracked, and QueryAudit does not instrument executors it was not asked
+to await — and the tracking decorator is read back from `SimpleAsyncTaskExecutor` internals, so a
+Spring version that renames that field fails startup with an explicit message instead of quietly
+dropping your decorator.
+
 Without Spring, wrap the tasks with `QueryCaptureSession.wrap`; see
 [parallel capture](troubleshooting.md#parallel-capture-is-incomplete).
 

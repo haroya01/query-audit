@@ -70,12 +70,13 @@
         "$ref": "#/definitions/comparisonInputs"
       }
     }
-    },
-      "description": "List of test IDs that failed due to scoped query contract violations."
-      "items": { "type": "string" },
-      "type": "array",
-    "contractViolations": {
-  },
+     },
+     "contractViolations": {
+       "type": "array",
+       "description": "List of test IDs that failed due to scoped query contract violations.",
+       "items": { "type": "string" }
+     }
+   },
   "allOf": [
     {
       "if": {
