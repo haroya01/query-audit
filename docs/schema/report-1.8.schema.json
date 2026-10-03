@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://haroya01.github.io/query-audit/schema/report-1.8.schema.json",
-  "title": "QueryAudit report.json schema 1.7",
+  "title": "QueryAudit report.json schema 1.8",
   "description": "Schema for the 1.8 report.json envelope, with stable finding IDs and grouped observation evidence.",
   "type": "object",
   "required": [
@@ -11,13 +11,13 @@
     "redaction",
     "reports",
     "coverage",
-    "comparisonInputs"
-    "contractViolations",
+    "comparisonInputs",
+    "contractViolations"
   ],
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "pattern": "^1\\.7\\.\\d+$"
+      "pattern": "^1\\.8\\.\\d+$"
     },
     "redaction": {
       "type": "string",
@@ -69,14 +69,15 @@
       "additionalProperties": {
         "$ref": "#/definitions/comparisonInputs"
       }
+    },
+    "contractViolations": {
+      "type": "array",
+      "description": "List of test IDs that failed due to scoped query contract violations.",
+      "items": {
+        "type": "string"
+      }
     }
-     },
-     "contractViolations": {
-       "type": "array",
-       "description": "List of test IDs that failed due to scoped query contract violations.",
-       "items": { "type": "string" }
-     }
-   },
+  },
   "allOf": [
     {
       "if": {

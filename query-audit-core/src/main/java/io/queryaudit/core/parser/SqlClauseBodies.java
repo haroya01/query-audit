@@ -16,40 +16,36 @@ import java.util.regex.Pattern;
 final class SqlClauseBodies {
   private SqlClauseBodies() {}
 
-  private static final Pattern ORDER_BY_START =
-      Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE);
-  private static final Pattern[] ORDER_BY_TERMINATORS = {
-    Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bOFFSET\\b", Pattern.CASE_INSENSITIVE),
-  };
-  private static final Pattern GROUP_BY_START =
-      Pattern.compile("\\bGROUP\\s+BY\\b", Pattern.CASE_INSENSITIVE);
-  private static final Pattern[] GROUP_BY_TERMINATORS = {
-    Pattern.compile("\\bHAVING\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE),
-  };
+  // ── extractWhereBody ────────────────────────────────────────────────
 
-  static String orderByBody(String sql) {
-    return findBody(sql, ORDER_BY_START, ORDER_BY_TERMINATORS);
-  }
-
-  static String groupByBody(String sql) {
-    return findBody(sql, GROUP_BY_START, GROUP_BY_TERMINATORS);
-  }
-
-  private static String findBody(String sql, Pattern start, Pattern[] terminators) {
+  /**
+   * Extracts the WHERE clause body by finding WHERE keyword and then scanning for the nearest
+   * clause terminator. Uses literal-aware scanner with parenthesis depth tracking to avoid
+   * false terminators inside subqueries, string literals, quoted identifiers, or comments.
+   *
+   * @return the WHERE clause body (without the WHERE keyword), or null if no WHERE found
+   */
+  static String extractWhereBody(String sql) {
     if (sql == null) return null;
-    Matcher matcher = start.matcher(sql);
-    return matcher.find() ? extractClauseBody(sql, matcher.end(), terminators) : null;
+    String effective = stripComments(sql);
+    effective = stripCtePrefix(effective);
+    return SqlSourceScanner.clauseBody(
+        effective,
+        "WHERE",
+        "GROUP BY",
+        "ORDER BY",
+        "LIMIT",
+        "HAVING",
+        "UNION",
+        "FETCH");
   }
 
-  // ── hasWhereClause ──────────────────────────────────────────────────
-
-  /** Returns true if the SQL contains a WHERE clause. */
+  /**
+   * Returns true if the SQL contains a WHERE clause.
+   */
   static boolean hasWhereClause(String sql) {
     if (sql == null) return false;
-    return WHERE_START.matcher(sql).find();
+    return SqlSourceScanner.scanForKeyword(sql, 0, "WHERE") >= 0;
   }
 
   /**
@@ -59,83 +55,68 @@ final class SqlClauseBodies {
   static boolean hasOuterWhereClause(String sql) {
     if (sql == null) return false;
     String cleaned = removeSubqueries(sql);
-    return WHERE_START.matcher(cleaned).find();
+    return SqlSourceScanner.scanForKeyword(cleaned, 0, "WHERE") >= 0;
   }
 
-  // ── extractWhereColumns ────────────────────────────────────────────
-
-  /** Keyword boundary pattern for finding WHERE keyword start position. */
-  private static final Pattern WHERE_START =
-      Pattern.compile("\\bWHERE\\b", Pattern.CASE_INSENSITIVE);
+  /**
+   * Returns true if the statement's own FROM scope has a JOIN clause. Shares the literal-aware
+   * scanner with {@link #hasOuterWhereClause(String)}, so a JOIN spelled out inside a literal, a
+   * quoted identifier or a comment is not a clause, and a JOIN belonging to a nested subquery does
+   * not count for the outer statement.
+   */
+  static boolean hasOuterJoinClause(String sql) {
+    return SqlSourceScanner.hasTopLevelClause(sql, "JOIN");
+  }
 
   /**
-   * Clause terminators that end a WHERE body. Searched via manual scanning to avoid catastrophic
-   * backtracking from (.+?) patterns with DOTALL.
+   * Returns true if the statement's own FROM scope has a USING clause, as used by the PostgreSQL
+   * {@code DELETE ... USING ...} form. Scanned the same way as {@link #hasOuterJoinClause(String)}:
+   * only a top-level USING followed by a table reference is a clause.
    */
-  private static final Pattern[] WHERE_TERMINATORS = {
-    Pattern.compile("\\bGROUP\\s+BY\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bHAVING\\b", Pattern.CASE_INSENSITIVE),
-  };
+  static boolean hasOuterUsingClause(String sql) {
+    return SqlSourceScanner.hasTopLevelClause(sql, "USING");
+  }
+
+  // ── extractOrderByBody ──────────────────────────────────────────────
 
   /**
-   * Extracts the WHERE clause body by finding WHERE keyword and then scanning for the nearest
-   * clause terminator. This is O(n) per terminator pattern, avoiding the O(n^2) worst-case of (.+?)
-   * with alternation terminators.
-   *
-   * @return the WHERE clause body (without the WHERE keyword), or null if no WHERE found
+   * Extracts the ORDER BY clause body.
    */
-  static String extractWhereBody(String sql) {
+  static String orderByBody(String sql) {
     if (sql == null) return null;
     String effective = stripComments(sql);
     effective = stripCtePrefix(effective);
-    Matcher m = WHERE_START.matcher(effective);
-    if (!m.find()) return null;
-    int bodyStart = m.end();
-    return extractClauseBody(effective, bodyStart, WHERE_TERMINATORS);
+    return SqlSourceScanner.clauseBody(effective, "ORDER BY", "LIMIT", "OFFSET", "FETCH");
   }
 
+  // ── extractGroupByBody ──────────────────────────────────────────────
+
   /**
-   * Given a start position inside the SQL string, finds the nearest terminator and returns the
-   * substring between start and the terminator (or end of string).
+   * Extracts the GROUP BY clause body.
    */
-  static String extractClauseBody(String sql, int bodyStart, Pattern[] terminators) {
-    int bodyEnd = sql.length();
-    for (Pattern terminator : terminators) {
-      Matcher tm = terminator.matcher(sql);
-      if (tm.find(bodyStart) && tm.start() < bodyEnd) {
-        bodyEnd = tm.start();
-      }
-    }
-    if (bodyStart >= bodyEnd) return null;
-    return sql.substring(bodyStart, bodyEnd);
+  static String groupByBody(String sql) {
+    if (sql == null) return null;
+    String effective = stripComments(sql);
+    effective = stripCtePrefix(effective);
+    return SqlSourceScanner.clauseBody(
+        effective, "GROUP BY", "HAVING", "ORDER BY", "LIMIT", "FETCH");
   }
 
-  // ── extractHavingClause ──────────────────────────────────────────
-
-  private static final Pattern HAVING_START =
-      Pattern.compile("\\bHAVING\\b", Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern[] HAVING_TERMINATORS = {
-    Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bUNION\\b", Pattern.CASE_INSENSITIVE),
-  };
+  // ── extractHavingClause ────────────────────────────────────────────
 
   /**
-   * Extracts the HAVING clause body from a SQL query, or null if not present. Uses manual clause
-   * boundary scanning to avoid regex backtracking.
+   * Extracts the HAVING clause body from a SQL query, or null if not present. Uses literal-aware
+   * scanner with parenthesis depth tracking.
+   *
+   * @return the HAVING clause body (without the HAVING keyword), or null if no HAVING found
    */
   static String extractHavingClause(String sql) {
     if (sql == null) {
       return null;
     }
-    Matcher m = HAVING_START.matcher(sql);
-    if (!m.find()) {
-      return null;
-    }
-    String body = extractClauseBody(sql, m.end(), HAVING_TERMINATORS);
+    String effective = stripComments(sql);
+    String body = SqlSourceScanner.clauseBody(
+        effective, "HAVING", "ORDER BY", "LIMIT", "UNION", "FETCH");
     return body != null ? body.trim() : null;
   }
 
@@ -148,6 +129,8 @@ final class SqlClauseBodies {
   static String extractHavingBody(String sql) {
     return extractHavingClause(sql);
   }
+
+  // ── extractJoinOnBodies ─────────────────────────────────────────────
 
   /**
    * Extracts the JOIN ON clause bodies for all JOINs found in the SQL.
@@ -173,7 +156,9 @@ final class SqlClauseBodies {
     List<JoinClause> result = new ArrayList<>();
     Matcher joinMatcher = JOIN_HEADER.matcher(sql);
     while (joinMatcher.find()) {
-      String onBody = extractClauseBody(sql, joinMatcher.end(), JOIN_ON_TERMINATORS);
+      int bodyStart = joinMatcher.end();
+      String onBody = SqlSourceScanner.clauseBodyFrom(sql, bodyStart,
+          "JOIN", "WHERE", "GROUP BY", "ORDER BY", "LIMIT", "HAVING");
       if (onBody != null) {
         result.add(
             new JoinClause(
@@ -183,30 +168,9 @@ final class SqlClauseBodies {
     return result;
   }
 
-  // ── detectJoinFunctions ─────────────────────────────────────────────
-
-  /**
-   * Pattern to match JOIN header: type, table name, optional alias, and ON keyword. The ON clause
-   * body is extracted via manual scanning (extractJoinOnBody) to avoid catastrophic backtracking
-   * from (.+?) with DOTALL.
-   */
+  // Pattern to match JOIN header: type, table name, optional alias, and ON keyword
   private static final Pattern JOIN_HEADER =
       Pattern.compile(
           "\\b(LEFT|RIGHT|INNER|CROSS|FULL)?\\s*(?:OUTER\\s+)?JOIN\\s+[`\"]?(\\w+)[`\"]?(?:\\s+(?:AS\\s+)?[`\"]?(\\w+)[`\"]?)?\\s+ON\\s+",
           Pattern.CASE_INSENSITIVE);
-
-  /**
-   * Terminators that end a JOIN ON clause body. Used by extractJoinOnBody for manual boundary
-   * scanning, replacing the previous (.+?) with DOTALL approach that caused catastrophic
-   * backtracking.
-   */
-  private static final Pattern[] JOIN_ON_TERMINATORS = {
-    Pattern.compile(
-        "\\b(?:LEFT|RIGHT|INNER|CROSS|FULL)?\\s*(?:OUTER\\s+)?JOIN\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bWHERE\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bGROUP\\s+BY\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE),
-    Pattern.compile("\\bHAVING\\b", Pattern.CASE_INSENSITIVE),
-  };
 }

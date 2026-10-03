@@ -291,6 +291,118 @@ class SqlParserTest {
     }
   }
 
+  // ── hasOuterJoinClause / hasOuterUsingClause ────────────────────────
+
+  @Nested
+  class HasOuterJoinOrUsingClause {
+
+    @Test
+    void nullAndBlankInput() {
+      assertThat(SqlParser.hasOuterJoinClause(null)).isFalse();
+      assertThat(SqlParser.hasOuterUsingClause(null)).isFalse();
+      assertThat(SqlParser.hasOuterJoinClause("")).isFalse();
+      assertThat(SqlParser.hasOuterUsingClause("")).isFalse();
+    }
+
+    @Test
+    void findsRealTopLevelJoinInEveryDmlForm() {
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE orders o JOIN users u ON o.uid = u.id SET o.s = 1"))
+          .isTrue();
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE orders o LEFT JOIN users u ON o.uid = u.id SET o.s = 1"))
+          .isTrue();
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE p INNER JOIN c ON p.cid = c.id SET p.a = 1"))
+          .isTrue();
+      assertThat(SqlParser.hasOuterJoinClause("DELETE o FROM orders o JOIN cancelled c ON o.id = c.oid"))
+          .isTrue();
+      assertThat(SqlParser.hasOuterJoinClause("SELECT * FROM a JOIN b ON a.id = b.aid")).isTrue();
+    }
+
+    @Test
+    void findsRealTopLevelUsingInPostgresDelete() {
+      assertThat(SqlParser.hasOuterUsingClause("DELETE FROM orders USING cancelled WHERE orders.id = cancelled.oid"))
+          .isTrue();
+      assertThat(SqlParser.hasOuterUsingClause("DELETE FROM users USING archived_users WHERE id = 1"))
+          .isTrue();
+    }
+
+    @Test
+    void keywordInsideLiteralIsNotAClause() {
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE users SET note = 'JOIN'")).isFalse();
+      assertThat(SqlParser.hasOuterUsingClause("UPDATE users SET note = 'USING'")).isFalse();
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE users SET note = 'a JOIN b ON c = d'")).isFalse();
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE users SET note = 'it''s a JOIN'")).isFalse();
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE users SET note = 'it\\'s a JOIN'")).isFalse();
+    }
+
+    @Test
+    void keywordInsideQuotedIdentifierIsNotAClause() {
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE users SET \"JOIN\" = 1")).isFalse();
+      assertThat(SqlParser.hasOuterJoinClause("SELECT * FROM a JOIN b ON a.\"JOIN\" = b.\"JOIN\""))
+          .as("the clause is real; the quoted identifiers must not hide it")
+          .isTrue();
+    }
+
+    @Test
+    void keywordInsideCommentIsNotAClause() {
+      assertThat(SqlParser.hasOuterJoinClause("DELETE FROM users /* JOIN u ON u.id = 1 */")).isFalse();
+      assertThat(SqlParser.hasOuterJoinClause("DELETE FROM users -- JOIN u ON u.id = 1")).isFalse();
+      assertThat(SqlParser.hasOuterUsingClause("DELETE FROM users /* USING archived */")).isFalse();
+      assertThat(SqlParser.hasOuterUsingClause("DELETE FROM users -- USING archived")).isFalse();
+    }
+
+    @Test
+    void commentBeforeRealClauseIsStillFound() {
+      assertThat(SqlParser.hasOuterJoinClause("DELETE FROM users /* drop JOIN */ JOIN a ON a.id = users.id"))
+          .as("a commented-out JOIN must not stop the scan reaching the real one")
+          .isTrue();
+    }
+
+    @Test
+    void keywordInsideSubqueryIsNotAnOuterClause() {
+      assertThat(SqlParser.hasOuterJoinClause(
+              "UPDATE orders SET total = (SELECT SUM(i.amount) FROM items i JOIN products p ON p.id = i.pid)"))
+          .isFalse();
+      assertThat(SqlParser.hasOuterUsingClause(
+              "DELETE FROM orders WHERE uid IN (SELECT id FROM users JOIN teams t ON t.id = users.tid)"))
+          .isFalse();
+    }
+
+    @Test
+    void bareKeywordWithoutTableReferenceIsNotAClause() {
+      assertThat(SqlParser.hasOuterUsingClause("DELETE FROM orders USING")).isFalse();
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE orders o JOIN")).isFalse();
+    }
+
+    @Test
+    void tableReferenceMayBeQuotedOrASubquery() {
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE o JOIN `users` u ON o.uid = u.id SET o.s = 1"))
+          .isTrue();
+      assertThat(SqlParser.hasOuterUsingClause("DELETE FROM orders USING \"cancelled\" WHERE id = 1"))
+          .isTrue();
+      assertThat(SqlParser.hasOuterUsingClause("DELETE FROM orders USING (SELECT id FROM c) WHERE id = 1"))
+          .isTrue();
+    }
+
+    @Test
+    void caseInsensitiveAcrossAllForms() {
+      assertThat(SqlParser.hasOuterJoinClause("update orders o join users u on o.uid = u.id set o.s = 1"))
+          .isTrue();
+      assertThat(SqlParser.hasOuterUsingClause("delete from orders using cancelled where id = 1")).isTrue();
+      assertThat(SqlParser.hasOuterJoinClause("UPDATE users SET note = 'join'")).isFalse();
+    }
+
+    @Test
+    void handlesLongInputWithoutStackOverflow() {
+      StringBuilder builder = new StringBuilder("UPDATE users SET note = '");
+      for (int i = 0; i < 50_000; i++) {
+        builder.append('x');
+      }
+      builder.append("'");
+      assertThat(SqlParser.hasOuterJoinClause(builder.toString())).isFalse();
+      assertThat(SqlParser.hasOuterUsingClause(builder.toString())).isFalse();
+    }
+  }
+
   // ── extractJoinColumns ──────────────────────────────────────────────
 
   @Nested

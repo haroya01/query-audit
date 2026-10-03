@@ -36,7 +36,7 @@ public class JsonReporter implements Reporter {
    *
    * @since 0.5.0
    */
-  public static final String SCHEMA_VERSION = "1.7.0";
+  public static final String SCHEMA_VERSION = "1.8.0";
 
   private static final String LEGACY_SCHEMA_VERSION = "1.0.0";
 
@@ -110,6 +110,9 @@ public class JsonReporter implements Reporter {
     sb.append("  \"comparisonInputs\": ");
     ComparisonInputsJson.append(sb, runResult.comparisonInputs());
     sb.append(",\n");
+    sb.append("  \"contractViolations\": ");
+    appendContractViolations(sb, runResult.contractViolations());
+    sb.append(",\n");
     appendReports(sb, runResult.reports(), true, redactor);
     sb.append("\n}");
     return sb.toString();
@@ -146,6 +149,23 @@ public class JsonReporter implements Reporter {
       appendJsonString(sb, "      ", "detail", redactor.diagnostic(reason.detail()));
       sb.append("\n    }");
       if (i < incompleteReasons.size() - 1) {
+        sb.append(",");
+      }
+      sb.append("\n");
+    }
+    sb.append("  ]");
+  }
+
+  private static void appendContractViolations(
+      StringBuilder sb, List<String> contractViolations) {
+    if (contractViolations.isEmpty()) {
+      sb.append("[]");
+      return;
+    }
+    sb.append("[\n");
+    for (int i = 0; i < contractViolations.size(); i++) {
+      sb.append("    \"").append(escapeJson(contractViolations.get(i))).append("\"");
+      if (i < contractViolations.size() - 1) {
         sb.append(",");
       }
       sb.append("\n");

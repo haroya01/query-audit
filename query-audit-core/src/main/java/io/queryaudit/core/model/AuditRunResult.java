@@ -23,21 +23,24 @@ public record AuditRunResult(
     AuditOutcome outcome,
     List<AuditIncompleteReason> incompleteReasons,
     AuditCoverage coverage,
-    Map<String, ComparisonInputs> comparisonInputs) {
+    Map<String, ComparisonInputs> comparisonInputs,
+    List<String> contractViolations) {
 
   /** Retains the constructor for integrations without comparison input metadata. */
   public AuditRunResult(
       List<QueryAuditReport> reports,
       AuditOutcome outcome,
       List<AuditIncompleteReason> incompleteReasons,
-      AuditCoverage coverage) {
-    this(reports, outcome, incompleteReasons, coverage, Map.of());
+      AuditCoverage coverage,
+      List<String> contractViolations) {
+    this(reports, outcome, incompleteReasons, coverage, Map.of(), contractViolations);
   }
 
   public AuditRunResult {
     Objects.requireNonNull(reports, "reports");
     Objects.requireNonNull(outcome, "outcome");
     Objects.requireNonNull(incompleteReasons, "incompleteReasons");
+    contractViolations = List.copyOf(Objects.requireNonNull(contractViolations, "contractViolations"));
 
     reports = List.copyOf(reports);
     List<AuditIncompleteReason> copiedReasons = new ArrayList<>();
@@ -97,22 +100,23 @@ public record AuditRunResult(
   public AuditRunResult(
       List<QueryAuditReport> reports,
       AuditOutcome outcome,
-      List<AuditIncompleteReason> incompleteReasons) {
-    this(reports, outcome, incompleteReasons, null, Map.of());
+      List<AuditIncompleteReason> incompleteReasons,
+      List<String> contractViolations) {
+    this(reports, outcome, incompleteReasons, null, Map.of(), contractViolations);
   }
 
   public AuditRunResult withComparisonInputs(Map<String, ComparisonInputs> inputs) {
-    return new AuditRunResult(reports, outcome, incompleteReasons, coverage, inputs);
+    return new AuditRunResult(reports, outcome, incompleteReasons, coverage, inputs, contractViolations);
   }
 
   /** Returns a completed result with no policy or contract failures. */
   public static AuditRunResult pass(List<QueryAuditReport> reports) {
-    return new AuditRunResult(reports, AuditOutcome.PASS, List.of());
+    return new AuditRunResult(reports, AuditOutcome.PASS, List.of(), List.of());
   }
 
   /** Returns a completed result with at least one policy or contract failure. */
   public static AuditRunResult fail(List<QueryAuditReport> reports) {
-    return new AuditRunResult(reports, AuditOutcome.FAIL, List.of());
+    return new AuditRunResult(reports, AuditOutcome.FAIL, List.of(), List.of());
   }
 
   /** Returns an incomplete result for one or more structured reasons. */
@@ -127,7 +131,7 @@ public record AuditRunResult(
     for (AuditIncompleteReason reason : additionalReasons) {
       reasons.add(Objects.requireNonNull(reason, "additionalReasons must not contain null"));
     }
-    return new AuditRunResult(reports, AuditOutcome.INCONCLUSIVE, reasons);
+    return new AuditRunResult(reports, AuditOutcome.INCONCLUSIVE, reasons, List.of());
   }
 
   /**
@@ -143,7 +147,7 @@ public record AuditRunResult(
     Objects.requireNonNull(incompleteReasons, "incompleteReasons");
     if (!incompleteReasons.isEmpty()) {
       return new AuditRunResult(
-          reports, AuditOutcome.INCONCLUSIVE, new ArrayList<>(incompleteReasons));
+          reports, AuditOutcome.INCONCLUSIVE, new ArrayList<>(incompleteReasons), List.of());
     }
     return policyFailed ? fail(reports) : pass(reports);
   }
@@ -161,6 +165,6 @@ public record AuditRunResult(
     List<AuditIncompleteReason> reasons = new ArrayList<>(incompleteReasons);
     reasons.addAll(coverage.incompleteReasons());
     AuditOutcome coveredOutcome = reasons.isEmpty() ? outcome : AuditOutcome.INCONCLUSIVE;
-    return new AuditRunResult(reports, coveredOutcome, reasons, coverage, comparisonInputs);
+    return new AuditRunResult(reports, coveredOutcome, reasons, coverage, comparisonInputs, contractViolations);
   }
 }

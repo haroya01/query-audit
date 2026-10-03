@@ -105,4 +105,98 @@ class CaseInWhereDetectorTest {
     assertThat(issues).hasSize(1);
     assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);
   }
+
+  // ── Issue #291 Regression Tests ───────────────────────────────────────
+
+  @Test
+  void issue291_underscoreIdentifierWithCaseInWhere() {
+    // credit_limit identifier should not break WHERE extraction
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(
+                q(
+                    "SELECT id FROM users WHERE credit_limit > ? AND CASE WHEN score > 0 THEN 1 ELSE 0 END = 1")),
+            emptyIndex);
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);
+  }
+
+  @Test
+  void issue291_caseInWhereWithNewlineOrderBy() {
+    // CASE in WHERE should be detected even with ORDER\nBY after
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(
+                q(
+                    "SELECT id FROM users WHERE CASE WHEN score > 0 THEN 1 ELSE 0 END = 1 ORDER\nBY name")),
+            emptyIndex);
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);
+  }
+
+  @Test
+  void issue291_noFalsePositiveCaseInOrderBy() {
+    // CASE in ORDER BY should NOT be flagged as CASE_IN_WHERE
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(
+                q(
+                    "SELECT id FROM users WHERE id > ? ORDER BY CASE WHEN score > 0 THEN 1 ELSE 0 END")),
+            emptyIndex);
+    assertThat(issues).isEmpty();
+  }
+
+  @Test
+  void issue291_caseInWhereWithNestedSubquery() {
+    // CASE in WHERE with nested subquery containing ORDER BY
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(
+                q(
+                    "SELECT * FROM users "
+                        + "WHERE id IN (SELECT user_id FROM permissions WHERE active = 1 ORDER BY created_at) "
+                        + "AND CASE WHEN score > 0 THEN 1 ELSE 0 END = 1")),
+            emptyIndex);
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);
+  }
+
+  @Test
+  void issue291_caseInWhereWithQuotedIdentifier() {
+    // CASE in WHERE with quoted identifier containing keyword-like text
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(
+                q(
+                    "SELECT * FROM users WHERE \"order_by\" = ? AND CASE WHEN score > 0 THEN 1 ELSE 0 END = 1")),
+            emptyIndex);
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);
+  }
+
+  @Test
+  void issue291_caseInWhereWithStringLiteral() {
+    // CASE in WHERE with string literal containing keyword-like text
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(
+                q(
+                    "SELECT * FROM users WHERE note = 'ORDER BY' AND CASE WHEN score > 0 THEN 1 ELSE 0 END = 1")),
+            emptyIndex);
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);
+  }
+
+  @Test
+  void issue291_caseInWhereWithComment() {
+    // CASE in WHERE with comment containing keyword-like text
+    List<Issue> issues =
+        detector.evaluate(
+            List.of(
+                q(
+                    "SELECT * FROM users WHERE status = ? -- ORDER BY comment\nAND CASE WHEN score > 0 THEN 1 ELSE 0 END = 1")),
+            emptyIndex);
+    assertThat(issues).hasSize(1);
+    assertThat(issues.get(0).type()).isEqualTo(IssueType.CASE_IN_WHERE);
+  }
 }

@@ -122,6 +122,25 @@ public final class SqlParser {
     return SqlClauseBodies.hasOuterWhereClause(sql);
   }
 
+  /**
+   * Returns true if the statement's own FROM scope has a JOIN clause.
+   *
+   * <p>Like {@link #hasOuterWhereClause(String)} this uses the literal-aware scanner, so a JOIN
+   * that only appears inside a string literal, a quoted identifier or a comment is not a clause,
+   * and a JOIN inside a nested subquery does not count for the outer statement.
+   */
+  public static boolean hasOuterJoinClause(String sql) {
+    return SqlClauseBodies.hasOuterJoinClause(sql);
+  }
+
+  /**
+   * Returns true if the statement's own FROM scope has a USING clause, as used by the PostgreSQL
+   * {@code DELETE ... USING ...} form. Scanned the same way as {@link #hasOuterJoinClause(String)}.
+   */
+  public static boolean hasOuterUsingClause(String sql) {
+    return SqlClauseBodies.hasOuterUsingClause(sql);
+  }
+
   public static boolean hasSelectAll(String sql) {
     return SqlStatementPatterns.hasSelectAll(sql);
   }

@@ -53,7 +53,7 @@ contracts enforce query counts.
 ## Report formats
 
 !!! note "Version scope"
-    QueryAudit 0.6.1 and later write report schema 1.7, which adds the finding IDs described here.
+    QueryAudit 0.6.1 and later write report schema 1.8, which adds contract violations.
     Comparison targets (`--require-resolved`) need 0.7.1, and 0.7.2 for an N+1 reached through a
     Hibernate lazy proxy. QueryAudit 0.6.0 writes schema 1.6, and
     0.5 writes both HTML and schema 1.0 JSON after a session with at least one completed audited
@@ -181,12 +181,13 @@ Finding IDs in this example illustrate the schema 1.7 format introduced for Quer
 
 ```json
 {
-  "schemaVersion": "1.7.0",
+  "schemaVersion": "1.8.0",
   "redaction": "REDACTED",
   "outcome": "FAIL",
   "incompleteReasons": [],
   "coverage": null,
   "comparisonInputs": {},
+  "contractViolations": [],
   "reports": [
     {
       "testId": "[engine:junit-jupiter]/[class:com.example.OrderServiceTest]/[method:findRecentOrders()]",
@@ -292,6 +293,7 @@ infer a trustworthy `PASS` from the per-test reports alone. Schema 1.1 added run
 added stable test identities, 1.3 added query-evidence retention counts, and 1.4 added the report
 redaction mode. Schema 1.5 added expected-test coverage; 1.6 added per-test comparison inputs.
 Schema 1.7 adds stable finding IDs and preserves repeated observations under `occurrences`.
+Schema 1.8 adds `contractViolations` to the run envelope.
 
 Each version has its own JSON Schema file. The deprecated Java method
 `JsonReporter.toEnvelopeJson(List<QueryAuditReport>)` emits a legacy 1.0 envelope without run
@@ -379,7 +381,8 @@ The stable schema URLs are
 [`schema/report-1.4.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.4.schema.json),
 [`schema/report-1.5.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.5.schema.json),
 [`schema/report-1.6.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.6.schema.json), and
-[`schema/report-1.7.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.7.schema.json).
+[`schema/report-1.7.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.7.schema.json), and
+[`schema/report-1.8.schema.json`](https://haroya01.github.io/query-audit/schema/report-1.8.schema.json).
 [`schema/report.schema.json`](https://haroya01.github.io/query-audit/schema/report.schema.json)
 always points to the current version.
 

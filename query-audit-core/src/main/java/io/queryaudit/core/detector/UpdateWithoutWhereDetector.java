@@ -10,23 +10,21 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Pattern;
 
 /**
  * Detects UPDATE or DELETE statements without a WHERE clause. These statements affect every row in
  * the table and are almost always unintentional, potentially causing catastrophic data loss in
  * production.
  *
+ * <p>JOIN and USING clauses count as row restrictions, but only when the parser finds a real
+ * top-level clause. The same literal-aware scan that recognises WHERE also decides JOIN and USING,
+ * so keyword text inside a string literal or a comment leaves the statement reportable instead of
+ * being mistaken for filtered DML.
+ *
  * @author haroya
  * @since 0.2.0
  */
 public class UpdateWithoutWhereDetector implements DetectionRule {
-
-  private static final Pattern JOIN_PATTERN =
-      Pattern.compile("\\bJOIN\\b", Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern USING_PATTERN =
-      Pattern.compile("\\bUSING\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
@@ -42,7 +40,7 @@ public class UpdateWithoutWhereDetector implements DetectionRule {
 
       if (SqlParser.isUpdateQuery(sql)
           && !SqlParser.hasOuterWhereClause(sql)
-          && !hasJoinClause(sql)) {
+          && !SqlParser.hasOuterJoinClause(sql)) {
         String table = SqlParser.extractUpdateTable(sql);
         issues.add(
             new Issue(
@@ -59,8 +57,8 @@ public class UpdateWithoutWhereDetector implements DetectionRule {
 
       if (SqlParser.isDeleteQuery(sql)
           && !SqlParser.hasOuterWhereClause(sql)
-          && !hasJoinClause(sql)
-          && !hasUsingClause(sql)) {
+          && !SqlParser.hasOuterJoinClause(sql)
+          && !SqlParser.hasOuterUsingClause(sql)) {
         String table = SqlParser.extractDeleteTable(sql);
         issues.add(
             new Issue(
@@ -76,21 +74,5 @@ public class UpdateWithoutWhereDetector implements DetectionRule {
       }
     }
     return issues;
-  }
-
-  /**
-   * Returns true if the SQL contains a JOIN clause, which provides row filtering via the ON
-   * condition even without an explicit WHERE clause.
-   */
-  private static boolean hasJoinClause(String sql) {
-    return JOIN_PATTERN.matcher(sql).find();
-  }
-
-  /**
-   * Returns true if the SQL contains a USING clause (PostgreSQL DELETE ... USING pattern), which
-   * provides row filtering similar to JOIN.
-   */
-  private static boolean hasUsingClause(String sql) {
-    return USING_PATTERN.matcher(sql).find();
   }
 }

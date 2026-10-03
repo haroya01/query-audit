@@ -189,6 +189,14 @@ public class HtmlReporter implements Reporter {
       }
       sb.append("  </ul>\n");
     }
+    if (!run.contractViolations().isEmpty()) {
+      sb.append("  <h3>Contract Violations</h3>\n");
+      sb.append("  <ul class=\"contract-violations\">\n");
+      for (String violation : run.contractViolations()) {
+        sb.append("    <li><code>").append(esc(violation)).append("</code></li>\n");
+      }
+      sb.append("  </ul>\n");
+    }
     sb.append("</section>\n");
   }
 
