@@ -22,7 +22,7 @@ internal    Implementation detail. No compatibility guarantee at all, in any rel
 | Package has a `package-info.java` naming the supported types it contains | Everything else in that package is internal |
 | Package or class name contains `internal` | Internal |
 | Rule code in the [rule reference](../detections/overview.md) | The behavior is documented; the implementing class is still internal |
-| Type is in the compatibility floor, `config/public-api/12c8ffc.json` | Supported |
+| Type is in the compatibility floor, `config/public-api/088f64d.json` | Supported |
 
 The floor is the authoritative machine-readable list. This page is the human-readable contract; if
 they ever disagree, the floor is what CI enforces and this page is the bug.

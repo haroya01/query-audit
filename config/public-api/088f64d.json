@@ -2118,11 +2118,29 @@
       "flags": 17,
       "interfaces": [],
       "methods": {
+        "<init>(Ljava/util/List;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List;)V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "(Ljava/util/List<Lio/queryaudit/core/model/QueryAuditReport;>;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List<Lio/queryaudit/core/model/AuditIncompleteReason;>;)V"
+        },
+        "<init>(Ljava/util/List;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List;Lio/queryaudit/core/model/AuditCoverage;)V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "(Ljava/util/List<Lio/queryaudit/core/model/QueryAuditReport;>;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List<Lio/queryaudit/core/model/AuditIncompleteReason;>;Lio/queryaudit/core/model/AuditCoverage;)V"
+        },
         "<init>(Ljava/util/List;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List;Lio/queryaudit/core/model/AuditCoverage;Ljava/util/List;)V": {
           "annotation_default": false,
           "exceptions": [],
           "flags": 1,
           "signature": "(Ljava/util/List<Lio/queryaudit/core/model/QueryAuditReport;>;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List<Lio/queryaudit/core/model/AuditIncompleteReason;>;Lio/queryaudit/core/model/AuditCoverage;Ljava/util/List<Ljava/lang/String;>;)V"
+        },
+        "<init>(Ljava/util/List;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List;Lio/queryaudit/core/model/AuditCoverage;Ljava/util/Map;)V": {
+          "annotation_default": false,
+          "exceptions": [],
+          "flags": 1,
+          "signature": "(Ljava/util/List<Lio/queryaudit/core/model/QueryAuditReport;>;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List<Lio/queryaudit/core/model/AuditIncompleteReason;>;Lio/queryaudit/core/model/AuditCoverage;Ljava/util/Map<Ljava/lang/String;Lio/queryaudit/core/provenance/ComparisonInputs;>;)V"
         },
         "<init>(Ljava/util/List;Lio/queryaudit/core/model/AuditOutcome;Ljava/util/List;Lio/queryaudit/core/model/AuditCoverage;Ljava/util/Map;Ljava/util/List;)V": {
           "annotation_default": false,
@@ -6324,10 +6342,10 @@
       "io/queryaudit/core/reporter/"
     ]
   },
-  "source_revision": "12c8ffca41fed6bf06c4cf4a857a666dc21a6f74",
+  "source_revision": "088f64d22564db3be1e41ceb825f1187901f22b5",
   "source_tree_hashes": {
-    "query-audit-core/src/main/java": "4c98e59ae70e49dbd35ff100e1c4b144f229abb6",
-    "query-audit-junit5/src/main/java": "9db9de612c0db4000a295a49a92a3031b031c718",
-    "query-audit-spring-boot-starter/src/main/java": "1d20351ca7a67bb14ce909c5bb942198a7622cdd"
+    "query-audit-core/src/main/java": "80227cc8839759d9afb7aaeb2747045fc415201d",
+    "query-audit-junit5/src/main/java": "ab0a7e223bd604e91d0fde90db185aa653428fd8",
+    "query-audit-spring-boot-starter/src/main/java": "2162c061d202d6a5fcb241abda2e2d5cc0439260"
   }
 }

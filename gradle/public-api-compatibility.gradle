@@ -12,7 +12,7 @@ tasks.register('checkPublicApiCompatibility', Exec) {
             ':query-audit-spring-boot-starter:classes',
             tasks.named('testPublicApiCompatibilityChecker')
     def script = rootProject.file('.github/scripts/check_public_api.py')
-    def baseline = rootProject.file('config/public-api/12c8ffc.json')
+    def baseline = rootProject.file('config/public-api/088f64d.json')
     def coreClasses = project(':query-audit-core').layout.buildDirectory.dir('classes/java/main')
     def junitClasses = project(':query-audit-junit5').layout.buildDirectory.dir('classes/java/main')
     def springClasses = project(':query-audit-spring-boot-starter').layout.buildDirectory.dir('classes/java/main')
