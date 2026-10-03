@@ -30,6 +30,11 @@ The [JSON reporter](https://github.com/haroya01/query-audit/blob/v0.7.2/query-au
 writes schema **`1.7.0`**, the same schema as `0.6.1`. Keep the report reader and library versions
 aligned.
 
+Not every public type is supported. See [Supported public API](../architecture/supported-api.md) for
+the surface you may depend on, [API compatibility policy](../architecture/api-compatibility.md) for
+how it is enforced, and [compatibility changelog](../architecture/api-changelog.md) for what changed
+since `0.5`.
+
 ## Changes in 0.7.2
 
 | Change | What to do |
@@ -56,6 +61,9 @@ aligned.
 
 The active rules changed, so a 0.6 report is not a valid comparison baseline. Record a new
 baseline report with 0.7.2 before comparing runs in CI.
+
+[Upgrading to 0.7.0](migrating-0.7.md) collects the same changes as a checklist, adds the `0.7.1`
+and `0.7.2` corrections, and lists the Java API additions that need no code change.
 
 ## Tested combinations
 

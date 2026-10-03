@@ -89,6 +89,7 @@ nav:
     - Run the Example: getting-started/quickstart.md
     - Coming from QuickPerf: guide/coming-from-quickperf.md
     - Versions and Compatibility: getting-started/versions.md
+    - Upgrading to 0.7.0: getting-started/migrating-0.7.md
   - Guides:
     - Find an N+1:
       - How N+1 Detection Works: detections/n-plus-one.md
@@ -117,6 +118,7 @@ nav:
   - Extend and Contribute:
     - Architecture: architecture/overview.md
     - Extensible Runtime: architecture/extensible-runtime.md
+    - Supported Public API: architecture/supported-api.md
     - Maintaining the Codebase: architecture/maintaining.md
     - Adding Database Support: architecture/new-database.md
     - Contributing: architecture/contributing.md
