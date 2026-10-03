@@ -119,6 +119,7 @@ nav:
     - Architecture: architecture/overview.md
     - Extensible Runtime: architecture/extensible-runtime.md
     - Supported Public API: architecture/supported-api.md
+    - API Compatibility Policy: architecture/api-compatibility.md
     - Maintaining the Codebase: architecture/maintaining.md
     - Adding Database Support: architecture/new-database.md
     - Contributing: architecture/contributing.md
