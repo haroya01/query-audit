@@ -26,7 +26,7 @@ public record AuditRunResult(
     Map<String, ComparisonInputs> comparisonInputs,
     List<String> contractViolations) {
 
-  /** Retains the constructor for integrations without comparison input metadata. */
+  /** Retains the constructor for callers without comparison input metadata. */
   public AuditRunResult(
       List<QueryAuditReport> reports,
       AuditOutcome outcome,
@@ -34,6 +34,33 @@ public record AuditRunResult(
       AuditCoverage coverage,
       List<String> contractViolations) {
     this(reports, outcome, incompleteReasons, coverage, Map.of(), contractViolations);
+  }
+
+  /** Retains the canonical constructor from before contract violations were reported. */
+  public AuditRunResult(
+      List<QueryAuditReport> reports,
+      AuditOutcome outcome,
+      List<AuditIncompleteReason> incompleteReasons,
+      AuditCoverage coverage,
+      Map<String, ComparisonInputs> comparisonInputs) {
+    this(reports, outcome, incompleteReasons, coverage, comparisonInputs, List.of());
+  }
+
+  /** Retains the constructor for callers that report neither coverage nor contract violations. */
+  public AuditRunResult(
+      List<QueryAuditReport> reports,
+      AuditOutcome outcome,
+      List<AuditIncompleteReason> incompleteReasons,
+      AuditCoverage coverage) {
+    this(reports, outcome, incompleteReasons, coverage, Map.of(), List.of());
+  }
+
+  /** Retains the original run-result constructor. */
+  public AuditRunResult(
+      List<QueryAuditReport> reports,
+      AuditOutcome outcome,
+      List<AuditIncompleteReason> incompleteReasons) {
+    this(reports, outcome, incompleteReasons, null, Map.of(), List.of());
   }
 
   public AuditRunResult {
