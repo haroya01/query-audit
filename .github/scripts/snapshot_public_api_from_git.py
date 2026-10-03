@@ -19,7 +19,8 @@ from pathlib import Path
 import check_public_api as api
 
 
-SOURCE_ROOTS = ("query-audit-core/src/main/java", "query-audit-junit5/src/main/java")
+SOURCE_ROOTS = ("query-audit-core/src/main/java", "query-audit-junit5/src/main/java",
+    "query-audit-spring-boot-starter/src/main/java")
 
 
 def git(*args):
@@ -60,7 +61,7 @@ def main():
             "source_tree_hashes": tree_hashes,
             "compiler_release": 17,
             "scope": {"prefixes": api.PREFIXES, "entry_points": api.ENTRY_POINTS,
-                "excluded": ["io/queryaudit/core/extension/internal/"]},
+                "excluded": list(api.EXCLUDED_PREFIXES)},
             "classes": api.snapshot([classes]),
         }
         print(json.dumps(baseline, indent=2, sort_keys=True))

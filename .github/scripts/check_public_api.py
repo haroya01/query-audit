@@ -20,29 +20,44 @@ ABSTRACT, INTERFACE, ANNOTATION, ENUM = 1024, 512, 8192, 16384
 CLASS_FLAGS = PUBLIC | PRIVATE | PROTECTED | STATIC | FINAL | ABSTRACT | INTERFACE | ANNOTATION | ENUM
 MEMBER_FLAGS = PUBLIC | PROTECTED | STATIC | FINAL | ABSTRACT | 128  # varargs for methods
 PREFIXES = (
+    "io/queryaudit/core/contract/",
     "io/queryaudit/core/extension/",
     "io/queryaudit/core/model/",
     "io/queryaudit/core/reporter/",
-    "io/queryaudit/core/interceptor/",
-    "io/queryaudit/core/contract/",
 )
 ENTRY_POINTS = (
-    "io/queryaudit/core/config/QueryAuditConfig",
-    "io/queryaudit/core/detector/QueryAuditAnalyzer",
-    "io/queryaudit/core/detector/DetectionRule",
-    "io/queryaudit/core/analyzer/IndexMetadataProvider",
-    "io/queryaudit/core/analyzer/ExplainAnalyzer",
-    "io/queryaudit/core/analyzer/ExplainAnalysisException",
-    "io/queryaudit/junit5/QueryAudit",
+    # JUnit 5 annotations and extension behaviour.
     "io/queryaudit/junit5/BooleanOverride",
-    "io/queryaudit/junit5/QueryAuditExtension",
-    "io/queryaudit/junit5/QueryAuditDataSourceStore",
-    "io/queryaudit/junit5/ExpectQueries",
+    "io/queryaudit/junit5/DetectNPlusOne",
+    "io/queryaudit/junit5/EnableQueryInspector",
     "io/queryaudit/junit5/ExpectMaxQueryCount",
+    "io/queryaudit/junit5/ExpectQueries",
+    "io/queryaudit/junit5/QueryAudit",
+    "io/queryaudit/junit5/QueryAuditDataSourceStore",
+    "io/queryaudit/junit5/QueryAuditExclude",
+    "io/queryaudit/junit5/QueryAuditExtension",
+    # Spring Boot configuration properties.
+    "io/queryaudit/spring/QueryAuditProperties",
+    # Programmatic configuration.
+    "io/queryaudit/core/config/AuditMode",
+    "io/queryaudit/core/config/QueryAuditConfig",
+    "io/queryaudit/core/config/ReportFormat",
+    "io/queryaudit/core/config/ReportRedaction",
+    "io/queryaudit/core/config/RuleProfile",
+    # Custom rule and metadata provider SPIs.
+    "io/queryaudit/core/detector/DetectionRule",
+    "io/queryaudit/core/detector/QueryAuditAnalyzer",
+    "io/queryaudit/core/analyzer/ExplainAnalysisException",
+    "io/queryaudit/core/analyzer/ExplainAnalyzer",
+    "io/queryaudit/core/analyzer/IndexMetadataProvider",
+    # Capture scoping for background work.
+    "io/queryaudit/core/interceptor/QueryCaptureSession",
+    # Recorded query count contracts.
     "io/queryaudit/core/regression/QueryContracts",
     "io/queryaudit/core/regression/QueryCountBaseline",
     "io/queryaudit/core/regression/QueryCounts",
 )
+EXCLUDED_PREFIXES = ("io/queryaudit/core/extension/internal/",)
 
 
 class Reader:
@@ -149,7 +164,7 @@ def read_class(path):
 
 
 def in_scope(name):
-    if name.startswith("io/queryaudit/core/extension/internal/"):
+    if name.startswith(EXCLUDED_PREFIXES):
         return False
     return name.startswith(PREFIXES) or any(name == value or name.startswith(value + "$") for value in ENTRY_POINTS)
 
@@ -225,7 +240,7 @@ def main(argv=None):
                 parser.error("snapshot requires the exact --source-revision used to compile these classes")
             print(json.dumps({"schema_version": SCHEMA_VERSION, "source_revision": args.source_revision,
                 "scope": {"prefixes": PREFIXES, "entry_points": ENTRY_POINTS,
-                    "excluded": ["io/queryaudit/core/extension/internal/"]}, "classes": current}, indent=2, sort_keys=True))
+                    "excluded": list(EXCLUDED_PREFIXES)}, "classes": current}, indent=2, sort_keys=True))
             return 0
         if args.baseline is None:
             parser.error("check requires --baseline")
