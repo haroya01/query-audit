@@ -34,6 +34,11 @@ jobs:
       - name: Test
         run: ./gradlew test
 
+      # Also runs as part of `build` via :query-audit-core:check. Named explicitly so a
+      # compatibility break is reported as its own step rather than as a build failure.
+      - name: Public API compatibility
+        run: ./gradlew checkPublicApiCompatibility
+
       - name: Test published core dependency
         run: |
           ./gradlew :query-audit-core:publishMavenPublicationToConsumerTestRepository
