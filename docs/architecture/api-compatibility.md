@@ -15,7 +15,7 @@ For every release:
 | Change a Javadoc comment or an implementation detail | Yes |
 | Remove or rename a supported type or member | No |
 | Change a supported signature, return type, generic bound, or checked exception | No |
-| Remove or change an annotation default | No |
+| Remove an annotation default, or change its value | No |
 | Add an abstract method to a supported interface or SPI | No |
 | Change a documented configuration default | No |
 | Remove or rename a `query-audit.*` key | No |
@@ -24,6 +24,9 @@ For every release:
 
 Additions are always safe for a consumer; removals and changes are not. The rule the project applies
 is therefore: **add freely on the supported surface, remove only at a major release.**
+
+The table is the policy. CI enforces most of it, but not all of it — the
+[gap list](#what-the-floor-does-not-catch) names the rows that currently rely on review.
 
 Pre-1.0 the project is still finding its shape, so a breaking change may still ship in a minor
 release. Each one is recorded with a `BREAKING CHANGE:` footer and a Conventional Commits `feat` or
@@ -77,12 +80,27 @@ The `AuditRunResult.contractViolations` change is a worked example of the second
 record component removes the previous canonical constructor descriptor, so the check fails until a
 compatibility constructor is added or the break is accepted deliberately.
 
-### Why the floor is not the whole policy
+### What the floor does not catch
 
-The floor sees JVM descriptors. It does not see behavior, inherited-member equivalence, generic
-type-inference edge cases, annotation values, or resource and schema files. It also cannot see a
-supported API in a module the check does not compile, which is why the Spring Boot starter is
-compiled explicitly. Treat a green check as a floor, not as proof.
+The floor sees JVM descriptors. It records whether an annotation member *has* a default, but not the
+default's value, so these policy rows depend on review rather than on CI:
+
+| Not caught | Why |
+| --- | --- |
+| Changing an annotation attribute's default **value** | The snapshot stores `annotation_default` as a boolean, not the value. Removing a default is caught; changing `-1` to `10` is not. |
+| Behavior | Only signatures are compared. Any supported method may change what it does in a bug fix. |
+| Inherited-member equivalence | A change in a supertype that alters inherited signatures is not compared per subtype. |
+| Complete overload resolution | Erasure-identical and inference edge cases can differ without a descriptor change. |
+| Annotation values, constants, serialization layout | Not read from the class file. |
+| Resource and schema files | `report.json` schemas and `META-INF/services` are outside the class-file comparison. |
+| Configuration defaults and CLI exit codes | Enforced by documentation review and tests, not by a signature check. |
+| A supported API in a module the check does not compile | Which is why the Spring Boot starter is compiled explicitly. |
+
+Closing the annotation-default gap would mean recording the value from the `AnnotationDefault`
+attribute and bumping the baseline `schema_version`. That is a deliberate change to a trusted tool
+and is left as a maintainer decision rather than done here.
+
+Treat a green check as a floor, not as proof.
 
 ## Deprecation policy
 
