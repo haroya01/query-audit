@@ -163,6 +163,33 @@ class ExpectQueriesMessageTest {
   }
 
   @Test
+  @DisplayName("Groups repeated statements and names the calling line, not the proxy")
+  void groupsRepeatedStatementsUnderTheCallingLine() throws NoSuchMethodException {
+    QueryRecord lazyLoad =
+        new QueryRecord(
+            "select * from members where id = ?",
+            0,
+            0,
+            "demo.Member$HibernateProxy.getName:-1\ndemo.OrderService.lambda$createOrder$0:44");
+    QueryRecord list =
+        new QueryRecord(
+            "select * from orders", 0, 0, "demo.$Proxy140.findAll:-1\ndemo.OrderService.list:41");
+
+    String message =
+        QueryAuditExtension.buildExpectQueriesFailureMessage(
+            budget("selectBudgetOne"), List.of(list, lazyLoad, lazyLoad), "createOrder()");
+
+    assertThat(message)
+        .isEqualTo(
+            "QueryAudit: createOrder() exceeded its query budget.\n"
+                + "SELECT: executed 3, expected at most 1.\n"
+                + "  2x select * from members where id = ?\n"
+                + "     at demo.OrderService.lambda$createOrder$0:44\n"
+                + "  1x select * from orders\n"
+                + "     at demo.OrderService.list:41\n");
+  }
+
+  @Test
   @DisplayName("Passes when the count equals the budget exactly")
   void passesAtExactBudget() throws NoSuchMethodException {
     List<QueryRecord> queries = List.of(query("select * from orders"));

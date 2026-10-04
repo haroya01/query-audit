@@ -119,8 +119,8 @@ public final class QueryContracts {
   }
 
   /**
-   * Appends one delta line when the type deviates; when the count grew, every query of that type is
-   * listed with its call site so the offender is identifiable without re-running.
+   * Appends one delta line when the type deviates; when the count grew, the queries of that type
+   * are listed, grouped by statement and call site.
    */
   private static void appendTypeDelta(
       StringBuilder sb,
@@ -144,26 +144,8 @@ public final class QueryContracts {
                 : " (" + (actual - expected) + ")")
         .append('\n');
     if (actual > expected) {
-      for (QueryRecord query : queries) {
-        if (!typeMatcher.test(query.sql())) {
-          continue;
-        }
-        String sql = query.sql();
-        sb.append("    ").append(sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
-        String callSite = firstStackFrame(query.stackTrace());
-        if (callSite != null) {
-          sb.append("\n      at ").append(callSite);
-        }
-        sb.append('\n');
-      }
+      QueryCountEvidence.appendGrouped(
+          sb, queries.stream().filter(query -> typeMatcher.test(query.sql())).toList(), "    ");
     }
-  }
-
-  private static String firstStackFrame(String stackTrace) {
-    if (stackTrace == null || stackTrace.isEmpty()) {
-      return null;
-    }
-    int newline = stackTrace.indexOf('\n');
-    return newline < 0 ? stackTrace : stackTrace.substring(0, newline);
   }
 }

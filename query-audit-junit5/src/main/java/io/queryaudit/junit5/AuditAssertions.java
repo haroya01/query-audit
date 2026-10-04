@@ -1,5 +1,6 @@
 package io.queryaudit.junit5;
 
+import io.queryaudit.core.interceptor.CallSites;
 import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
@@ -7,6 +8,7 @@ import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.parser.SqlParser;
 import io.queryaudit.core.regression.QueryContracts;
+import io.queryaudit.core.regression.QueryCountEvidence;
 import io.queryaudit.core.regression.QueryCounts;
 import java.util.List;
 import java.util.Map;
@@ -77,23 +79,7 @@ final class AuditAssertions {
         String.format(
             "%s: executed %d, expected %s %d.\n",
             type, matched.size(), exact ? "exactly" : "at most", expected));
-    for (QueryRecord query : matched) {
-      String sql = query.sql();
-      sb.append("  ").append(sql.length() > 100 ? sql.substring(0, 100) + "..." : sql);
-      String callSite = firstStackFrame(query.stackTrace());
-      if (callSite != null) {
-        sb.append("\n    at ").append(callSite);
-      }
-      sb.append('\n');
-    }
-  }
-
-  private static String firstStackFrame(String stackTrace) {
-    if (stackTrace == null || stackTrace.isEmpty()) {
-      return null;
-    }
-    int newline = stackTrace.indexOf('\n');
-    return newline < 0 ? stackTrace : stackTrace.substring(0, newline);
+    QueryCountEvidence.appendGrouped(sb, matched, "  ");
   }
 
   static String nPlusOneFailure(
@@ -175,23 +161,12 @@ final class AuditAssertions {
       }
       if (issue.sourceLocation() != null && !issue.sourceLocation().isBlank()) {
         sb.append("\n    Call stack:");
-        issue
-            .sourceLocation()
-            .lines()
-            .filter(AuditAssertions::isApplicationFrame)
-            .limit(5)
+        CallSites.applicationFrames(issue.sourceLocation(), 5)
             .forEach(frame -> sb.append("\n      at ").append(frame));
       }
       sb.append("\n");
     }
     return sb.toString();
-  }
-
-  private static boolean isApplicationFrame(String frame) {
-    return !frame.startsWith("java.")
-        && !frame.startsWith("jdk.")
-        && !frame.startsWith("sun.")
-        && !frame.startsWith("worker.org.gradle.");
   }
 
   static String contractFailure(

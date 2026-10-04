@@ -437,18 +437,17 @@ without writing the numbers by hand, record a [contract](contracts.md) instead.
 
 ### Failure Message
 
-When a budget is exceeded, the diagnostic lists captured statements of the violated type and
-available source information. The console's first frame can be a JDBC proxy; inspect the JSON
-`stackTrace` for application frames. Example excerpt:
+When a budget is exceeded, the diagnostic lists the statements of the violated type, grouped by
+statement and calling line, most repeated first. The calling line skips repository and entity
+proxies. Example:
 
 ```
 QueryAudit: createOrder() exceeded its query budget.
-SELECT: executed 3, expected at most 2.
-  select * from orders where customer_id = ?
-    at com.example.OrderService.createOrder:42
-  select * from members where id = ?
-    at com.example.OrderService.loadCustomer:57
-  ...
+SELECT: executed 6, expected at most 2.
+  5x select * from members where id = ?
+     at com.example.OrderService.lambda$loadCustomers$0:57
+  1x select * from orders where customer_id = ?
+     at com.example.OrderService.createOrder:42
 ```
 
 !!! tip "Use `0` to forbid a query type"

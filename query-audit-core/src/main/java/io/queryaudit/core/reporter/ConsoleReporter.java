@@ -3,6 +3,7 @@ package io.queryaudit.core.reporter;
 import io.queryaudit.core.baseline.Baseline;
 import io.queryaudit.core.baseline.BaselineEntry;
 import io.queryaudit.core.extension.FindingKindId;
+import io.queryaudit.core.interceptor.CallSites;
 import io.queryaudit.core.model.Finding;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryAuditReport;
@@ -411,19 +412,7 @@ public class ConsoleReporter implements Reporter {
   }
 
   private static List<String> sourceFrames(String sourceLocation) {
-    List<String> lines =
-        sourceLocation.lines().map(String::strip).filter(line -> !line.isEmpty()).toList();
-    List<String> application =
-        lines.stream()
-            .filter(
-                frame ->
-                    !frame.startsWith("java.")
-                        && !frame.startsWith("jdk.")
-                        && !frame.startsWith("sun.")
-                        && !frame.startsWith("worker.org.gradle."))
-            .limit(5)
-            .toList();
-    return application.isEmpty() ? List.of(lines.get(0)) : application;
+    return CallSites.applicationFrames(sourceLocation, 5);
   }
 
   private String colorForSeverity(Severity severity) {

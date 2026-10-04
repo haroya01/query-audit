@@ -69,6 +69,24 @@ class QueryInterceptorCallSiteTest {
     assertThat(records.get(0).fullStackHash()).isEqualTo(records.get(1).fullStackHash());
   }
 
+  static final class Team$HibernateProxy {
+    void getName(QueryInterceptor interceptor) {
+      fire(interceptor);
+    }
+  }
+
+  @Test
+  void unsuffixedEntityProxyNamesDoNotEnterTheCallSite() {
+    QueryInterceptor interceptor = new QueryInterceptor();
+    interceptor.start();
+    new Team$HibernateProxy().getName(interceptor);
+    interceptor.stop();
+
+    assertThat(interceptor.getRecordedQueries().get(0).stackTrace())
+        .doesNotContain("$Team$HibernateProxy.getName")
+        .contains(".unsuffixedEntityProxyNamesDoNotEnterTheCallSite:");
+  }
+
   @Test
   void repeatedQueriesFromOneLoopShareTheirFullCallSite() {
     QueryInterceptor interceptor = new QueryInterceptor();

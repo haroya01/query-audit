@@ -78,6 +78,37 @@ class QueryContractsTest {
   }
 
   @Test
+  @DisplayName("an increase groups the statements behind it by call site")
+  void increaseGroupsRepeatedStatements() {
+    QueryRecord list =
+        new QueryRecord(
+            "select * from orders", 0, 0, "demo.$Proxy136.findAll:-1\ndemo.OrderService.list:30");
+    QueryRecord customer =
+        new QueryRecord(
+            "select * from customers where id = ?",
+            0,
+            0,
+            "demo.Customer$HibernateProxy.getName:-1\ndemo.OrderService.lambda$list$0:31");
+    String failure =
+        QueryContracts.verify(
+            KEY_CLASS,
+            KEY_TEST,
+            new QueryCounts(4, 0, 0, 0, 4),
+            contracts(new QueryCounts(1, 0, 0, 0, 1)),
+            List.of(list, customer, customer, customer));
+
+    assertThat(failure)
+        .contains(
+            "  SELECT: contract 1, executed 4 (+3)\n"
+                + "    3x select * from customers where id = ?\n"
+                + "       at demo.OrderService.lambda$list$0:31\n"
+                + "    1x select * from orders\n"
+                + "       at demo.OrderService.list:30\n")
+        .doesNotContain("$Proxy136")
+        .doesNotContain("HibernateProxy");
+  }
+
+  @Test
   @DisplayName("a decrease also fails — snapshot semantics, both directions")
   void decreaseAlsoFails() {
     String failure =

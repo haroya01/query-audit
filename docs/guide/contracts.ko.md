@@ -64,18 +64,20 @@ source_digest: d043f05b3afb
 ## 강제하기 {#enforcement}
 
 이후 실행마다 기록된 항목이 있는 테스트를 그 계약과 비교해요. 개수가 다르면 차이와 함께 실패해요.
-늘어난 경우에는 그 종류의 캡처된 문장과, 있으면 첫 호출 위치도 함께 보여 줘요. 진단 예시(SQL 목록 일부):
+늘어난 경우에는 그 종류의 문장을 문장과 호출한 줄로 묶어서, 많이 반복된 것부터 보여 줘요. 계약은
+SQL이 아니라 개수만 저장하기 때문에 어떤 문장이 새로 생겼는지 표시할 수는 없어요. 대신 반복된 문장이 맨
+위에 와요. 진단 예시:
 
 ```
 QueryAudit: placeOrder() deviates from its recorded query contract (.query-audit-contracts).
   INSERT: contract 1, executed 3 (+2)
-    insert into order_items (order_id, sku) values (?, ?)
-      at com.example.OrderService.placeOrder:87
+    3x insert into order_items (order_id, sku) values (?, ?)
+       at com.example.OrderService.lambda$placeOrder$0:87
 If the change is intended, re-record the contracts with -DqueryAudit.contracts.record=true and review the file diff.
 ```
 
-호출 위치가 JDBC 프록시를 가리킬 수 있어요. 애플리케이션 호출 위치는
-[JSON 리포트](reports.md#read-a-policy-failure)의 `reports[].queries[].stackTrace`에서 확인하세요.
+모든 문장과 캡처된 프레임은 [JSON 리포트](reports.md#read-a-policy-failure)의 `reports[].queries[]`에
+남아 있어요.
 
 마지막 줄은 테스트 JVM 속성 이름을 알려 줘요. 브리지를 설정한 Gradle 프로젝트는
 `-PqueryAudit.contracts.record=true`로 다시 실행하고, Maven 프로젝트는 진단에 나온 `-D` 형식을 쓰세요.

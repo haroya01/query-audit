@@ -163,7 +163,7 @@ public class LazyLoadTracker {
       String cls = frame.getClassName();
       if (cls.startsWith("java.") || cls.startsWith("javax.") || cls.startsWith("jdk.")) continue;
       if (cls.startsWith("org.hibernate.") || cls.startsWith("org.springframework.")) continue;
-      if (cls.contains("$HibernateProxy$") || cls.contains("$ByteBuddy$")) continue;
+      if (CallSites.isGeneratedSubclass(cls)) continue;
       if (cls.startsWith("io.queryaudit.")) continue;
       if (cls.startsWith("sun.") || cls.startsWith("com.sun.")) continue;
 
@@ -196,7 +196,7 @@ public class LazyLoadTracker {
       String cls = frame.getClassName();
 
       // ByteBuddy interceptor (Hibernate 6 default proxy mechanism)
-      if (cls.contains("$HibernateProxy$")) return true;
+      if (cls.contains("$HibernateProxy$") || cls.endsWith("$HibernateProxy")) return true;
       if (cls.contains("$ByteBuddy$")) return true;
 
       // Legacy CGLIB proxy (older Hibernate / Spring proxies)
@@ -220,6 +220,9 @@ public class LazyLoadTracker {
   static String deproxyClassName(String className) {
     int idx = className.indexOf("$HibernateProxy$");
     if (idx > 0) return className.substring(0, idx);
+    if (className.endsWith("$HibernateProxy")) {
+      return className.substring(0, className.length() - "$HibernateProxy".length());
+    }
     idx = className.indexOf("$ByteBuddy$");
     if (idx > 0) return className.substring(0, idx);
     idx = className.indexOf("$$EnhancerByCGLIB$$");

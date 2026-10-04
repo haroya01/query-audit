@@ -65,7 +65,8 @@ void recentOrdersStayWithinBudget() {
 ```text
 QueryAudit: recentOrdersStayWithinBudget() exceeded its query budget.
 UPDATE: executed 1, expected at most 0.
-  update orders set last_viewed_at = ? where id = ?
+  1x update orders set last_viewed_at = ? where id = ?
+     at com.example.OrderService.recentOrders:31
 ```
 
 이 값들은 상한이에요. `select = 2`는 SELECT 0개, 1개, 2개를 모두 허용하고, 정확히 2개를 요구하지는

@@ -64,6 +64,12 @@ class LazyLoadTrackerTest {
   }
 
   @Test
+  void deproxyClassName_unsuffixedHibernateProxy_strippedCorrectly() {
+    String proxied = "com.example.User$HibernateProxy";
+    assertThat(LazyLoadTracker.deproxyClassName(proxied)).isEqualTo("com.example.User");
+  }
+
+  @Test
   void deproxyClassName_byteBuddy_strippedCorrectly() {
     String proxied = "com.example.User$ByteBuddy$xyz789";
     assertThat(LazyLoadTracker.deproxyClassName(proxied)).isEqualTo("com.example.User");

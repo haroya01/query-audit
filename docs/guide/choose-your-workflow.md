@@ -64,7 +64,8 @@ the diagnostic includes the statement. Example excerpt:
 ```text
 QueryAudit: recentOrdersStayWithinBudget() exceeded its query budget.
 UPDATE: executed 1, expected at most 0.
-  update orders set last_viewed_at = ? where id = ?
+  1x update orders set last_viewed_at = ? where id = ?
+     at com.example.OrderService.recentOrders:31
 ```
 
 The limits are upper bounds. `select = 2` permits zero, one, or two SELECTs; it does not require

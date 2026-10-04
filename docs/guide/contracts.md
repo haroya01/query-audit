@@ -59,19 +59,21 @@ you rely on; a contract entry alone does not fail when its test is skipped.
 ## Enforcement
 
 On every subsequent run, each test with a recorded entry is compared against its contract.
-A count deviation fails with the delta. Increases also list captured statements of that type and
-their first captured stack frame when available. Illustrative diagnostic (SQL list excerpt):
+A count deviation fails with the delta. Increases also list the statements of that type, grouped
+by statement and calling line, most repeated first. Contracts store counts, not SQL, so the list
+cannot mark which statements are new; a repeated statement stands at the top. Illustrative
+diagnostic:
 
 ```
 QueryAudit: placeOrder() deviates from its recorded query contract (.query-audit-contracts).
   INSERT: contract 1, executed 3 (+2)
-    insert into order_items (order_id, sku) values (?, ?)
-      at com.example.OrderService.placeOrder:87
+    3x insert into order_items (order_id, sku) values (?, ?)
+       at com.example.OrderService.lambda$placeOrder$0:87
 If the change is intended, re-record the contracts with -DqueryAudit.contracts.record=true and review the file diff.
 ```
 
-The frame can identify a JDBC proxy; inspect `reports[].queries[].stackTrace` in the
-[JSON report](reports.md#read-a-policy-failure) for available application callers.
+The [JSON report](reports.md#read-a-policy-failure) keeps every statement and its captured
+frames in `reports[].queries[]`.
 
 The final line names the underlying test-JVM property. Gradle projects using the bridge rerun with
 `-PqueryAudit.contracts.record=true`; Maven projects use the `-D` form shown in the diagnostic.
