@@ -137,6 +137,35 @@ query-audit:
 데이터소스가 하나의 감사로 합쳐지는 건 아니에요. 데이터소스가 여러 개인 애플리케이션에서는 실제
 리포지토리 경로로 캡처를 증명하세요.
 
+## 테스트 슬라이스 {#test-slices}
+
+`@DataJpaTest`, `@JdbcTest`, `@DataJdbcTest`, `@JooqTest`는 Spring Boot 3과 4 모두에서 스타터의
+auto-configuration을 불러와요. 슬라이스 테스트에도 평소처럼 `@QueryAudit`이나 `@EnableQueryInspector`를
+붙이면 돼요.
+
+슬라이스 테스트는 트랜잭션 하나 안에서 돌기 때문에, 픽스처가 저장한 엔티티가 영속성 컨텍스트에 그대로
+남아요. 그 엔티티에서 lazy 연관관계를 읽어도 SQL이 나가지 않아서 N+1이 보이지 않아요. 시드한 뒤
+flush와 clear를 하세요.
+
+```java
+@DataJpaTest
+@QueryAudit
+class OrderRepositoryTest {
+    @Autowired OrderRepository orders;
+    @Autowired TestEntityManager entityManager;
+
+    @BeforeEach
+    void seed() {
+        // 픽스처 행 저장
+        entityManager.flush();
+        entityManager.clear();
+    }
+}
+```
+
+다른 슬라이스나 auto-configuration 없이 만든 컨텍스트라면 테스트 클래스에
+`@ImportAutoConfiguration(QueryAuditAutoConfiguration.class)`를 붙이세요.
+
 ## 기존 datasource-proxy 재사용하기 {#reuse-an-existing-datasource-proxy}
 
 다른 라이브러리가 이미 쿼리를 인식하는 Spring 데이터소스를 제공한다면, 스타터의 추가 감싸기만 끄세요.

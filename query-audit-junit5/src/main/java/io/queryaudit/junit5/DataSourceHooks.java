@@ -25,11 +25,32 @@ final class DataSourceHooks {
     if (resolved.staticField() != null) return installField(resolved.staticField(), interceptor);
     ProxyDataSource proxy = DataSourceResolver.findProxyDataSource(resolved.dataSource());
     if (proxy == null) {
-      throw new ExtensionConfigurationException(
-          "QueryAudit: the Spring DataSource is not query-aware. Add the QueryAudit Spring Boot"
-              + " starter or register a datasource-proxy DataSource bean.");
+      throw new ExtensionConfigurationException(notQueryAwareMessage(starterOnClasspath()));
     }
     return attach(proxy, interceptor);
+  }
+
+  private static String notQueryAwareMessage(boolean starterOnClasspath) {
+    if (!starterOnClasspath) {
+      return "QueryAudit: the Spring DataSource is not query-aware. Add the QueryAudit Spring Boot"
+          + " starter or register a datasource-proxy DataSource bean.";
+    }
+    return "QueryAudit: the Spring DataSource is not query-aware. The QueryAudit Spring Boot starter"
+        + " is on the classpath, but its auto-configuration did not run in this test context."
+        + " Add @ImportAutoConfiguration(QueryAuditAutoConfiguration.class) to the test class, and"
+        + " check that query-audit.enabled and query-audit.wrap-data-source.enabled are not false.";
+  }
+
+  private static boolean starterOnClasspath() {
+    try {
+      Class.forName(
+          "io.queryaudit.spring.QueryAuditAutoConfiguration",
+          false,
+          DataSourceHooks.class.getClassLoader());
+      return true;
+    } catch (ClassNotFoundException | LinkageError absent) {
+      return false;
+    }
   }
 
   private static synchronized Runnable installField(Field field, QueryInterceptor interceptor) {

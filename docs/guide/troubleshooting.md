@@ -34,6 +34,8 @@ JUnit actually discovered and executed the test; a skipped test or cached/no-op 
 | --- | --- |
 | Audit activation | Put `@EnableQueryInspector` or `@QueryAudit` directly on the test class/method. Keep `query-audit.enabled` enabled. |
 | Spring wiring | Include the starter and retain automatic wrapping unless another datasource-proxy bean already provides capture. |
+| "The Spring DataSource is not query-aware" with the starter present | The starter's auto-configuration did not run in that test context. Slices listed in [test slices](../getting-started/spring-boot.md#test-slices) load it; for any other context add `@ImportAutoConfiguration(QueryAuditAutoConfiguration.class)`. |
+| `@DataJpaTest` reports no lazy-load SQL | The fixture's entities are still in the persistence context. Flush and clear after seeding. |
 | Plain JUnit wiring | Expose the static proxy and pass that same object into the repository; a separately retained raw datasource bypasses it. |
 | Test timing | Execute the proof SQL in the test body. Captured per-test setup/teardown SQL remains in raw reports and budgets; detector analysis excludes it by default. Class-level initialization is outside the per-test audit. |
 | Multiple datasources | Check the actual selected datasource; marking one `@Primary` does not combine all of them. |

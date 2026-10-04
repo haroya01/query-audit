@@ -138,6 +138,34 @@ If you have several datasources, make the one used by the audited code unambiguo
 `@Primary`. This does not merge every datasource into one audit. Run the capture proof through the
 actual repository path when validating a multi-datasource application.
 
+## Test slices
+
+`@DataJpaTest`, `@JdbcTest`, `@DataJdbcTest`, and `@JooqTest` load the starter's auto-configuration
+on Spring Boot 3 and 4. Put `@QueryAudit` or `@EnableQueryInspector` on the slice test as usual.
+
+A slice test runs in one transaction, so entities the fixture saved stay in the persistence context.
+Reading a lazy association from them issues no SQL, and an N+1 stays hidden. Flush and clear after
+seeding:
+
+```java
+@DataJpaTest
+@QueryAudit
+class OrderRepositoryTest {
+    @Autowired OrderRepository orders;
+    @Autowired TestEntityManager entityManager;
+
+    @BeforeEach
+    void seed() {
+        // save the fixture rows
+        entityManager.flush();
+        entityManager.clear();
+    }
+}
+```
+
+For another slice, or a context built without auto-configuration, add
+`@ImportAutoConfiguration(QueryAuditAutoConfiguration.class)` to the test class.
+
 ## Reuse an existing datasource-proxy
 
 If another library already provides the query-aware Spring datasource, disable only the starter's

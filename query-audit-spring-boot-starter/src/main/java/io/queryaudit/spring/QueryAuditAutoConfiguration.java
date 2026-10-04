@@ -186,13 +186,14 @@ public class QueryAuditAutoConfiguration {
       name = {"query-audit.enabled", "query-audit.wrap-data-source.enabled"},
       havingValue = "true",
       matchIfMissing = true)
-  public BeanPostProcessor queryAuditDataSourcePostProcessor(QueryInterceptor interceptor) {
+  public static BeanPostProcessor queryAuditDataSourcePostProcessor(
+      ObjectProvider<QueryInterceptor> interceptor) {
     return new BeanPostProcessor() {
       @Override
       public Object postProcessAfterInitialization(Object bean, String beanName)
           throws BeansException {
         if (bean instanceof DataSource ds) {
-          return DataSourceProxyFactory.wrap(ds, interceptor);
+          return DataSourceProxyFactory.wrap(ds, interceptor.getObject());
         }
         return bean;
       }

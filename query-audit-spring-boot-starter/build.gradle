@@ -38,6 +38,7 @@ dependencies {
     boot4TestImplementation 'org.springframework.boot:spring-boot-starter-test:4.0.6'
     // Boot 4.x split MockMvc test support out of spring-boot-test-autoconfigure
     boot4TestImplementation 'org.springframework.boot:spring-boot-webmvc-test:4.0.6'
+    boot4TestImplementation 'org.springframework.boot:spring-boot-data-jpa-test:4.0.6'
     boot4TestImplementation 'com.h2database:h2:2.3.232'
     boot4TestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
