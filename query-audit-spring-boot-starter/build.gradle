@@ -57,3 +57,7 @@ tasks.register('boot4Test', Test) {
 tasks.named('check') {
     dependsOn tasks.named('boot4Test')
 }
+tasks.named('compileJava') {
+    // Process additional configuration metadata before compilation
+    inputs.files(tasks.named('processResources'))
+}
