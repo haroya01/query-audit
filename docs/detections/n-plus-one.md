@@ -78,7 +78,9 @@ built-in rule in the default `recommended` profile. Neither `EXPLAIN` nor Hibern
 
 Hibernate lazy-load events are recorded when the integration is active. They produce INFO
 `n-plus-one` findings that name the collection or proxy and suggest the fetch to add. They
-explain a confirmed finding but never confirm one on their own. The older SQL-only
+explain a confirmed finding but never confirm one on their own. Loads of an entity or collection
+that Hibernate fetches in batches, through `@BatchSize` or `default_batch_fetch_size`, are not
+recorded, because the batch is already the fix. The older SQL-only
 `n-plus-one-suspect` rule is still available through `strict` or `enabled-rules`.
 
 `@QueryAudit` fails the test on a confirmed finding and `@EnableQueryInspector` only reports it.

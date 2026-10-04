@@ -31,6 +31,7 @@ class HibernateLazyLoadListener
     if (!tracker.isActive()) return;
 
     String role = event.getCollection() != null ? event.getCollection().getRole() : "unknown";
+    if (event.getCollection() != null && collectionBatchLoadable(event, role)) return;
     tracker.recordCollectionInitialized(
         role, event.getAffectedOwnerEntityName(), event.getAffectedOwnerIdOrNull());
   }
@@ -43,9 +44,27 @@ class HibernateLazyLoadListener
     Object id = event.getId();
 
     if (LazyLoadTracker.isProxyResolution()) {
-      tracker.recordProxyResolved(entityName, id);
+      if (!entityBatchLoadable(event)) tracker.recordProxyResolved(entityName, id);
     } else if (LazyLoadTracker.hasFindByIdInStack()) {
       tracker.recordExplicitLoad(entityName, id, LazyLoadTracker.captureApplicationStack());
+    }
+  }
+
+  // AbstractEvent.getFactory() keeps one signature from Hibernate 6.6 to 7.x; getSession() does
+  // not. A metamodel that cannot answer leaves the event recorded, as before batch awareness.
+  private static boolean collectionBatchLoadable(InitializeCollectionEvent event, String role) {
+    try {
+      return event.getFactory().getMappingMetamodel().getCollectionDescriptor(role).isBatchLoadable();
+    } catch (RuntimeException | LinkageError unavailable) {
+      return false;
+    }
+  }
+
+  private static boolean entityBatchLoadable(PostLoadEvent event) {
+    try {
+      return event.getPersister() != null && event.getPersister().isBatchLoadable();
+    } catch (RuntimeException | LinkageError unavailable) {
+      return false;
     }
   }
 }

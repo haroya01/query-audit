@@ -94,7 +94,8 @@ class QueryAuditExtensionZeroQueryContractTest {
       System.setOut(originalOut);
     }
     assertThat(output.toString(StandardCharsets.UTF_8))
-        .contains("[QueryAudit] Rule profile: recommended");
+        .contains("[QueryAudit] auditedMethod(): no findings (profile: recommended)")
+        .doesNotContain("QUERYAUDIT REPORT");
 
     assertZeroQueryExecutionWasRecorded(fixture);
     assertThat(

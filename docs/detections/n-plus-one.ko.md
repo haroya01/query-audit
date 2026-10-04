@@ -82,7 +82,8 @@ N queries: SELECT * FROM members WHERE id = ?            -- one per order (lazy 
 
 Hibernate 연동이 켜져 있으면 지연 로딩 이벤트도 기록해요. 이 이벤트는 컬렉션이나 프록시 이름과 함께
 추가할 페치를 제안하는 INFO `n-plus-one` 탐지 결과가 돼요. 확정된 탐지 결과를 설명해 주지만, 이벤트만으로
-확정하지는 않아요. 예전의 SQL 전용 `n-plus-one-suspect` 규칙은 `strict`나 `enabled-rules`로 여전히 쓸 수 있어요.
+확정하지는 않아요. `@BatchSize`나 `default_batch_fetch_size`로 Hibernate가 묶어서 가져오는 엔티티와
+컬렉션의 로딩은 기록하지 않아요. 묶어서 가져오는 것 자체가 이미 해결책이기 때문이에요. 예전의 SQL 전용 `n-plus-one-suspect` 규칙은 `strict`나 `enabled-rules`로 여전히 쓸 수 있어요.
 
 `@QueryAudit`은 확정된 탐지 결과가 있으면 테스트를 실패시키고, `@EnableQueryInspector`는 보고만 해요.
 다른 규칙을 켰을 때 N+1에서만 실패하게 하려면 `@QueryAudit(failOn = IssueType.N_PLUS_ONE)`을 쓰세요.

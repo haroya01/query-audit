@@ -538,7 +538,8 @@ QueryAudit includes three reporter implementations, all in `query-audit-core`:
 
 ### Console Report (`ConsoleReporter`)
 
-ANSI-colored output printed to stdout after each test method. The default reporter.
+ANSI-colored output printed to stdout after each test method that has findings to show. A test
+without findings prints one line with its name and the active rule profile. The default reporter.
 
 ### JSON Report (`JsonReporter`)
 

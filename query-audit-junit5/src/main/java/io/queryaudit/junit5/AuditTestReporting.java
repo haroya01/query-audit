@@ -12,12 +12,16 @@ import java.util.Locale;
 final class AuditTestReporting {
   void present(AuditScope scope, AnalyzedAudit result) {
     QueryAuditReport display = visible(result.report(), result.config().isShowInfo());
-    System.out.println(
-        "[QueryAudit] Rule profile: "
-            + result.config().getRuleProfile().name().toLowerCase(Locale.ROOT));
-    new ConsoleReporter(
-            System.out, ConsoleReporter.detectColorSupport(), result.analyzer().getBaseline())
-        .report(display);
+    String profile = result.config().getRuleProfile().name().toLowerCase(Locale.ROOT);
+    if (display.getFindings().isEmpty()) {
+      System.out.println(
+          "[QueryAudit] " + result.testName() + ": no findings (profile: " + profile + ")");
+    } else {
+      System.out.println("[QueryAudit] Rule profile: " + profile);
+      new ConsoleReporter(
+              System.out, ConsoleReporter.detectColorSupport(), result.analyzer().getBaseline())
+          .report(display);
+    }
     if ("true".equals(System.getenv("GITHUB_ACTIONS"))) {
       new GitHubActionsReporter(result.config().getReportRedaction()).report(display);
     }
