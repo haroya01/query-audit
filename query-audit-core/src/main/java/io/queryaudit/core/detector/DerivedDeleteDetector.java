@@ -42,6 +42,11 @@ public class DerivedDeleteDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.DERIVED_DELETE_LOADS_ENTITIES.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     // Read-only captures cannot contain a derived delete. Avoid scanning every SELECT suffix.
     if (threshold > 0

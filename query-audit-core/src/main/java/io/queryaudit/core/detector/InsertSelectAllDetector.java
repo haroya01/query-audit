@@ -30,6 +30,11 @@ public class InsertSelectAllDetector implements DetectionRule {
           Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.INSERT_SELECT_ALL.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new HashSet<>();

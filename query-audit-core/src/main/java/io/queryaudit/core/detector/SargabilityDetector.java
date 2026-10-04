@@ -106,6 +106,11 @@ public class SargabilityDetector implements DetectionRule {
   private static final Pattern INVERSE_OP = Pattern.compile("^[+\\-*/]$");
 
   @Override
+  public String getRuleCode() {
+    return IssueType.NON_SARGABLE_EXPRESSION.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

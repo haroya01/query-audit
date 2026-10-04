@@ -81,6 +81,11 @@ public class ImplicitTypeConversionDetector implements DetectionRule {
       Pattern.compile("(?i)\\b(\\w+)\\s*=\\s*(\\d+)\\b");
 
   @Override
+  public String getRuleCode() {
+    return IssueType.IMPLICIT_TYPE_CONVERSION.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

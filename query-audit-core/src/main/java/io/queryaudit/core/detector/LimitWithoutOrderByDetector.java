@@ -56,6 +56,11 @@ public class LimitWithoutOrderByDetector implements DetectionRule {
   private static final Pattern EXISTS_BY_METHOD = Pattern.compile("\\.existsBy\\w+:");
 
   @Override
+  public String getRuleCode() {
+    return IssueType.LIMIT_WITHOUT_ORDER_BY.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

@@ -31,6 +31,11 @@ public class InsertOnDuplicateKeyDetector implements DetectionRule {
       Pattern.compile("^\\s*REPLACE\\s+INTO\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.INSERT_ON_DUPLICATE_KEY.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

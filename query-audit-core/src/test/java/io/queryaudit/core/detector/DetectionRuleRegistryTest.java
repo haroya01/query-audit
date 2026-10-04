@@ -11,10 +11,17 @@ import io.queryaudit.core.model.IssueType;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 class DetectionRuleRegistryTest {
@@ -24,7 +31,10 @@ class DetectionRuleRegistryTest {
   @Test
   void onlyRegistryConstructedRulesHaveKnownConfigurationInputs() {
     QueryAuditConfig config =
-        QueryAuditConfig.builder().addDisabledRule("service-loader-detection-rule").build();
+        QueryAuditConfig.builder()
+            .ruleProfile(RuleProfile.STRICT)
+            .addDisabledRule("service-loader-detection-rule")
+            .build();
     assertThat(new QueryAuditAnalyzer(config, List.of()).hasCompleteRuleInputs()).isTrue();
     assertThat(
             new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of()).hasCompleteRuleInputs())
@@ -121,14 +131,74 @@ class DetectionRuleRegistryTest {
     List<DetectionRule> reEnabledRules = new DetectionRuleRegistry(reEnabled).createRules();
 
     assertThat(minimalRules).noneMatch(RepeatedSingleUpdateDetector.class::isInstance);
-    assertThat(minimalRules).anyMatch(SelectAllDetector.class::isInstance);
+    assertThat(minimalRules).noneMatch(SelectAllDetector.class::isInstance);
+    assertThat(minimalRules).anyMatch(UpdateWithoutWhereDetector.class::isInstance);
     assertThat(reEnabledRules).anyMatch(RepeatedSingleUpdateDetector.class::isInstance);
+  }
+
+  @Test
+  void theDefaultProfileRegistersOnlyTheCallSiteNPlusOneRuleAmongBuiltIns() {
+    List<DetectionRule> rules = new DetectionRuleRegistry(QueryAuditConfig.defaults()).createRules();
+
+    assertThat(rules)
+        .filteredOn(rule -> rule.getClass().getPackageName().equals("io.queryaudit.core.detector") && !(rule instanceof TestServiceLoaderDetectionRule))
+        .singleElement()
+        .isInstanceOf(CallSiteNPlusOneDetector.class);
+  }
+
+  @Test
+  void aMultiCodeRuleRunsWhenAnyOfItsCodesIsEnabled() {
+    QueryAuditConfig joinIndex =
+        QueryAuditConfig.builder().addEnabledRule("missing-join-index").build();
+
+    assertThat(new DetectionRuleRegistry(joinIndex).createRules())
+        .anyMatch(MissingIndexDetector.class::isInstance);
+    assertThat(new DetectionRuleRegistry(QueryAuditConfig.defaults()).createRules())
+        .noneMatch(MissingIndexDetector.class::isInstance);
+  }
+
+  @Test
+  void aDisabledRuleNamedAfterItsClassStaysDisabled() {
+    QueryAuditConfig config =
+        QueryAuditConfig.builder()
+            .ruleProfile(RuleProfile.STRICT)
+            .addDisabledRule("missing-index")
+            .build();
+
+    assertThat(new DetectionRuleRegistry(config).createRules())
+        .noneMatch(MissingIndexDetector.class::isInstance);
+  }
+
+  @Test
+  void everyBuiltInRuleDeclaresTheIssueCodesItsSourceEmits() throws IOException {
+    QueryAuditConfig strict = QueryAuditConfig.builder().ruleProfile(RuleProfile.STRICT).build();
+    List<DetectionRule> builtIns =
+        new DetectionRuleRegistry(strict)
+            .createRules().stream()
+                .filter(rule -> rule.getClass().getPackageName().equals("io.queryaudit.core.detector") && !(rule instanceof TestServiceLoaderDetectionRule))
+                .toList();
+    assertThat(builtIns).hasSize(59);
+
+    Pattern issueType = Pattern.compile("IssueType\\.([A-Z_]+)");
+    for (DetectionRule rule : builtIns) {
+      Path source =
+          Path.of("src/main/java/io/queryaudit/core/detector", rule.getClass().getSimpleName() + ".java");
+      Set<String> emitted = new TreeSet<>();
+      Matcher matcher = issueType.matcher(Files.readString(source));
+      while (matcher.find()) emitted.add(IssueType.valueOf(matcher.group(1)).getCode());
+
+      assertThat(rule.getRuleCodes()).as(rule.getClass().getSimpleName()).isNotEmpty();
+      assertThat(rule.getRuleCodes())
+          .as(rule.getClass().getSimpleName())
+          .containsAll(emitted);
+    }
   }
 
   @Test
   void passesThresholdsToConfigurableRules() {
     QueryAuditConfig config =
         QueryAuditConfig.builder()
+            .ruleProfile(RuleProfile.STRICT)
             .nPlusOneThreshold(4)
             .slowQueryWarningMs(100)
             .slowQueryErrorMs(200)

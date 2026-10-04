@@ -69,6 +69,11 @@ public class LargeInListDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.LARGE_IN_LIST.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

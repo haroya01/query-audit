@@ -175,9 +175,9 @@ final class DetectionRuleRegistry {
   }
 
   private boolean isRuleDisabled(DetectionRule rule) {
-    String ruleCode = rule.getRuleCode();
-    if (ruleCode != null) {
-      return config.isRuleExcluded(ruleCode);
+    Set<String> codes = rule.getRuleCodes();
+    if (!codes.isEmpty() && codes.stream().allMatch(config::isRuleExcluded)) {
+      return true;
     }
 
     String className = rule.getClass().getSimpleName();

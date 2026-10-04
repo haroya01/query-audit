@@ -40,6 +40,11 @@ public class TooManyJoinsDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.TOO_MANY_JOINS.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new HashSet<>();

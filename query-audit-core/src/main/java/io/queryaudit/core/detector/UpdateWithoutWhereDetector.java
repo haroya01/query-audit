@@ -29,6 +29,11 @@ public class UpdateWithoutWhereDetector implements DetectionRule {
       Pattern.compile("\\bUSING\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.UPDATE_WITHOUT_WHERE.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new HashSet<>();

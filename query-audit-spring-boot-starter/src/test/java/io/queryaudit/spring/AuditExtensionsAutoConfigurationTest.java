@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.queryaudit.core.analyzer.ExplainAnalyzer;
 import io.queryaudit.core.analyzer.IndexMetadataProvider;
 import io.queryaudit.core.config.QueryAuditConfig;
+import io.queryaudit.core.detector.CallSiteNPlusOneDetector;
 import io.queryaudit.core.detector.DetectionRule;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
-import io.queryaudit.core.detector.SelectAllDetector;
 import io.queryaudit.core.extension.AuditExtensions;
 import io.queryaudit.core.extension.AuditRule;
 import io.queryaudit.core.extension.FindingKindId;
@@ -75,7 +75,7 @@ class AuditExtensionsAutoConfigurationTest {
                   new QueryAuditAnalyzer(
                       context.getBean(QueryAuditConfig.class), List.of(), extensions.rules());
               assertThat(analyzer.getRules()).contains(firstRule, secondRule);
-              assertThat(analyzer.getRules()).anyMatch(SelectAllDetector.class::isInstance);
+              assertThat(analyzer.getRules()).anyMatch(CallSiteNPlusOneDetector.class::isInstance);
             });
   }
 

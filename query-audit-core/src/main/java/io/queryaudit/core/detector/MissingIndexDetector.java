@@ -68,6 +68,15 @@ public class MissingIndexDetector implements DetectionRule {
           "unsuspended_at");
 
   @Override
+  public Set<String> getRuleCodes() {
+    return Set.of(
+        IssueType.MISSING_WHERE_INDEX.getCode(),
+        IssueType.MISSING_JOIN_INDEX.getCode(),
+        IssueType.MISSING_ORDER_BY_INDEX.getCode(),
+        IssueType.MISSING_GROUP_BY_INDEX.getCode());
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     if (indexMetadata == null || indexMetadata.isEmpty()) {

@@ -55,6 +55,11 @@ public class MergeableQueriesDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.MERGEABLE_QUERIES.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
 

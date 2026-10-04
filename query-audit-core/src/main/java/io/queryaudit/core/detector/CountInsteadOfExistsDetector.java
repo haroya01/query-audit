@@ -81,6 +81,11 @@ public class CountInsteadOfExistsDetector implements DetectionRule {
       Pattern.compile("\\bHAVING\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.COUNT_INSTEAD_OF_EXISTS.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     if (!enabled) {
       return List.of();

@@ -38,6 +38,11 @@ public class ForceIndexHintDetector implements DetectionRule {
           "\\b(FORCE\\s+INDEX|USE\\s+INDEX|IGNORE\\s+INDEX)\\s*\\(", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.FORCE_INDEX_HINT.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

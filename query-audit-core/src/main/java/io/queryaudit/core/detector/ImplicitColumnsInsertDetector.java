@@ -29,6 +29,11 @@ public class ImplicitColumnsInsertDetector implements DetectionRule {
       Pattern.compile("INSERT\\s+INTO\\s+(?:`\\w+`|\\w+)\\s+VALUES", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.IMPLICIT_COLUMNS_INSERT.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new HashSet<>();

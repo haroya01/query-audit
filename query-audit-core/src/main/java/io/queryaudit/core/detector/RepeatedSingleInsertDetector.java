@@ -57,6 +57,11 @@ public class RepeatedSingleInsertDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.REPEATED_SINGLE_INSERT.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
 

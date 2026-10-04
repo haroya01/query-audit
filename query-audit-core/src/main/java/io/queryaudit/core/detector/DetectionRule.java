@@ -4,6 +4,7 @@ import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.QueryRecord;
 import java.util.List;
+import java.util.Set;
 
 /**
  * A rule that evaluates a list of query records and returns detected issues. Implementations of
@@ -26,5 +27,18 @@ public interface DetectionRule {
    */
   default String getRuleCode() {
     return null;
+  }
+
+  /**
+   * Returns every issue-type code this detector can emit. Rule profiles and {@code enabled-rules}
+   * skip the detector when all of them are excluded. Defaults to {@link #getRuleCode()}; a detector
+   * that emits several codes overrides this.
+   *
+   * @return the codes, or an empty set if not declared
+   * @since 0.8.0
+   */
+  default Set<String> getRuleCodes() {
+    String code = getRuleCode();
+    return code == null ? Set.of() : Set.of(code);
   }
 }

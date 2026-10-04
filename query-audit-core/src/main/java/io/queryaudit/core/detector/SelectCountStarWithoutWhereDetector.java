@@ -29,6 +29,11 @@ public class SelectCountStarWithoutWhereDetector implements DetectionRule {
       Pattern.compile("\\bGROUP\\s+BY\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.COUNT_STAR_WITHOUT_WHERE.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

@@ -40,6 +40,11 @@ public class NPlusOneDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.N_PLUS_ONE_SUSPECT.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new HashSet<>();

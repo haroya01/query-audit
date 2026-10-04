@@ -50,6 +50,11 @@ public class CollectionManagementDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.COLLECTION_DELETE_REINSERT.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> flaggedTables = new HashSet<>();

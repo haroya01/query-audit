@@ -38,6 +38,11 @@ public class RangeLockDetector implements DetectionRule {
   private static final Set<String> RANGE_OPERATORS = Set.of(">", "<", ">=", "<=", "BETWEEN");
 
   @Override
+  public String getRuleCode() {
+    return IssueType.RANGE_LOCK_RISK.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
 

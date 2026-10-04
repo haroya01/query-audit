@@ -137,7 +137,9 @@ query-audit:
 Precedence: `disabled-rules` > `enabled-rules` > profile tier.
 
 `recommended` and `minimal` are allow-lists over built-in rules, so a new built-in rule stays
-off until it is added explicitly. `recommended` never filters custom finding kinds from
+off until it is added explicitly. A rule whose codes are all excluded is not registered, so it
+neither runs nor logs; a rule that emits several codes runs when any of them is enabled.
+`recommended` never filters custom finding kinds from
 `AuditRule` extensions. Legacy `DetectionRule` extensions report built-in issue types and follow
 the profile like built-in rules; enable their codes with `enabled-rules`. External rules
 registered via `ServiceLoader` without a rule code are never filtered by profiles.

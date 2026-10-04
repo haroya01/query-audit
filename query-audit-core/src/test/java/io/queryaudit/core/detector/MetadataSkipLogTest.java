@@ -2,6 +2,7 @@ package io.queryaudit.core.detector;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.model.IndexMetadata;
 import io.queryaudit.core.model.QueryRecord;
 import java.io.ByteArrayOutputStream;
@@ -60,6 +61,15 @@ class MetadataSkipLogTest {
     // Only one occurrence of the warning despite three empty-metadata calls.
     int occurrences = err.split("OrderByLimitWithoutIndexDetector", -1).length - 1;
     assertThat(occurrences).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("the default profile does not run, or warn about, index rules it excludes")
+  void theDefaultProfileStaysSilentAboutExcludedIndexRules() {
+    new QueryAuditAnalyzer(QueryAuditConfig.defaults(), List.of())
+        .analyze("test", List.of(record("SELECT * FROM t WHERE x = 1 ORDER BY y LIMIT 10")), EMPTY);
+
+    assertThat(capturedErr.toString()).doesNotContain("IndexMetadata is empty");
   }
 
   @Test

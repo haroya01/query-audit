@@ -29,6 +29,11 @@ public class RegexpInsteadOfLikeDetector implements DetectionRule {
       Pattern.compile("\\b(REGEXP|RLIKE)\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.REGEXP_INSTEAD_OF_LIKE.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new HashSet<>();

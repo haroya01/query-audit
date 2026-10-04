@@ -86,6 +86,11 @@ public class WhereFunctionDetector implements DetectionRule {
       "Rewrite without function wrapper, or create a functional index";
 
   @Override
+  public String getRuleCode() {
+    return IssueType.WHERE_FUNCTION.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

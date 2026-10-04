@@ -41,6 +41,11 @@ public class ImplicitJoinDetector implements DetectionRule {
       Pattern.compile("\\bFROM\\s+\\w+\\s*\\(", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.IMPLICIT_JOIN.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new HashSet<>();

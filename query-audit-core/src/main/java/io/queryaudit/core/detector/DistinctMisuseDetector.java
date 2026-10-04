@@ -58,6 +58,11 @@ public class DistinctMisuseDetector implements DetectionRule {
       Pattern.compile("(?:(\\w+)\\.)?(\\w+)", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.DISTINCT_MISUSE.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

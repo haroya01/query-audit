@@ -27,6 +27,11 @@ import java.util.Set;
 public class DmlWithoutIndexDetector implements DetectionRule {
 
   @Override
+  public String getRuleCode() {
+    return IssueType.DML_WITHOUT_INDEX.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     if (indexMetadata == null || indexMetadata.isEmpty()) {

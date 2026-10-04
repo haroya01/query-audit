@@ -32,6 +32,11 @@ import java.util.stream.Collectors;
 public class CompositeIndexDetector implements DetectionRule {
 
   @Override
+  public String getRuleCode() {
+    return IssueType.COMPOSITE_INDEX_LEADING_COLUMN.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
 

@@ -32,6 +32,11 @@ import java.util.stream.Collectors;
 public class IndexRedundancyDetector implements DetectionRule {
 
   @Override
+  public String getRuleCode() {
+    return IssueType.REDUNDANT_INDEX.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
 

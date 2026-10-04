@@ -37,6 +37,11 @@ public class WriteAmplificationDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.WRITE_AMPLIFICATION.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
 

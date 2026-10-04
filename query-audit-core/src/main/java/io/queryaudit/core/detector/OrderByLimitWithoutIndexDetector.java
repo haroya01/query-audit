@@ -36,6 +36,11 @@ public class OrderByLimitWithoutIndexDetector implements DetectionRule {
       Pattern.compile("\\bORDER\\s+BY\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.ORDER_BY_LIMIT_WITHOUT_INDEX.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
 

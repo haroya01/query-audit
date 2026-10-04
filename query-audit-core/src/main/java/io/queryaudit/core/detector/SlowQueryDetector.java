@@ -48,6 +48,11 @@ public class SlowQueryDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.SLOW_QUERY.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     // Group all executions by normalizedSql to compute median per pattern
     Map<String, List<QueryRecord>> grouped = new LinkedHashMap<>();

@@ -54,6 +54,11 @@ public class WindowFunctionWithoutPartitionDetector implements DetectionRule {
       Set.of("ROW_NUMBER", "RANK", "DENSE_RANK", "NTILE");
 
   @Override
+  public String getRuleCode() {
+    return IssueType.WINDOW_FUNCTION_WITHOUT_PARTITION.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

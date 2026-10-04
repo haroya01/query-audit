@@ -38,6 +38,11 @@ public class NonDeterministicPaginationDetector implements DetectionRule {
       Pattern.compile("\\bLIMIT\\b", Pattern.CASE_INSENSITIVE);
 
   @Override
+  public String getRuleCode() {
+    return IssueType.NON_DETERMINISTIC_PAGINATION.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
 

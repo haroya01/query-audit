@@ -66,6 +66,11 @@ public class ExcessiveColumnFetchDetector implements DetectionRule {
   }
 
   @Override
+  public String getRuleCode() {
+    return IssueType.EXCESSIVE_COLUMN_FETCH.getCode();
+  }
+
+  @Override
   public List<Issue> evaluate(List<QueryRecord> queries, IndexMetadata indexMetadata) {
     List<Issue> issues = new ArrayList<>();
     Set<String> flaggedPatterns = new HashSet<>();

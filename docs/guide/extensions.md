@@ -167,8 +167,9 @@ public final class ApplicationSlowQueryRule implements DetectionRule {
 This intentionally small example demonstrates the SPI. For a different slow-query threshold
 alone, prefer `query-audit.slow-query.warning-ms` instead of a custom implementation.
 
-`getRuleCode()` declares the rule's policy code, here `slow-query`. The emitted
-`IssueType.SLOW_QUERY` uses the same code for reporting and suppression. Disabling or
+`getRuleCode()` declares the rule's policy code, here `slow-query`. A rule that emits several
+issue types overrides `getRuleCodes()` instead (0.8); the profile skips it only when every code is
+excluded. The emitted `IssueType.SLOW_QUERY` uses the same code for reporting and suppression. Disabling or
 suppressing `slow-query` therefore affects both this rule and the built-in slow-query rule;
 if both run, they may produce overlapping findings. The current SPI does not replace a built-in
 implementation just because the codes match.
