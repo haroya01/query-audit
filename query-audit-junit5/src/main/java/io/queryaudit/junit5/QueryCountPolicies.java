@@ -54,6 +54,7 @@ final class QueryCountPolicies {
   String contractFailure(
       AuditScope scope,
       List<QueryRecord> queries,
+      List<QueryRecord> allPhases,
       String testId,
       String testClass,
       String testName) {
@@ -77,6 +78,18 @@ final class QueryCountPolicies {
         Files.isDirectory(location)
             ? ContractFiles.load(location).fileFor(QueryCountBaseline.key(testId)).toString()
             : location.toString();
-    return AuditAssertions.contractFailure(testId, testClass, testName, queries, contracts, source);
+    String failure =
+        AuditAssertions.contractFailure(testId, testClass, testName, queries, contracts, source);
+    if (failure == null || queries.size() == allPhases.size()) {
+      return failure;
+    }
+    QueryCounts recorded = QueryCountBaseline.find(contracts, testId, testClass, testName);
+    if (!QueryCounts.from(allPhases).equals(recorded)) {
+      return failure;
+    }
+    return failure
+        + "\nThe recorded counts include setup and teardown queries. QueryAudit 0.7 and earlier"
+        + " counted them in method contracts; re-record once with"
+        + " -DqueryAudit.contracts.record=true.";
   }
 }

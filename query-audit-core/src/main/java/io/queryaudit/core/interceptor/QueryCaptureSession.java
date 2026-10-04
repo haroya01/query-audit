@@ -94,6 +94,7 @@ public final class QueryCaptureSession implements AutoCloseable {
   public void setPhase(LifecyclePhase phase) {
     this.phase = Objects.requireNonNull(phase, "phase");
     interceptor.setPhase(phase);
+    if (tracker != null) tracker.setPhase(phase);
   }
 
   /** Stops this invocation, not whichever invocation happens to be bound to the caller. */

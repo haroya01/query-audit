@@ -2,6 +2,7 @@ package io.queryaudit.junit5;
 
 import io.queryaudit.core.interceptor.QueryCaptureSnapshot;
 import io.queryaudit.core.model.Finding;
+import io.queryaudit.core.model.QueryRecord;
 import java.util.List;
 
 /**
@@ -24,24 +25,33 @@ final class AuditTestAssertions {
     }
     try {
       var method = scope.context().getRequiredTestMethod();
+      List<QueryRecord> judged = result.judgedQueries();
+      int excluded = result.queries().size() - judged.size();
       requireSatisfied(
-          AuditAssertions.maxQueryCountFailure(
-              AuditAnnotations.onMethod(method, ExpectMaxQueryCount.class),
-              result.queries(),
-              result.testName()));
+          AuditAssertions.withExcludedSetupNote(
+              AuditAssertions.maxQueryCountFailure(
+                  AuditAnnotations.onMethod(method, ExpectMaxQueryCount.class),
+                  judged,
+                  result.testName()),
+              excluded));
       ExpectQueries inlineBudget = AuditAnnotations.onMethod(method, ExpectQueries.class);
       if (inlineBudget != null) {
         requireSatisfied(
-            AuditAssertions.buildExpectQueriesFailureMessage(
-                inlineBudget, result.queries(), result.testName()));
+            AuditAssertions.withExcludedSetupNote(
+                AuditAssertions.buildExpectQueriesFailureMessage(
+                    inlineBudget, judged, result.testName()),
+                excluded));
       }
       requireSatisfied(
-          counts.contractFailure(
-              scope,
-              result.queries(),
-              result.identity().testId(),
-              result.testClass(),
-              result.testName()));
+          AuditAssertions.withExcludedSetupNote(
+              counts.contractFailure(
+                  scope,
+                  judged,
+                  result.queries(),
+                  result.identity().testId(),
+                  result.testClass(),
+                  result.testName()),
+              excluded));
       requireSatisfied(
           AuditAssertions.nPlusOneFailure(
               settings.findDetectNPlusOne(scope.context()), result.report(), result.testName()));

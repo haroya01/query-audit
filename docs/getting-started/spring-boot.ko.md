@@ -123,7 +123,7 @@ query-audit:
 | 설정한 탐지 결과로 실패 | `@QueryAudit` |
 | 규칙 묶음 선택 | `query-audit.profile: recommended` |
 | 로컬에서 브라우저용 리포트 생성 | `query-audit.report.format: html` |
-| 테스트별 setup/teardown SQL도 탐지에 포함 | `@QueryAudit(includeSetupQueries = true)`. 원본 리포트와 예산에는 이미 생명주기 SQL이 포함돼요 |
+| 테스트별 setup/teardown SQL도 탐지·예산·메서드 계약에 포함 | `@QueryAudit(includeSetupQueries = true)`. 원본 리포트에는 어느 쪽이든 남아요 |
 
 기본값과 덮어쓰기는 [설정](../guide/configuration.md)을 보세요. JSON/Actions 마스킹은 현재 콘솔과 HTML
 진단에는 적용되지 않아요. [리포트 개인정보](../guide/reports.md#machine-report-redaction)를 참고하세요.

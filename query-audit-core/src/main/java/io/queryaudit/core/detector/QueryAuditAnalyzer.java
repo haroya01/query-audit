@@ -172,12 +172,8 @@ public class QueryAuditAnalyzer {
     List<QueryRecord> filteredQueries =
         queries.stream().filter(q -> !config.isQuerySuppressed(q.sql())).toList();
 
-    // By default only TEST-phase queries are analyzed; setup/teardown queries are excluded
-    // to prevent false positives from test infrastructure (e.g., deleteAll, repeated save).
     List<QueryRecord> detectableQueries =
-        config.isIncludeSetupQueries()
-            ? filteredQueries
-            : filteredQueries.stream().filter(q -> q.phase() == LifecyclePhase.TEST).toList();
+        LifecyclePhase.judged(filteredQueries, config.isIncludeSetupQueries());
 
     List<Issue> allIssues = new ArrayList<>();
     // Legacy detectors keep their no-captured-query behavior. Open rules may enforce absence.

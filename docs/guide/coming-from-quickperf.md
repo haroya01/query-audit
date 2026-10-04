@@ -54,9 +54,9 @@ Use explicit zeros to forbid them, and keep ordinary assertions that verify the 
 Since 0.7.2, `exact = true` turns every declared field into an exact count, so
 `@ExpectQueries(select = 2, exact = true)` keeps the meaning of `@ExpectSelect(2)`.
 
-QueryAudit's inline budgets count captured setup and teardown SQL too. Its general finding analysis
-uses test-body SQL by default. Move fixture creation outside the counted window only when that is
-the contract you intend; otherwise budget for it. A recorded snapshot checks SELECT/INSERT/UPDATE/DELETE
+Like QuickPerf's SQL annotations, QueryAudit's budgets count the test method body; `@BeforeEach`
+and `@AfterEach` SQL is left out unless `@QueryAudit(includeSetupQueries = true)`. Before 0.8,
+budgets also counted that setup and teardown SQL. A recorded snapshot checks SELECT/INSERT/UPDATE/DELETE
 counts in both directions. It does not snapshot SQL text, DDL, or result rows. A test with no recorded
 entry has no snapshot contract to enforce, and an inline `@ExpectQueries` takes precedence over that method's snapshot.
 See [annotations](annotations.md) and [snapshot contracts](contracts.md).

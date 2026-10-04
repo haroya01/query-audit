@@ -22,6 +22,18 @@ import java.util.function.Predicate;
 final class AuditAssertions {
   private AuditAssertions() {}
 
+  static String withExcludedSetupNote(String failure, int excluded) {
+    if (failure == null || excluded <= 0) {
+      return failure;
+    }
+    return failure
+        + (failure.endsWith("\n") ? "" : "\n")
+        + "Not counted: "
+        + excluded
+        + (excluded == 1 ? " setup or teardown query" : " setup or teardown queries")
+        + ". Set @QueryAudit(includeSetupQueries = true) to count them.";
+  }
+
   static String maxQueryCountFailure(
       ExpectMaxQueryCount annotation, List<QueryRecord> queries, String testName) {
     if (annotation == null) return null;

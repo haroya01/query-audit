@@ -58,9 +58,9 @@ public @interface QueryAudit {
   BooleanOverride autoOpenReport() default BooleanOverride.INHERIT;
 
   /**
-   * Whether to include {@code @BeforeEach}/{@code @AfterEach} lifecycle queries in analysis.
-   * Defaults to {@code false} — only queries from the {@code @Test} method are analyzed. Set to
-   * {@code true} to analyze all lifecycle phases.
+   * Whether findings, budgets, and method contracts also count {@code @BeforeEach}/{@code
+   * @AfterEach} queries. Defaults to {@code false}: every check judges only the {@code @Test}
+   * method body.
    */
   boolean includeSetupQueries() default false;
 }

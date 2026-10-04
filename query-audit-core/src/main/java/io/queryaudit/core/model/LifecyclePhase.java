@@ -1,5 +1,7 @@
 package io.queryaudit.core.model;
 
+import java.util.List;
+
 /**
  * Represents the JUnit 5 test lifecycle phase during which a query was captured.
  *
@@ -18,5 +20,15 @@ public enum LifecyclePhase {
   TEST,
 
   /** Queries captured during {@code @AfterEach} user methods. */
-  TEARDOWN
+  TEARDOWN;
+
+  /**
+   * Returns the queries that findings, budgets, and method contracts judge: those of the test body,
+   * or every phase when {@code includeSetup} is true.
+   *
+   * @since 0.8.0
+   */
+  public static List<QueryRecord> judged(List<QueryRecord> queries, boolean includeSetup) {
+    return includeSetup ? queries : queries.stream().filter(query -> query.phase() == TEST).toList();
+  }
 }

@@ -1,6 +1,7 @@
 package io.queryaudit.junit5;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -169,7 +170,9 @@ class HibernateIntegrationPolicyTest {
 
   private static LazyLoadTracker trackerWithNPlusOne() {
     LazyLoadTracker tracker = mock(LazyLoadTracker.class);
-    when(tracker.getRecords()).thenReturn(List.of(lazyLoad("1"), lazyLoad("2"), lazyLoad("3")));
+    List<LazyLoadRecord> records = List.of(lazyLoad("1"), lazyLoad("2"), lazyLoad("3"));
+    when(tracker.getRecords()).thenReturn(records);
+    when(tracker.getRecords(anyBoolean())).thenReturn(records);
     return tracker;
   }
 
@@ -182,9 +185,10 @@ class HibernateIntegrationPolicyTest {
 
   private static LazyLoadTracker trackerWithAllFindings() {
     LazyLoadTracker tracker = trackerWithNPlusOne();
-    when(tracker.getExplicitLoads())
-        .thenReturn(
-            List.of(new ExplicitLoadRecord("example.User", "42", 1_000L, "OrderTest.java:20")));
+    List<ExplicitLoadRecord> loads =
+        List.of(new ExplicitLoadRecord("example.User", "42", 1_000L, "OrderTest.java:20"));
+    when(tracker.getExplicitLoads()).thenReturn(loads);
+    when(tracker.getExplicitLoads(anyBoolean())).thenReturn(loads);
     return tracker;
   }
 

@@ -30,8 +30,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * <p>With {@code exact = true}, each declared count must match: {@code @ExpectQueries(select = 2,
  * exact = true)} fails on one SELECT as well as on three.
  *
- * <p>When a budget is exceeded, the failure message lists every query of the violated type together
- * with its call site.
+ * <p>Budgets count the test method body. {@code @BeforeEach} and {@code @AfterEach} queries count
+ * only with {@link QueryAudit#includeSetupQueries()}.
+ *
+ * <p>When a budget is exceeded, the failure message lists the queries of the violated type,
+ * grouped by statement and call site.
  *
  * @author haroya
  * @since 0.4.0

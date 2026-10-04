@@ -3,6 +3,7 @@ package io.queryaudit.junit5;
 import io.queryaudit.core.config.QueryAuditConfig;
 import io.queryaudit.core.detector.QueryAuditAnalyzer;
 import io.queryaudit.core.interceptor.QueryCaptureSnapshot;
+import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import java.util.List;
@@ -18,5 +19,9 @@ record AnalyzedAudit(
     String testName) {
   List<QueryRecord> queries() {
     return capture.queries();
+  }
+
+  List<QueryRecord> judgedQueries() {
+    return LifecyclePhase.judged(queries(), config.isIncludeSetupQueries());
   }
 }

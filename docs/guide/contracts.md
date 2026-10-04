@@ -155,7 +155,8 @@ file that holds the contract. Setting names follow [one rule](configuration.md#s
 
 ## Contract a request or job
 
-A test method often mixes fixture setup, the request under test, and database assertions.
+A test method contract already leaves out `@BeforeEach` and `@AfterEach`, but the body itself
+often mixes fixture setup, the request under test, and database assertions.
 `QueryContractScope` (0.7.0) counts only the work you give it. The Spring Boot starter provides
 it as a bean that uses the configured contracts:
 

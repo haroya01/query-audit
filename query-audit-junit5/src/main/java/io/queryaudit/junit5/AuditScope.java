@@ -346,8 +346,13 @@ final class AuditScope {
 
   void transitionCapture(io.queryaudit.core.model.LifecyclePhase phase) {
     InvocationCapture capture = invocationCapture();
-    if (capture != null) capture.session().setPhase(phase);
-    else if (interceptor() != null) interceptor().setPhase(phase);
+    if (capture != null) {
+      capture.session().setPhase(phase);
+      return;
+    }
+    if (interceptor() != null) interceptor().setPhase(phase);
+    LazyLoadTracker tracker = tracker();
+    if (tracker != null) tracker.setPhase(phase);
   }
 
   void finishTestPhase() {

@@ -35,7 +35,7 @@ JUnit actually discovered and executed the test; a skipped test or cached/no-op 
 | Audit activation | Put `@EnableQueryInspector` or `@QueryAudit` directly on the test class/method. Keep `query-audit.enabled` enabled. |
 | Spring wiring | Include the starter and retain automatic wrapping unless another datasource-proxy bean already provides capture. |
 | Plain JUnit wiring | Expose the static proxy and pass that same object into the repository; a separately retained raw datasource bypasses it. |
-| Test timing | Execute the proof SQL in the test body. Captured per-test setup/teardown SQL remains in raw reports and budgets; detector analysis excludes it by default. Class-level initialization is outside the per-test audit. |
+| Test timing | Execute the proof SQL in the test body. Captured per-test setup/teardown SQL remains in raw reports; findings, budgets, and method contracts leave it out unless `includeSetupQueries = true`. Class-level initialization is outside the per-test audit. |
 | Multiple datasources | Check the actual selected datasource; marking one `@Primary` does not combine all of them. |
 | Async work | Keep the audited SQL on the test execution path; see [execution constraints](#parallel-capture-is-incomplete). |
 

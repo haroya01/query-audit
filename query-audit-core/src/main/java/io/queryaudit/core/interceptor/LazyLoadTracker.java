@@ -1,7 +1,9 @@
 package io.queryaudit.core.interceptor;
 
+import io.queryaudit.core.model.LifecyclePhase;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Tracks lazy loading events for N+1 detection and explicit PK loads for findById-for-association
@@ -51,14 +53,27 @@ public class LazyLoadTracker {
       String collectionRole, // e.g., "com.example.Order.items" or "proxy:com.example.User"
       String ownerEntity, // e.g., "com.example.Order" or "com.example.User"
       String ownerIdString, // e.g., "42"
-      long timestamp) {}
+      long timestamp,
+      LifecyclePhase phase) {
+
+    public LazyLoadRecord(
+        String collectionRole, String ownerEntity, String ownerIdString, long timestamp) {
+      this(collectionRole, ownerEntity, ownerIdString, timestamp, LifecyclePhase.TEST);
+    }
+  }
 
   /** Record of an explicit entity load via findById (non-proxy PostLoadEvent). */
   public record ExplicitLoadRecord(
       String entityType, // e.g., "com.example.User"
       String idString, // e.g., "42"
       long timestamp,
-      String stackTrace) {}
+      String stackTrace,
+      LifecyclePhase phase) {
+
+    public ExplicitLoadRecord(String entityType, String idString, long timestamp, String stackTrace) {
+      this(entityType, idString, timestamp, stackTrace, LifecyclePhase.TEST);
+    }
+  }
 
   private static final int DEFAULT_MAX_EVENTS = 10_000;
 
@@ -66,6 +81,7 @@ public class LazyLoadTracker {
   private final List<LazyLoadRecord> records = new ArrayList<>();
   private final List<ExplicitLoadRecord> explicitLoads = new ArrayList<>();
   private volatile boolean active = false;
+  private volatile LifecyclePhase phase = LifecyclePhase.TEST;
   private final boolean captureLeaf;
   private final int maxEvents;
   private int droppedEvents;
@@ -97,7 +113,8 @@ public class LazyLoadTracker {
             collectionRole != null ? collectionRole : "unknown",
             ownerEntity,
             ownerId != null ? ownerId.toString() : "null",
-            System.currentTimeMillis()));
+            System.currentTimeMillis(),
+            phase));
   }
 
   // ── Post-load (proxy resolution / explicit load) ───────────────────────
@@ -116,7 +133,8 @@ public class LazyLoadTracker {
             PROXY_ROLE_PREFIX + deproxied,
             deproxied,
             id != null ? id.toString() : "null",
-            System.currentTimeMillis()));
+            System.currentTimeMillis(),
+            phase));
   }
 
   /**
@@ -134,7 +152,8 @@ public class LazyLoadTracker {
             deproxyClassName(entityName),
             id != null ? id.toString() : "null",
             System.currentTimeMillis(),
-            stackTrace));
+            stackTrace,
+            phase));
   }
 
   /**
@@ -244,11 +263,21 @@ public class LazyLoadTracker {
 
   public void start() {
     clear();
+    phase = LifecyclePhase.TEST;
     active = true;
   }
 
   public void stop() {
     active = false;
+  }
+
+  /**
+   * Sets the lifecycle phase that events recorded after this call carry.
+   *
+   * @since 0.8.0
+   */
+  public void setPhase(LifecyclePhase phase) {
+    this.phase = Objects.requireNonNull(phase, "phase");
   }
 
   public void clear() {
@@ -269,6 +298,30 @@ public class LazyLoadTracker {
     synchronized (lock) {
       return List.copyOf(explicitLoads);
     }
+  }
+
+  /**
+   * Returns the lazy-load events of the test body, or of every phase when {@code includeSetup} is
+   * true.
+   *
+   * @since 0.8.0
+   */
+  public List<LazyLoadRecord> getRecords(boolean includeSetup) {
+    return getRecords().stream()
+        .filter(record -> includeSetup || record.phase() == LifecyclePhase.TEST)
+        .toList();
+  }
+
+  /**
+   * Returns the explicit loads of the test body, or of every phase when {@code includeSetup} is
+   * true.
+   *
+   * @since 0.8.0
+   */
+  public List<ExplicitLoadRecord> getExplicitLoads(boolean includeSetup) {
+    return getExplicitLoads().stream()
+        .filter(record -> includeSetup || record.phase() == LifecyclePhase.TEST)
+        .toList();
   }
 
   /** Returns how many events were not recorded because the capture limit was reached. */

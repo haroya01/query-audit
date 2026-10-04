@@ -73,6 +73,7 @@ final class AuditResources {
     interceptor.setPhase(LifecyclePhase.SETUP);
     if (tracker != null) {
       tracker.start();
+      tracker.setPhase(LifecyclePhase.SETUP);
     }
   }
 

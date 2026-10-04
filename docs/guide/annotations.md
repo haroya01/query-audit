@@ -29,7 +29,7 @@ reference documents the published `0.7.2` annotation API.
 | `failOnKinds` | `@QueryAudit` | `String[]` | `{}` | Select built-in/custom kind codes; union with `failOn` |
 | `baselinePath` | `@QueryAudit` | `String` | `""` (default path) | Path to baseline file |
 | `autoOpenReport` | `@QueryAudit` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests |
-| `includeSetupQueries` | `@QueryAudit` | `boolean` | `false` | Include `@BeforeEach`/`@AfterEach` queries in analysis |
+| `includeSetupQueries` | `@QueryAudit` | `boolean` | `false` | Count `@BeforeEach`/`@AfterEach` queries in findings, budgets, and method contracts |
 | `threshold` | `@DetectNPlusOne` | `int` | `3` | Repeated query count to consider N+1 |
 | `value` | `@ExpectMaxQueryCount` | `int` | *(required)* | Maximum number of queries allowed |
 | `select` | `@ExpectQueries` | `int` | `-1` (not verified) | Maximum SELECT queries allowed |
@@ -83,7 +83,7 @@ class OrderServiceTest {
 | `failOnKinds` | `String[]` | `{}` | Select namespaced custom or built-in kinds; both selection arrays empty means all confirmed findings |
 | `baselinePath` | `String` | `""` (default path) | Path to baseline file |
 | `autoOpenReport` | `BooleanOverride` | `INHERIT` (yml default: `true`) | Open HTML report in browser after tests |
-| `includeSetupQueries` | `boolean` | `false` | Include queries from `@BeforeEach`/`@AfterEach` lifecycle methods in analysis. Default analyzes only `@Test` body queries. |
+| `includeSetupQueries` | `boolean` | `false` | Count queries from `@BeforeEach`/`@AfterEach` in findings, budgets, and method contracts. By default every check judges only the `@Test` method body. |
 
 ### Usage Patterns
 
@@ -366,10 +366,9 @@ QueryAudit: createOrder executed 8 queries, expected at most 5.
 Tip: Check the Query Patterns section in the report above to identify which queries to optimize.
 ```
 
-!!! warning "Counts ALL queries"
-    `@ExpectMaxQueryCount` counts all query types, including INSERTs from test data setup.
-    If you use `@BeforeEach` to seed data, those INSERTs are included in the count.
-    Consider using a higher limit or moving setup to `@BeforeAll`.
+!!! note "Counts the test body"
+    `@ExpectMaxQueryCount` counts every query type in the test method body. Since 0.8,
+    `@BeforeEach` and `@AfterEach` queries count only with `@QueryAudit(includeSetupQueries = true)`.
 
 ---
 
@@ -454,9 +453,11 @@ SELECT: executed 6, expected at most 2.
     `@ExpectQueries(insert = 0, update = 0, delete = 0)` turns a test into a read-only
     contract -- useful for guarding query-only endpoints against accidental writes.
 
-!!! warning "Counts ALL queries"
-    Budgets count queries from the whole test lifecycle, including INSERTs from `@BeforeEach`
-    data setup. To count one request or job only, use a
+!!! note "Counts the test body"
+    Budgets count the test method body, the same window as findings and method contracts. Since
+    0.8, `@BeforeEach` and `@AfterEach` queries count only with
+    `@QueryAudit(includeSetupQueries = true)`, and a failing budget says how many it left out. To
+    count one request or job inside the body, use a
     [scoped contract](contracts.md#contract-a-request-or-job).
 
 `total` caps every statement while the type attributes constrain individual types; both can be

@@ -2,6 +2,7 @@ package io.queryaudit.core.interceptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.queryaudit.core.model.LifecyclePhase;
 import org.junit.jupiter.api.Test;
 
 /** Tests for {@link LazyLoadTracker}'s proxy detection and class name deproxying. */
@@ -26,6 +27,43 @@ class LazyLoadTrackerTest {
 
     tracker.start();
     assertThat(tracker.getDroppedEventCount()).isZero();
+  }
+
+  @Test
+  void eventsCarryThePhaseTheyWereRecordedIn() {
+    LazyLoadTracker tracker = new LazyLoadTracker(true, 100);
+    tracker.start();
+    tracker.setPhase(LifecyclePhase.SETUP);
+    tracker.recordCollectionInitialized("com.example.Order.items", "com.example.Order", 1);
+    tracker.recordExplicitLoad("com.example.Team", 1, "Fixture.seed:1");
+    tracker.setPhase(LifecyclePhase.TEST);
+    tracker.recordCollectionInitialized("com.example.Order.items", "com.example.Order", 2);
+    tracker.recordExplicitLoad("com.example.Team", 2, "Service.load:1");
+    tracker.setPhase(LifecyclePhase.TEARDOWN);
+    tracker.recordProxyResolved("com.example.User", 3);
+
+    assertThat(tracker.getRecords(false))
+        .extracting(LazyLoadTracker.LazyLoadRecord::ownerIdString)
+        .containsExactly("2");
+    assertThat(tracker.getRecords(true))
+        .extracting(LazyLoadTracker.LazyLoadRecord::phase)
+        .containsExactly(LifecyclePhase.SETUP, LifecyclePhase.TEST, LifecyclePhase.TEARDOWN);
+    assertThat(tracker.getExplicitLoads(false))
+        .extracting(LazyLoadTracker.ExplicitLoadRecord::idString)
+        .containsExactly("2");
+    assertThat(tracker.getExplicitLoads(true)).hasSize(2);
+  }
+
+  @Test
+  void startReturnsToTheTestPhase() {
+    LazyLoadTracker tracker = new LazyLoadTracker(true, 100);
+    tracker.setPhase(LifecyclePhase.TEARDOWN);
+    tracker.start();
+    tracker.recordProxyResolved("com.example.User", 1);
+
+    assertThat(tracker.getRecords())
+        .extracting(LazyLoadTracker.LazyLoadRecord::phase)
+        .containsExactly(LifecyclePhase.TEST);
   }
 
   @Test

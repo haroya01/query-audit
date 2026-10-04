@@ -104,7 +104,9 @@ class HibernateIntegration {
     LazyLoadNPlusOneDetector hibernateDetector =
         new LazyLoadNPlusOneDetector(analyzer.getConfig().getNPlusOneThreshold());
     List<Issue> hibernateIssues =
-        hibernateDetector.evaluate(tracker.getRecords()).stream()
+        hibernateDetector
+            .evaluate(tracker.getRecords(analyzer.getConfig().isIncludeSetupQueries()))
+            .stream()
             .map(
                 issue ->
                     new Issue(
@@ -128,8 +130,12 @@ class HibernateIntegration {
       QueryAuditReport report, LazyLoadTracker tracker, QueryAuditAnalyzer analyzer) {
 
     FindByIdForAssociationDetector detector = new FindByIdForAssociationDetector();
+    boolean includeSetup = analyzer.getConfig().isIncludeSetupQueries();
     List<Issue> findByIdIssues =
-        detector.evaluate(tracker.getExplicitLoads(), tracker.getRecords(), report.getAllQueries());
+        detector.evaluate(
+            tracker.getExplicitLoads(includeSetup),
+            tracker.getRecords(includeSetup),
+            report.getAllQueries());
     return analyzer.mergeDetectedIssues(report, findByIdIssues);
   }
 

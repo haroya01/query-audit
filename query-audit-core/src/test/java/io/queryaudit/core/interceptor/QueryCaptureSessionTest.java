@@ -49,9 +49,16 @@ class QueryCaptureSessionTest {
         assertThat(session.tracker().getRecords())
             .extracting(LazyLoadTracker.LazyLoadRecord::ownerIdString)
             .containsExactly(session.testId());
+        assertThat(session.tracker().getRecords())
+            .extracting(LazyLoadTracker.LazyLoadRecord::phase)
+            .containsExactly(LifecyclePhase.SETUP);
+        assertThat(session.tracker().getRecords(false)).isEmpty();
         assertThat(session.tracker().getExplicitLoads())
             .extracting(LazyLoadTracker.ExplicitLoadRecord::idString)
             .containsExactly(session.testId());
+        assertThat(session.tracker().getExplicitLoads())
+            .extracting(LazyLoadTracker.ExplicitLoadRecord::phase)
+            .containsExactly(LifecyclePhase.TEST);
         assertThat(session.incompleteReasons()).isEmpty();
       }
     } finally {

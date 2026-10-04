@@ -11,6 +11,7 @@ import io.queryaudit.core.interceptor.QueryInterceptor;
 import io.queryaudit.core.model.IncompleteReasonCode;
 import io.queryaudit.core.model.Issue;
 import io.queryaudit.core.model.IssueType;
+import io.queryaudit.core.model.LifecyclePhase;
 import io.queryaudit.core.model.QueryAuditReport;
 import io.queryaudit.core.model.QueryRecord;
 import io.queryaudit.core.model.Severity;
@@ -79,7 +80,13 @@ final class AuditTestAnalysis {
     if (!capture.truncated()) {
       report =
           counts.detectRegression(
-              scope, report, queries, identity.testId(), testClass, testName, analyzer);
+              scope,
+              report,
+              LifecyclePhase.judged(queries, config.isIncludeSetupQueries()),
+              identity.testId(),
+              testClass,
+              testName,
+              analyzer);
     }
     report = explain.analyze(scope, extensions, report, queries, analyzer);
     report =

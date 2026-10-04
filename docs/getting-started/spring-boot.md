@@ -123,7 +123,7 @@ to keep missing tests or changed audit settings visible.
 | Fail on configured detector findings | `@QueryAudit` |
 | Choose the rule set | `query-audit.profile: recommended` |
 | Generate a browser report locally | `query-audit.report.format: html` |
-| Analyze per-test setup/teardown SQL for detector findings | `@QueryAudit(includeSetupQueries = true)`; raw reports and budgets already include captured lifecycle SQL |
+| Count per-test setup/teardown SQL in findings, budgets, and method contracts | `@QueryAudit(includeSetupQueries = true)`; raw reports keep it either way |
 
 See [configuration](../guide/configuration.md) for defaults and overrides. JSON/Actions redaction
 does not currently redact console or HTML diagnostics; see [report privacy](../guide/reports.md#machine-report-redaction).
