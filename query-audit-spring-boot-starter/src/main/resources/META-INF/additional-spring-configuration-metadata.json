@@ -1,0 +1,169 @@
+{
+  "properties": [
+    {
+      "name": "query-audit.enabled",
+      "description": "Master switch for the entire auto-configuration. When `false`, the `QueryInterceptor` bean and the wrapping `BeanPostProcessor` are both skipped — the `@QueryAudit` annotation will not work either. Use `wrap-data-source.enabled: false` instead if you want to keep the interceptor active but skip the auto-wrap."
+    },
+    {
+      "name": "query-audit.profile",
+      "description": "Rule tier: `recommended` (call-site N+1 only), `minimal` (N+1, index, and write safety), or `strict` (all rules). See [Rule Profiles](#rule-profiles)."
+    },
+    {
+      "name": "query-audit.enabled-rules",
+      "description": "Rule codes to run even when the profile tier excludes them. `disabled-rules` still wins."
+    },
+    {
+      "name": "query-audit.mode",
+      "description": "Which tests the JUnit extension audits: `annotated` (opt-in via `@QueryAudit`) or `all` (every test, opt-out via `@QueryAuditExclude`). `all` additionally requires JUnit extension autodetection — see [Audit Coverage Mode](#audit-coverage-mode)."
+    },
+    {
+      "name": "query-audit.contracts.path",
+      "description": "Query contracts for test methods and `QueryContractScope`: one file, or a directory whose `*.contracts` files are all read. See [contracts](contracts.md)."
+    },
+    {
+      "name": "query-audit.await-executors",
+      "description": "Bean names of `ThreadPoolTaskExecutor` or `ThreadPoolExecutor` pools that audited test methods and the injected `QueryContractScope` wait for. See [Background Work](#background-work)."
+    },
+    {
+      "name": "query-audit.wrap-data-source.enabled",
+      "description": "Surgical escape hatch (issue #134) — disables only the auto-wrap `BeanPostProcessor` while keeping `QueryInterceptor` and `QueryAuditConfig` beans active. Use this when integrating with an existing datasource-proxy (e.g. gavlyukovskiy)."
+    },
+    {
+      "name": "query-audit.fail-on-detection",
+      "description": "Whether confirmed issues (ERROR/WARNING) should cause the test to fail with an `AssertionError`."
+    },
+    {
+      "name": "query-audit.count-instead-of-exists.enabled",
+      "description": "Enable the `count-instead-of-exists` INFO detector. Off by default because it can fire on legitimate aggregate counts."
+    },
+    {
+      "name": "query-audit.connection-held-idle.threshold-ms",
+      "description": "Minimum idle time (connection held minus database work) before the `connection-held-idle` rule fires. Requires the non-DB work to actually take time in tests — zero-latency mocks never reproduce the gap."
+    },
+    {
+      "name": "query-audit.repeated-insert.exclude-tables",
+      "description": "Table-name globs (case-insensitive, `*` wildcard) treated as deliberate staging targets — repeated single-row inserts into these tables are not flagged."
+    },
+    {
+      "name": "query-audit.repeated-update.exclude-tables",
+      "description": "Case-insensitive table-name globs excluded from repeated single-row UPDATE detection. Replace with `[]` to inspect every table."
+    },
+    {
+      "name": "query-audit.n-plus-one.threshold",
+      "description": "Number of times a structurally identical query must repeat before it is flagged as N+1."
+    },
+    {
+      "name": "query-audit.offset-pagination.threshold",
+      "description": "The OFFSET value that triggers a warning."
+    },
+    {
+      "name": "query-audit.or-clause.threshold",
+      "description": "Number of OR conditions in a single WHERE clause before flagging."
+    },
+    {
+      "name": "query-audit.suppress-patterns",
+      "description": "Issue codes or qualified patterns to suppress globally. See [Suppressing Issues](suppressing.md)."
+    },
+    {
+      "name": "query-audit.suppress-queries",
+      "description": "SQL query substrings to suppress (e.g., health-check queries). Case-insensitive substring match."
+    },
+    {
+      "name": "query-audit.baseline-path",
+      "description": "Path to the finding baseline file. When `null`, uses `.query-audit-baseline` in the working directory."
+    },
+    {
+      "name": "query-audit.auto-open-report",
+      "description": "Whether to open the selected HTML report after tests. Ignored for `console` and `json`."
+    },
+    {
+      "name": "query-audit.max-queries",
+      "description": "Maximum number of queries retained per test. If additional queries are dropped, the audit fails as incomplete."
+    },
+    {
+      "name": "query-audit.report.format",
+      "description": "Suite artifact: `console` writes no file, `json` writes `report.json`, and `html` writes the browser report. Per-test console diagnostics remain available for every selection."
+    },
+    {
+      "name": "query-audit.report.output-dir",
+      "description": "Directory used by the selected JSON or HTML report."
+    },
+    {
+      "name": "query-audit.report.show-info",
+      "description": "Whether unacknowledged INFO findings appear in console, HTML, and GitHub Actions display. Canonical run JSON and sink summaries retain them for trustworthy comparisons; analysis and query statistics are unchanged."
+    },
+    {
+      "name": "query-audit.disabled-rules",
+      "description": "Rule codes to completely disable."
+    },
+    {
+      "name": "query-audit.severity-overrides",
+      "description": "Override severity per rule code (e.g., `select-all: WARNING`)."
+    },
+    {
+      "name": "query-audit.large-in-list.threshold",
+      "description": "Number of values in IN clause before flagging."
+    },
+    {
+      "name": "query-audit.too-many-joins.threshold",
+      "description": "Number of JOINs before flagging."
+    },
+    {
+      "name": "query-audit.excessive-column.threshold",
+      "description": "Number of selected columns before flagging."
+    },
+    {
+      "name": "query-audit.repeated-insert.threshold",
+      "description": "Number of repeated single-row INSERTs before flagging."
+    },
+    {
+      "name": "query-audit.repeated-update.threshold",
+      "description": "Number of repeated single-row UPDATEs with the same normalized shape before flagging."
+    },
+    {
+      "name": "query-audit.write-amplification.threshold",
+      "description": "Number of indexes per table before flagging write amplification."
+    },
+    {
+      "name": "query-audit.slow-query.warning-ms",
+      "description": "Execution time (ms) that triggers a WARNING-level slow query."
+    },
+    {
+      "name": "query-audit.slow-query.error-ms",
+      "description": "Execution time (ms) that triggers an ERROR-level slow query."
+    },
+    {
+      "name": "query-audit.report.redaction",
+      "description": "Accepts redacted (the default) or full. The default removes SQL values, comments, raw diagnostic prose, and framework/absolute-path stack details from JSON and GitHub Actions output. It does not change findings or enforcement. Use full only for local debugging; see [machine report redaction](reports.md#machine-report-redaction)."
+    }
+  ],
+  "hints": [
+    {
+      "name": "query-audit.profile",
+      "values": [
+        { "value": "recommended" },
+        { "value": "minimal" },
+        { "value": "strict" }
+      ]
+    },
+    {
+      "name": "query-audit.mode",
+      "values": [{ "value": "annotated" }, { "value": "all" }]
+    },
+    {
+      "name": "query-audit.report.format",
+      "values": [
+        { "value": "console" },
+        { "value": "json" },
+        { "value": "html" }
+      ]
+    },
+    {
+      "name": "query-audit.report.redaction",
+      "values": [
+        { "value": "redacted" },
+        { "value": "full" }
+      ]
+    }
+  ]
+}
