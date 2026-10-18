@@ -32,8 +32,17 @@ final class AuditDiagnostics {
 
   static void capabilityFailure(
       AuditScope scope, AuditCapability capability, IncompleteReasonCode code) {
+    capabilityFailure(scope, capability, code, null);
+  }
+
+  static void capabilityFailure(
+      AuditScope scope, AuditCapability capability, IncompleteReasonCode code, String failure) {
     if (capability.state() == AuditCapability.State.FAILED) {
-      incomplete(scope, code, "Capability failed: " + capability.source());
+      String detail = "Capability failed: " + capability.source();
+      if (failure != null && !failure.isBlank()) {
+        detail += " (" + failure + ")";
+      }
+      incomplete(scope, code, detail);
     }
   }
 

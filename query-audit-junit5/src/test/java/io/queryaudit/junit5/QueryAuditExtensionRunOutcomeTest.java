@@ -165,6 +165,12 @@ class QueryAuditExtensionRunOutcomeTest {
     try (fixture) {
       extension.beforeEach(fixture.methodContext());
       assertIncomplete(fixture, IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED);
+      assertThat(runState(fixture).result(List.of()).incompleteReasons())
+          .singleElement()
+          .satisfies(
+              reason ->
+                  assertThat(reason.detail())
+                      .isEqualTo("Capability failed: test-index-provider (SQLException)"));
     } finally {
       PostHookFailureFixture.DATA_SOURCE = dataSource;
     }

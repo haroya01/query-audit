@@ -105,7 +105,10 @@ final class AuditScopeInitializer {
             : metadata.collectWithCapabilities(dataSource, extensions.indexMetadataProvidersById());
     if (indexes.diagnostic() == null) {
       AuditDiagnostics.capabilityFailure(
-          scope, indexes.capability(), IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED);
+          scope,
+          indexes.capability(),
+          IncompleteReasonCode.CAPABILITY_INITIALIZATION_FAILED,
+          indexes.failure());
     } else {
       AuditDiagnostics.incomplete(
           scope,
